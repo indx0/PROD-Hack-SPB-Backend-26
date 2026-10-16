@@ -22,8 +22,13 @@ mvn clean verify
 и Docker-in-Docker. Переменная `TEST_DATABASE_EXTERNAL=true` отключает создание
 Testcontainers-контейнера; адрес и учётные данные задаются через `TEST_DB_URL`,
 `TEST_DB_USERNAME`, `TEST_DB_PASSWORD`. В CI это отдельная одноразовая тестовая БД.
-Не направляй эти переменные на рабочую БД: тесты пересоздают и очищают таблицы.
+Не направляй эти переменные на рабочую БД: Liquibase создаёт схему, а тесты очищают таблицы.
 Без `TEST_DATABASE_EXTERNAL=true` локальные тесты по-прежнему используют Testcontainers.
+
+Схему создаёт тот же master changelog, что и в приложении; Hibernate проверяет её
+через `ddl-auto=validate`. `LiquibaseMigrationIntegrationTest` дополнительно проверяет
+10 changeset с автором `indx0`, ограничения БД, повторное применение с сохранением
+данных, полный откат и повторное создание таблиц в отдельной временной схеме.
 
 Один unit-класс:
 
