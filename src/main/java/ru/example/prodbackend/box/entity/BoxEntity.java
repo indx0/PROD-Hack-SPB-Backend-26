@@ -15,9 +15,7 @@ import java.util.UUID;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name = "boxes", check = @CheckConstraint(
-        name = "ck_boxes_positive_number", constraint = "number > 0"), uniqueConstraints = @UniqueConstraint(
-        name = "uk_boxes_project_number", columnNames = {"project_id", "number"}), indexes = {
+@Table(name = "boxes", indexes = {
         @Index(name = "idx_boxes_project_status", columnList = "project_id,status"),
         @Index(name = "idx_boxes_room_project", columnList = "room_id,project_id")
     })
