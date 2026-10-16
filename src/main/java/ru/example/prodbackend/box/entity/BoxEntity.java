@@ -15,7 +15,9 @@ import java.util.UUID;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name = "boxes", indexes = {
+@Table(name = "boxes", uniqueConstraints = @UniqueConstraint(
+        name = "uk_boxes_project_number", columnNames = {"project_id", "number"}
+    ), check = @CheckConstraint(name = "ck_boxes_positive_number", constraint = "number > 0"), indexes = {
         @Index(name = "idx_boxes_project_status", columnList = "project_id,status"),
         @Index(name = "idx_boxes_room_project", columnList = "room_id,project_id")
     })
@@ -25,22 +27,26 @@ public class BoxEntity {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    @Positive
+    @Column(name = "number", nullable = false)
+    private int number;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "project_id", nullable = false)
     private MoveProjectEntity project;
 
-    // Explicit composite DDL keeps project and room writable without a mixed-writability join.
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "room_id", nullable = false, foreignKey = @ForeignKey(
             name = "fk_boxes_room_project",
-            foreignKeyDefinition = "foreign key (room_id, project_id) references rooms (id, project_id)"))
+            foreignKeyDefinition = "foreign key (room_id, project_id) references rooms (id, project_id)")
+    )
     private RoomEntity room;
 
     @Builder.Default
     @NotNull
     @Setter(lombok.AccessLevel.NONE)
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 32)
+    @Column(nullable = false)
     private BoxStatus status = BoxStatus.PACKING;
 
     @Column(name = "contents_deferred", nullable = false)

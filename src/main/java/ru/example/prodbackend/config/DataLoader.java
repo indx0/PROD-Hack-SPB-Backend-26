@@ -28,6 +28,7 @@ import ru.example.prodbackend.user.repository.UserRepository;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 @Slf4j
@@ -84,7 +85,8 @@ public class DataLoader implements ApplicationRunner {
         MoveProjectEntity project = MoveProjectEntity.builder()
                 .owner(user)
                 .name("Переезд в новую квартиру")
-                .moveDate(LocalDate.now().plusDays(14))
+                .moveDate(LocalDate.now(ZoneOffset.UTC).plusDays(14)
+                        .atStartOfDay(ZoneOffset.UTC).toInstant())
                 .originAddress("Москва, ул. Лесная, д. 10, кв. 15")
                 .destinationAddress("Москва, ул. Садовая, д. 25, кв. 42")
                 .build();
@@ -97,11 +99,11 @@ public class DataLoader implements ApplicationRunner {
         RoomEntity bedroom = createRoom(project, "Спальня");
         RoomEntity bathroom = createRoom(project, "Ванная");
 
-        createBox(project, livingRoom, BoxStatus.PACKING, true);
-        createBox(project, kitchen, BoxStatus.PACKED, false, "Тарелки", "Кружки", "Столовые приборы");
-        createBox(project, bedroom, BoxStatus.LOADED, false, "Постельное бельё", "Подушки", "Плед");
-        createBox(project, livingRoom, BoxStatus.DELIVERED, false, "Книги", "Настольная лампа", "Фоторамки");
-        BoxEntity bathroomBox = createBox(project, bathroom, BoxStatus.UNPACKED, false,
+        createBox(project, livingRoom, 1, BoxStatus.PACKING, true);
+        createBox(project, kitchen, 2, BoxStatus.PACKED, false, "Тарелки", "Кружки", "Столовые приборы");
+        createBox(project, bedroom, 3, BoxStatus.LOADED, false, "Постельное бельё", "Подушки", "Плед");
+        createBox(project, livingRoom, 4, BoxStatus.DELIVERED, false, "Книги", "Настольная лампа", "Фоторамки");
+        BoxEntity bathroomBox = createBox(project, bathroom, 5, BoxStatus.UNPACKED, false,
                 "Полотенца", "Шампунь");
         entityManager.persist(ItemEntity.builder().box(bathroomBox).name("Фен").lost(true).build());
 
@@ -139,13 +141,13 @@ public class DataLoader implements ApplicationRunner {
         return room;
     }
 
-    private BoxEntity createBox(MoveProjectEntity project, RoomEntity room, BoxStatus status,
+    private BoxEntity createBox(MoveProjectEntity project, RoomEntity room, int number, BoxStatus status,
                                 boolean contentsDeferred, String... items) {
-        BoxEntity box = BoxEntity.builder().project(project).room(room)
+        BoxEntity box = BoxEntity.builder().project(project).room(room).number(number)
                 .contentsDeferred(contentsDeferred).build();
         entityManager.persist(box);
         createEvent(project, ProjectEventType.BOX_CREATED, EventObjectType.BOX,
-                box.getId(), "Создана коробка: " + room.getName());
+                box.getId(), "Создана коробка №" + number + ": " + room.getName());
         for (BoxStatus next : BoxStatus.values()) {
             if (next.ordinal() > 0 && next.ordinal() <= status.ordinal()) {
                 box.changeStatus(next);
@@ -163,7 +165,8 @@ public class DataLoader implements ApplicationRunner {
                             TaskStage stage, int dueDateOffset, String assignee, boolean completed) {
         MoveTaskEntity task = MoveTaskEntity.builder()
                 .project(project).title(title).description(description).stage(stage)
-                .dueDate(project.getMoveDate().plusDays(dueDateOffset)).assigneeName(assignee)
+                .dueDate(project.getMoveDate().atOffset(ZoneOffset.UTC).toLocalDate().plusDays(dueDateOffset))
+                .assigneeName(assignee)
                 .completedAt(completed ? Instant.now() : null).build();
         entityManager.persist(task);
         if (completed) {

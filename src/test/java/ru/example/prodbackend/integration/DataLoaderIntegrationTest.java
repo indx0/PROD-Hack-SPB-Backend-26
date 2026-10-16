@@ -16,7 +16,12 @@ import ru.example.prodbackend.box.entity.BoxStatus;
 import ru.example.prodbackend.config.DataLoader;
 import ru.example.prodbackend.config.TestcontainersConfig;
 import ru.example.prodbackend.move.entity.MoveProjectEntity;
+import ru.example.prodbackend.task.entity.MoveTaskEntity;
 import ru.example.prodbackend.user.repository.UserRepository;
+
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZoneOffset;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -44,13 +49,18 @@ class DataLoaderIntegrationTest {
         DataLoader loader = new DataLoader(entityManager, userRepository, passwordEncoder, refreshTokenService);
         ReflectionTestUtils.setField(loader, "adminPassword", "test-admin-password");
         ReflectionTestUtils.setField(loader, "user1Password", "test-user-password");
+        LocalDate beforeLoad = LocalDate.now(ZoneOffset.UTC);
         loader.run(new DefaultApplicationArguments(new String[0]));
+        LocalDate afterLoad = LocalDate.now(ZoneOffset.UTC);
         entityManager.flush();
         entityManager.clear();
 
         MoveProjectEntity project = entityManager.createQuery("from MoveProjectEntity", MoveProjectEntity.class)
                 .getSingleResult();
         assertThat(project.getOwner().getEmail()).isEqualTo("user1");
+        LocalDate moveDate = project.getMoveDate().atOffset(ZoneOffset.UTC).toLocalDate();
+        assertThat(moveDate).isBetween(beforeLoad.plusDays(14), afterLoad.plusDays(14));
+        assertThat(project.getMoveDate().atOffset(ZoneOffset.UTC).toLocalTime()).isEqualTo(LocalTime.MIDNIGHT);
         assertThat(count("UserEntity")).isEqualTo(2);
         assertThat(entityManager.createQuery(
                 "select count(t) from RefreshTokenEntity t group by t.user.id", Long.class).getResultList())
@@ -67,6 +77,18 @@ class DataLoaderIntegrationTest {
                     assertThat(box.getRoom().getProject().getId()).isEqualTo(project.getId());
                 })
                 .extracting(BoxEntity::getStatus).containsExactlyInAnyOrder(BoxStatus.values());
+        assertThat(entityManager.createQuery("from BoxEntity", BoxEntity.class).getResultList())
+                .extracting(BoxEntity::getNumber).containsExactlyInAnyOrder(1, 2, 3, 4, 5);
+        assertTaskDueDate("Выбрать перевозчика", moveDate.minusDays(10));
+        assertTaskDueDate("Встретить грузчиков", moveDate);
+        assertTaskDueDate("Подключить интернет", moveDate.plusDays(2));
+    }
+
+    private void assertTaskDueDate(String title, LocalDate expected) {
+        MoveTaskEntity task = entityManager.createQuery(
+                        "from MoveTaskEntity t where t.title = :title", MoveTaskEntity.class)
+                .setParameter("title", title).getSingleResult();
+        assertThat(task.getDueDate()).isEqualTo(expected);
     }
 
     private long count(String entity) {

@@ -6,7 +6,6 @@ import lombok.*;
 import ru.example.prodbackend.user.entity.UserEntity;
 
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.UUID;
 
 @Entity
@@ -33,7 +32,7 @@ public class MoveProjectEntity {
 
     @NotNull
     @Column(name = "move_date", nullable = false)
-    private LocalDate moveDate;
+    private Instant moveDate;
 
     @Size(max = 1000)
     @Column(name = "origin_address", nullable = true, length = 1000)
