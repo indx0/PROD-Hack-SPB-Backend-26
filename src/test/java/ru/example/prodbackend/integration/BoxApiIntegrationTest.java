@@ -78,7 +78,7 @@ class BoxApiIntegrationTest {
         entityManager.flush();
         entityManager.clear();
         token = jwtService.generateToken(owner);
-        baseUrl = "/api/move-projects/" + project.getId() + "/boxes";
+        baseUrl = "/api/projects/" + project.getId() + "/boxes";
         boxUrl = baseUrl + "/" + box.getId();
     }
 
@@ -285,7 +285,7 @@ class BoxApiIntegrationTest {
     void returns404ForMissingBoxOrMismatchedProject(String scenario) throws Exception {
         String url = scenario.equals("missing-box")
                 ? baseUrl + "/" + UUID.randomUUID()
-                : "/api/move-projects/" + UUID.randomUUID() + "/boxes/" + box.getId();
+                : "/api/projects/" + UUID.randomUUID() + "/boxes/" + box.getId();
 
         mockMvc.perform(get(url).header(HttpHeaders.AUTHORIZATION, bearer(token)))
                 .andExpect(status().isNotFound())
