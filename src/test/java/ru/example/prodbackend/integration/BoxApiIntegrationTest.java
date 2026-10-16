@@ -138,7 +138,10 @@ class BoxApiIntegrationTest {
         entityManager.flush();
 
         patchJson(boxUrl, "{\"number\":2,\"contentsDeferred\":false}")
-                .andExpect(status().isConflict());
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DATA_CONFLICT"))
+                .andExpect(jsonPath("$.traceId").isNotEmpty())
+                .andExpect(jsonPath("$.time").isNotEmpty());
 
         BoxEntity unchanged = reloadBox();
         assertThat(unchanged.getNumber()).isEqualTo(1);
@@ -215,7 +218,10 @@ class BoxApiIntegrationTest {
         Instant updatedAt = reloadBox().getUpdatedAt();
 
         patchJson(boxUrl + "/status", "{\"status\":\"" + next + "\"}")
-                .andExpect(status().isConflict());
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DATA_CONFLICT"))
+                .andExpect(jsonPath("$.traceId").isNotEmpty())
+                .andExpect(jsonPath("$.time").isNotEmpty());
 
         BoxEntity unchanged = reloadBox();
         assertThat(unchanged.getStatus()).isEqualTo(current);
@@ -264,7 +270,10 @@ class BoxApiIntegrationTest {
                         .header(HttpHeaders.AUTHORIZATION, bearer(jwtService.generateToken(stranger)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(suffix == null ? "{\"number\":12}" : "{\"status\":\"PACKED\"}"))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("MOVE_PROJECT_NOT_FOUND"))
+                .andExpect(jsonPath("$.traceId").isNotEmpty())
+                .andExpect(jsonPath("$.time").isNotEmpty());
 
         BoxEntity unchanged = reloadBox();
         assertThat(unchanged.getNumber()).isEqualTo(1);
@@ -279,7 +288,35 @@ class BoxApiIntegrationTest {
                 : "/api/move-projects/" + UUID.randomUUID() + "/boxes/" + box.getId();
 
         mockMvc.perform(get(url).header(HttpHeaders.AUTHORIZATION, bearer(token)))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(scenario.equals("missing-box") ? "BOX_NOT_FOUND" : "MOVE_PROJECT_NOT_FOUND"))
+                .andExpect(jsonPath("$.traceId").isNotEmpty())
+                .andExpect(jsonPath("$.time").isNotEmpty());
+    }
+
+    @Test
+    void createChecksProjectOwnerBeforeSavingBox() throws Exception {
+        UserEntity stranger = user();
+        entityManager.flush();
+
+        mockMvc.perform(post(baseUrl).header(HttpHeaders.AUTHORIZATION, bearer(jwtService.generateToken(stranger)))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"number\":2,\"roomId\":\"" + room.getId() + "\",\"contentsDeferred\":false}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("MOVE_PROJECT_NOT_FOUND"));
+        assertThat(reloadBox().getNumber()).isEqualTo(1);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "/summary"})
+    void listsAndSummaryHideForeignProject(String suffix) throws Exception {
+        UserEntity stranger = user();
+        entityManager.flush();
+
+        mockMvc.perform(get(baseUrl + suffix).header(HttpHeaders.AUTHORIZATION, bearer(jwtService.generateToken(stranger))))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("MOVE_PROJECT_NOT_FOUND"))
+                .andExpect(jsonPath("$.traceId").isNotEmpty())
+                .andExpect(jsonPath("$.time").isNotEmpty());
     }
 
     @ParameterizedTest
@@ -301,7 +338,7 @@ class BoxApiIntegrationTest {
             "{\"roomId\":\"00000000-0000-0000-0000-000000000001\",\"contentsDeferred\":false}",
             "{\"number\":0,\"roomId\":\"00000000-0000-0000-0000-000000000001\",\"contentsDeferred\":false}"
     })
-    void validatesCreateRequestBeforeCallingUnfinishedService(String body) throws Exception {
+    void validatesCreateRequestBeforeSavingBox(String body) throws Exception {
         mockMvc.perform(post(baseUrl).header(HttpHeaders.AUTHORIZATION, bearer(token))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().is(422))

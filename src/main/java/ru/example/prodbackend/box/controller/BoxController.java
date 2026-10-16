@@ -37,7 +37,7 @@ import java.util.UUID;
 @Tag(name = "Boxes", description = "Коробки проекта переезда")
 @SecurityRequirement(name = "jwtAuth")
 @ApiResponses({
-        @ApiResponse(responseCode = "400", description = "Некорректный UUID, параметры запроса или тело JSON"),
+        @ApiResponse(responseCode = "400", description = "Некорректный UUID или тело JSON", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
         @ApiResponse(responseCode = "401", description = "Access токен отсутствует, некорректный или истек",
                 content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
 })
@@ -51,14 +51,16 @@ public class BoxController {
                     Создаёт коробку с положительным номером, уникальным внутри проекта,
                     комнатой назначения и начальным статусом PACKING.
                     contentsDeferred позволяет отложить заполнение содержимого.
-                    Пока недоступно: в сервисе не реализована интеграция с Move, Room и Event.
+                    Комната должна принадлежать этому проекту. Доступ разрешён только владельцу проекта.
+                    Событие BOX_CREATED сохраняется вместе с коробкой в одной транзакции.
                     """,
             responses = {
                     @ApiResponse(responseCode = "201", description = "Коробка создана; Location содержит её адрес",
                             content = @Content(schema = @Schema(implementation = BoxResponse.class))),
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не найден или недоступен; ROOM_NOT_FOUND: комнаты нет в этом проекте", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: номер уже занят другой коробкой проекта", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "422", description = "Ошибка валидации тела запроса",
-                            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "500", description = "Создание пока не реализовано: TODO интеграции с другими модулями")
+                            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             }
     )
     @PostMapping
@@ -110,7 +112,7 @@ public class BoxController {
             responses = {
                     @ApiResponse(responseCode = "200", description = "Карточка коробки",
                             content = @Content(schema = @Schema(implementation = BoxResponse.class))),
-                    @ApiResponse(responseCode = "404", description = "Коробка не найдена в проекте или недоступна пользователю")
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не найден или недоступен; BOX_NOT_FOUND: коробки нет в этом проекте", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             }
     )
     @GetMapping("/{boxId}")
@@ -125,19 +127,18 @@ public class BoxController {
     @Operation(
             summary = "Редактирование коробки",
             description = """
-                    Изменяет номер и признак contentsDeferred. Отсутствующие поля сохраняют значения.
+                    Изменяет номер, комнату назначения и признак contentsDeferred. Отсутствующие поля сохраняют значения.
                     Пустой запрос, явный null и неизвестные поля запрещены.
                     Статус изменяется отдельным запросом.
-                    Смена комнаты пока недоступна: требуется интеграция с Room.
+                    Новая комната должна принадлежать тому же проекту. Содержимое коробки сохраняется.
                     Передача идентификатора текущей комнаты допустима.
                     """,
             responses = {
                     @ApiResponse(responseCode = "200", description = "Коробка обновлена",
                             content = @Content(schema = @Schema(implementation = BoxResponse.class))),
-                    @ApiResponse(responseCode = "404", description = "Коробка не найдена в проекте или недоступна пользователю"),
-                    @ApiResponse(responseCode = "409", description = "Номер уже занят другой коробкой проекта"),
-                    @ApiResponse(responseCode = "422", description = "Ошибка валидации"),
-                    @ApiResponse(responseCode = "500", description = "Смена комнаты пока не реализована")
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не найден или недоступен; BOX_NOT_FOUND: коробки нет в этом проекте; ROOM_NOT_FOUND: комнаты нет в этом проекте", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: номер уже занят другой коробкой проекта", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: ошибка валидации; подробности в fieldErrors", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             }
     )
     @PatchMapping("/{boxId}")
@@ -156,13 +157,13 @@ public class BoxController {
                     Разрешён следующий шаг: PACKING → PACKED → LOADED → DELIVERED → UNPACKED.
                     Повтор текущего статуса успешен и не изменяет updatedAt.
                     Пропуск этапа и возврат назад запрещены.
-                    Запись события BOX_STATUS_CHANGED пока не реализована: TODO модуля Event.
+                    Событие BOX_STATUS_CHANGED сохраняется в той же транзакции. Повтор статуса не создаёт событие.
                     """,
             responses = {
                     @ApiResponse(responseCode = "200", description = "Коробка с актуальным статусом",
                             content = @Content(schema = @Schema(implementation = BoxResponse.class))),
-                    @ApiResponse(responseCode = "404", description = "Коробка не найдена в проекте или недоступна пользователю"),
-                    @ApiResponse(responseCode = "409", description = "Недопустимый переход статуса"),
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не найден или недоступен; BOX_NOT_FOUND: коробки нет в этом проекте", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: недопустимый переход статуса", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "422", description = "Статус обязателен",
                             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             }
@@ -174,9 +175,7 @@ public class BoxController {
             @PathVariable UUID boxId,
             @Valid @RequestBody ChangeBoxStatusRequest request
     ) {
-        return ResponseEntity.ok(
-                boxService.changeStatus(user.getId(), projectId, boxId, request.getStatus())
-        );
+        return ResponseEntity.ok(boxService.changeStatus(user.getId(), projectId, boxId, request.getStatus()));
     }
 
     @Operation(
@@ -187,7 +186,7 @@ public class BoxController {
                     """,
             responses = {
                     @ApiResponse(responseCode = "204", description = "Коробка удалена", content = @Content),
-                    @ApiResponse(responseCode = "404", description = "Коробка не найдена в проекте или недоступна пользователю")
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не найден или недоступен; BOX_NOT_FOUND: коробки нет в этом проекте", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             }
     )
     @DeleteMapping("/{boxId}")

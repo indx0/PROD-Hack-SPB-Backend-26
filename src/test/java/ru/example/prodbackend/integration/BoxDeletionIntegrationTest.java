@@ -9,14 +9,16 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
-import org.springframework.http.HttpStatus;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.web.server.ResponseStatusException;
 import ru.example.prodbackend.box.entity.BoxEntity;
 import ru.example.prodbackend.box.service.BoxService;
 import ru.example.prodbackend.config.TestcontainersConfig;
+import ru.example.prodbackend.event.service.ProjectEventService;
+import ru.example.prodbackend.exception.BoxNotFoundException;
+import ru.example.prodbackend.exception.MoveProjectNotFoundException;
 import ru.example.prodbackend.item.entity.ItemEntity;
 import ru.example.prodbackend.move.entity.MoveProjectEntity;
+import ru.example.prodbackend.move.service.ProjectAccessService;
 import ru.example.prodbackend.room.entity.RoomEntity;
 import ru.example.prodbackend.user.entity.UserEntity;
 import ru.example.prodbackend.user.entity.UserRole;
@@ -30,7 +32,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @DataJpaTest(properties = "spring.jpa.show-sql=false")
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
-@Import({TestcontainersConfig.class, BoxService.class})
+@Import({TestcontainersConfig.class, BoxService.class, ProjectAccessService.class, ProjectEventService.class})
 class BoxDeletionIntegrationTest {
 
     @Autowired
@@ -108,8 +110,7 @@ class BoxDeletionIntegrationTest {
         UUID boxId = invalidField.equals("box") ? UUID.randomUUID() : box.getId();
 
         assertThatThrownBy(() -> boxService.delete(userId, projectId, boxId))
-                .isInstanceOfSatisfying(ResponseStatusException.class,
-                        exception -> assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
+                .isInstanceOf(invalidField.equals("box") ? BoxNotFoundException.class : MoveProjectNotFoundException.class);
         entityManager.clear();
 
         assertThat(entityManager.find(BoxEntity.class, box.getId())).isNotNull();

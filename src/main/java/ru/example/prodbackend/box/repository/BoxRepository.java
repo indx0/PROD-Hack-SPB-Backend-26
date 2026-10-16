@@ -18,6 +18,9 @@ import java.util.UUID;
 
 @Repository
 public interface BoxRepository extends JpaRepository<BoxEntity, UUID> {
+
+    boolean existsByRoom_Id(UUID roomId);
+
     @EntityGraph(attributePaths = "room")
     Optional<BoxEntity> findByIdAndProject_Id(UUID boxId, UUID projectId);
 
