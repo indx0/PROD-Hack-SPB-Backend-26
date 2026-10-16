@@ -2,25 +2,29 @@ package ru.example.prodbackend.box.entity;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
-import ru.example.prodbackend.common.entity.AuditedEntity;
-import java.time.Instant;
+import lombok.*;
 import ru.example.prodbackend.move.entity.MoveProjectEntity;
 import ru.example.prodbackend.room.entity.RoomEntity;
 
+import java.time.Instant;
+import java.util.UUID;
+
 @Entity
+@Builder
 @Getter
 @Setter
 @NoArgsConstructor
-@Table(name = "boxes", check = @CheckConstraint(
-        name = "ck_boxes_positive_number", constraint = "number > 0"), uniqueConstraints = @UniqueConstraint(
-        name = "uk_boxes_project_number", columnNames = {"project_id", "number"}), indexes = {
+@AllArgsConstructor
+@Table(name = "boxes", indexes = {
         @Index(name = "idx_boxes_project_status", columnList = "project_id,status"),
         @Index(name = "idx_boxes_room_project", columnList = "room_id,project_id")
     })
-public class BoxEntity extends AuditedEntity {
+public class BoxEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "project_id", nullable = false)
     private MoveProjectEntity project;
@@ -32,10 +36,7 @@ public class BoxEntity extends AuditedEntity {
             foreignKeyDefinition = "foreign key (room_id, project_id) references rooms (id, project_id)"))
     private RoomEntity room;
 
-    @Positive
-    @Column(nullable = false)
-    private int number;
-
+    @Builder.Default
     @NotNull
     @Setter(lombok.AccessLevel.NONE)
     @Enumerated(EnumType.STRING)
@@ -45,8 +46,22 @@ public class BoxEntity extends AuditedEntity {
     @Column(name = "contents_deferred", nullable = false)
     private boolean contentsDeferred;
 
-    @Column(name = "contents_reminder_at")
-    private Instant contentsReminderAt;
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
+
+    @PrePersist
+    protected void onCreate() {
+        createdAt = Instant.now();
+        updatedAt = createdAt;
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = Instant.now();
+    }
 
     /** Allows only a sequential forward step or an idempotent repeat. */
     public void changeStatus(BoxStatus next) {
