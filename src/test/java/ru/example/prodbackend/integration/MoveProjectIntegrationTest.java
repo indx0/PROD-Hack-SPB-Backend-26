@@ -29,7 +29,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /** Реальные HTTP-сценарии через MockMvc, Security, сервис и PostgreSQL, без моков. */
 class MoveProjectIntegrationTest extends AuthIntegrationTestSupport {
 
-    private static final String URL = "/api/v1/move-projects";
+    private static final String URL = "/api/move-projects";
     private static final Instant MOVE_DATE = Instant.parse("2026-11-01T09:00:00Z");
 
     @Autowired

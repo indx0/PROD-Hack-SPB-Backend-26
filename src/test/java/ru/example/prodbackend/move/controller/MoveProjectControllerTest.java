@@ -30,7 +30,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 class MoveProjectControllerTest {
 
-    private static final String URL = "/api/v1/move-projects";
+    private static final String URL = "/api/move-projects";
     private static final UUID PROJECT_ID = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
     private static final String CREATE_BODY = """
             {"name":"Переезд", "moveDate":"2026-11-01T09:00:00Z"}

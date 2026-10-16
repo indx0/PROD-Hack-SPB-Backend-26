@@ -114,8 +114,8 @@ class SecurityIntegrationTest extends AuthIntegrationTestSupport {
     @Test
     void openApiDescribesMoveProjectResponsesAndErrors() throws Exception {
         var response = mockMvc.perform(get("/v3/api-docs")).andExpect(status().isOk());
-        String collection = "$.paths['/api/v1/move-projects']";
-        String project = "$.paths['/api/v1/move-projects/{projectId}']";
+        String collection = "$.paths['/api/move-projects']";
+        String project = "$.paths['/api/move-projects/{projectId}']";
 
         response.andExpect(jsonPath(collection + ".post.responses['201'].content['application/json'].schema['$ref']").value("#/components/schemas/MoveProjectResponse"))
                 .andExpect(jsonPath(collection + ".get.responses['200'].content['application/json'].schema['$ref']").value("#/components/schemas/PageResponseMoveProjectResponse"))
@@ -135,7 +135,7 @@ class SecurityIntegrationTest extends AuthIntegrationTestSupport {
     @ParameterizedTest
     @ValueSource(strings = {"POST", "LIST", "GET", "PATCH", "DELETE"})
     void moveProjectEndpointsRequireAccessToken(String operation) throws Exception {
-        String path = "/api/v1/move-projects";
+        String path = "/api/move-projects";
         if (!operation.equals("POST") && !operation.equals("LIST")) {
             path += "/550e8400-e29b-41d4-a716-446655440000";
         }
@@ -161,7 +161,7 @@ class SecurityIntegrationTest extends AuthIntegrationTestSupport {
         String boxes = "$.paths['/api/projects/{projectId}/boxes'].get";
         response.andExpect(jsonPath(boxes + ".responses['200'].content['application/json'].schema['$ref']").value("#/components/schemas/PageResponseBoxResponse"))
                 .andExpect(jsonPath(boxes + ".responses['422'].content['application/json'].schema['$ref']").value("#/components/schemas/ErrorResponse"));
-        for (String path : new String[]{"/api/v1/move-projects", "/api/projects/{projectId}/boxes"}) {
+        for (String path : new String[]{"/api/move-projects", "/api/projects/{projectId}/boxes"}) {
             String parameters = "$.paths['" + path + "'].get.parameters";
             response.andExpect(jsonPath(parameters + "[?(@.name == 'page')].schema.default").value(org.hamcrest.Matchers.contains(0)))
                     .andExpect(jsonPath(parameters + "[?(@.name == 'size')].schema.default").value(org.hamcrest.Matchers.contains(20)))

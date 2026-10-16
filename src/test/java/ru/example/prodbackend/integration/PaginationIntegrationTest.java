@@ -141,7 +141,7 @@ class PaginationIntegrationTest extends AuthIntegrationTestSupport {
     }
 
     private ResultActions list(String resource, Map<String, String> parameters) throws Exception {
-        var request = get(resource.equals("projects") ? "/api/v1/move-projects" : boxesUrl(projectId));
+        var request = get(resource.equals("projects") ? "/api/move-projects" : boxesUrl(projectId));
         parameters.forEach(request::param);
         return mockMvc.perform(request.header(HttpHeaders.AUTHORIZATION, "Bearer " + token));
     }
