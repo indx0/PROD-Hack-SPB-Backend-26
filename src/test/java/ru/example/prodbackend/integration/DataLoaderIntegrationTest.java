@@ -18,10 +18,18 @@ import ru.example.prodbackend.config.TestcontainersConfig;
 import ru.example.prodbackend.move.entity.MoveProjectEntity;
 import ru.example.prodbackend.task.entity.MoveTaskEntity;
 import ru.example.prodbackend.user.repository.UserRepository;
+import ru.example.prodbackend.box.service.BoxService;
+import ru.example.prodbackend.checklist.service.FirstDayChecklistService;
+import ru.example.prodbackend.move.service.MoveProjectService;
+import ru.example.prodbackend.room.service.RoomService;
+import ru.example.prodbackend.task.service.MoveTaskService;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
+import java.util.HashMap;
+import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -29,7 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @ActiveProfiles("test")
 @Import(TestcontainersConfig.class)
 @Transactional
-class DataLoaderIntegrationTest {
+class DataLoaderIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private EntityManager entityManager;
@@ -42,13 +50,21 @@ class DataLoaderIntegrationTest {
 
     @Autowired
     private RefreshTokenService refreshTokenService;
+    @Autowired
+    private MoveProjectService moveProjectService;
+    @Autowired
+    private RoomService roomService;
+    @Autowired
+    private BoxService boxService;
+    @Autowired
+    private MoveTaskService moveTaskService;
+    @Autowired
+    private FirstDayChecklistService checklistService;
 
     @Test
     void loadsDemoMoveForUser1() {
         // Run inside the test transaction so demo data is rolled back, including in the shared CI database.
-        DataLoader loader = new DataLoader(entityManager, userRepository, passwordEncoder, refreshTokenService);
-        ReflectionTestUtils.setField(loader, "adminPassword", "test-admin-password");
-        ReflectionTestUtils.setField(loader, "user1Password", "test-user-password");
+        DataLoader loader = loader();
         LocalDate beforeLoad = LocalDate.now(ZoneOffset.UTC);
         loader.run(new DefaultApplicationArguments(new String[0]));
         LocalDate afterLoad = LocalDate.now(ZoneOffset.UTC);
@@ -67,7 +83,7 @@ class DataLoaderIntegrationTest {
                 .containsExactlyInAnyOrder(1L, 1L);
         assertThat(count("RoomEntity")).isEqualTo(4);
         assertThat(count("ItemEntity")).isEqualTo(12);
-        assertThat(count("MoveTaskEntity")).isEqualTo(9);
+        assertThat(count("MoveTaskEntity")).isEqualTo(12);
         assertThat(count("FirstDayChecklistItemEntity")).isEqualTo(6);
         assertThat(count("ProjectEventEntity")).isEqualTo(18);
         assertThat(entityManager.createQuery("from BoxEntity", BoxEntity.class).getResultList())
@@ -79,9 +95,41 @@ class DataLoaderIntegrationTest {
                 .extracting(BoxEntity::getStatus).containsExactlyInAnyOrder(BoxStatus.values());
         assertThat(entityManager.createQuery("from BoxEntity", BoxEntity.class).getResultList())
                 .extracting(BoxEntity::getNumber).containsExactlyInAnyOrder(1, 2, 3, 4, 5);
-        assertTaskDueDate("Выбрать перевозчика", moveDate.minusDays(10));
-        assertTaskDueDate("Встретить грузчиков", moveDate);
-        assertTaskDueDate("Подключить интернет", moveDate.plusDays(2));
+        assertTaskDueDate("Заказать грузчиков", moveDate.minusDays(14));
+        assertTaskDueDate("Передать ключи", moveDate);
+        assertTaskDueDate("Подключить интернет", moveDate.plusDays(1));
+        assertTaskDueDate("Упаковать кухню", moveDate.minusDays(2));
+        assertThat(entityManager.createQuery("select count(t) from MoveTaskEntity t where t.completedAt is not null", Long.class).getSingleResult()).isEqualTo(2);
+        assertThat(entityManager.createQuery("select count(i) from FirstDayChecklistItemEntity i where i.completedAt is not null", Long.class).getSingleResult()).isEqualTo(2);
+        assertThat(entityManager.createQuery("select count(e) from ProjectEventEntity e where e.eventType = ru.example.prodbackend.event.entity.ProjectEventType.PROJECT_CREATED", Long.class).getSingleResult()).isEqualTo(1);
+        assertThat(passwordEncoder.matches("test-user-password", userRepository.findByEmail("user1").orElseThrow().getPassword())).isTrue();
+    }
+
+    @Test
+    void repeatedRunPreservesUsersDemoObjectsSessionsAndEvents() {
+        DataLoader loader = loader();
+        var args = new DefaultApplicationArguments(new String[0]);
+        loader.run(args);
+        entityManager.flush();
+        var before = new HashMap<String, List<UUID>>();
+        for (String entity : new String[]{"UserEntity", "RefreshTokenEntity", "MoveProjectEntity", "RoomEntity", "BoxEntity", "ItemEntity", "MoveTaskEntity", "FirstDayChecklistItemEntity", "ProjectEventEntity"}) {
+            before.put(entity, entityManager.createQuery("select e.id from " + entity + " e order by e.id", UUID.class).getResultList());
+        }
+        String password = userRepository.findByEmail("user1").orElseThrow().getPassword();
+        ReflectionTestUtils.setField(loader, "user1Password", "new-password-must-not-overwrite-user");
+        loader.run(args);
+        entityManager.flush();
+        entityManager.clear();
+        before.forEach((entity, ids) -> assertThat(entityManager.createQuery("select e.id from " + entity + " e order by e.id", UUID.class).getResultList()).isEqualTo(ids));
+        assertThat(userRepository.findByEmail("user1").orElseThrow().getPassword()).isEqualTo(password);
+    }
+
+    private DataLoader loader() {
+        var loader = new DataLoader(entityManager, userRepository, passwordEncoder, refreshTokenService, moveProjectRepository,
+                moveProjectService, roomService, boxService, moveTaskService, checklistService);
+        ReflectionTestUtils.setField(loader, "adminPassword", "test-admin-password");
+        ReflectionTestUtils.setField(loader, "user1Password", "test-user-password");
+        return loader;
     }
 
     private void assertTaskDueDate(String title, LocalDate expected) {

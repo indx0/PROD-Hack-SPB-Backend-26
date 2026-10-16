@@ -37,6 +37,9 @@ public class TaskTemplateEntity {
     @Column(nullable = false, length = 32)
     private TaskStage stage;
 
+    @Column(name = "due_date_offset_days", nullable = false)
+    private int dueDateOffsetDays;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

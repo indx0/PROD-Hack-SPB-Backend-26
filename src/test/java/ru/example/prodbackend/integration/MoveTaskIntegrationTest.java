@@ -8,6 +8,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import ru.example.prodbackend.event.entity.EventObjectType;
 import ru.example.prodbackend.event.entity.ProjectEventType;
 import ru.example.prodbackend.event.repository.ProjectEventRepository;
@@ -38,6 +40,8 @@ class MoveTaskIntegrationTest extends AuthIntegrationTestSupport {
     private TaskTemplateInitializer templateInitializer;
     @Autowired
     private ProjectEventRepository eventRepository;
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     private String token;
     private UUID projectId;
@@ -261,7 +265,11 @@ class MoveTaskIntegrationTest extends AuthIntegrationTestSupport {
         byte[] body = mockMvc.perform(post("/api/move-projects").header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"Тест задач\",\"moveDate\":\"2026-11-01T09:00:00Z\"}"))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsByteArray();
-        return jsonMapper.readValue(body, MoveProjectResponse.class).getId();
+        UUID id = jsonMapper.readValue(body, MoveProjectResponse.class).getId();
+        // Эти тесты проверяют собственные задачи и ручное применение шаблонов на пустом плане.
+        // Автозаполнение нового проекта отдельно проверяет MoveProjectBootstrapIntegrationTest.
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> moveProjectRepository.deleteProjectTasks(id));
+        return id;
     }
 
     private MoveTaskResponse createTask(UUID project, String title, TaskStage stage) throws Exception {

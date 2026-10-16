@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.example.prodbackend.common.dto.PageResponse;
 import ru.example.prodbackend.common.dto.PaginationRequest;
+import ru.example.prodbackend.checklist.service.FirstDayChecklistService;
 import ru.example.prodbackend.event.entity.EventObjectType;
 import ru.example.prodbackend.event.entity.ProjectEventType;
 import ru.example.prodbackend.event.service.ProjectEventService;
@@ -19,7 +20,11 @@ import ru.example.prodbackend.move.entity.MoveProjectEntity;
 import ru.example.prodbackend.move.repository.MoveProjectRepository;
 import ru.example.prodbackend.user.entity.UserEntity;
 import ru.example.prodbackend.user.repository.UserRepository;
+import ru.example.prodbackend.task.entity.MoveTaskEntity;
+import ru.example.prodbackend.task.repository.MoveTaskRepository;
+import ru.example.prodbackend.task.service.TaskTemplateService;
 
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 @Service
@@ -31,6 +36,9 @@ public class MoveProjectService {
     private final UserRepository userRepository;
     private final ProjectAccessService projectAccessService;
     private final ProjectEventService projectEventService;
+    private final TaskTemplateService taskTemplateService;
+    private final MoveTaskRepository moveTaskRepository;
+    private final FirstDayChecklistService checklistService;
 
     @Transactional
     public MoveProjectResponse createMoveProject(CreateMoveProjectRequest request, UserEntity user) {
@@ -45,6 +53,11 @@ public class MoveProjectService {
                 .build();
 
         MoveProjectEntity savedProject = moveProjectRepository.save(project);
+        var moveDate = savedProject.getMoveDate().atOffset(ZoneOffset.UTC).toLocalDate();
+        moveTaskRepository.saveAll(taskTemplateService.getDefaultTemplates().stream().map(template -> MoveTaskEntity.builder()
+                .project(savedProject).template(template).title(template.getTitle()).description(template.getDescription()).stage(template.getStage())
+                .dueDate(moveDate.plusDays(template.getDueDateOffsetDays())).build()).toList());
+        checklistService.createDefaults(savedProject);
         projectEventService.record(savedProject, owner, ProjectEventType.PROJECT_CREATED, EventObjectType.PROJECT,
                 savedProject.getId(), "Создан проект переезда «" + savedProject.getName() + "»");
 

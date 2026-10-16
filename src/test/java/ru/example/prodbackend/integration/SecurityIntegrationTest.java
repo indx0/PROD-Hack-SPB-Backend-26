@@ -150,7 +150,7 @@ class SecurityIntegrationTest extends AuthIntegrationTestSupport {
     @Test
     void openApiDescribesGenericPagesWithTypedItemsAndSharedParameters() throws Exception {
         var response = mockMvc.perform(get("/v3/api-docs")).andExpect(status().isOk());
-        for (String item : new String[]{"MoveProjectResponse", "BoxResponse"}) {
+        for (String item : new String[]{"MoveProjectResponse", "BoxResponse", "RoomResponse", "MoveTaskResponse", "TaskTemplateResponse", "ChecklistItemResponse", "ProjectEventResponse"}) {
             String schema = "$.components.schemas.PageResponse" + item;
             response.andExpect(jsonPath(schema + ".properties.content.items['$ref']").value("#/components/schemas/" + item))
                     .andExpect(jsonPath(schema + ".properties.page.type").value("integer"))

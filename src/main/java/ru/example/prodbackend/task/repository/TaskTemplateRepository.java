@@ -9,10 +9,12 @@ import ru.example.prodbackend.task.entity.TaskStage;
 import ru.example.prodbackend.task.entity.TaskTemplateEntity;
 
 import java.util.UUID;
+import java.util.Optional;
 
 public interface TaskTemplateRepository extends JpaRepository<TaskTemplateEntity, UUID> {
 
     boolean existsByStageAndTitle(TaskStage stage, String title);
+    Optional<TaskTemplateEntity> findByStageAndTitle(TaskStage stage, String title);
 
     @Query("""
             select t from TaskTemplateEntity t

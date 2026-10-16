@@ -15,6 +15,7 @@ public interface MoveProjectRepository extends JpaRepository<MoveProjectEntity, 
 
     Page<MoveProjectEntity> findAllByOwner_Id(UUID ownerId, Pageable pageable);
     Optional<MoveProjectEntity> findByIdAndOwner_Id(UUID projectId, UUID ownerId);
+    boolean existsByOwner_IdAndName(UUID ownerId, String name);
 
     @Modifying
     @Query(value = """
