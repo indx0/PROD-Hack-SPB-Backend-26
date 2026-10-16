@@ -19,12 +19,15 @@ import ru.example.prodbackend.event.entity.EventObjectType;
 import ru.example.prodbackend.event.entity.ProjectEventType;
 import ru.example.prodbackend.event.repository.ProjectEventRepository;
 import ru.example.prodbackend.item.entity.ItemEntity;
+import ru.example.prodbackend.item.dto.CreateItemsRequest;
 import ru.example.prodbackend.item.repository.ItemRepository;
+import ru.example.prodbackend.item.service.ItemService;
 import ru.example.prodbackend.move.entity.MoveProjectEntity;
 import ru.example.prodbackend.room.entity.RoomEntity;
 import ru.example.prodbackend.room.repository.RoomRepository;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -41,6 +44,8 @@ class BoxLifecycleIntegrationTest extends AuthIntegrationTestSupport {
     private RoomRepository roomRepository;
     @Autowired
     private ItemRepository itemRepository;
+    @Autowired
+    private ItemService itemService;
     @Autowired
     private ProjectEventRepository eventRepository;
     @Autowired
@@ -214,6 +219,31 @@ class BoxLifecycleIntegrationTest extends AuthIntegrationTestSupport {
         });
         assertEquals(BoxStatus.PACKING, boxRepository.findById(box.getId()).orElseThrow().getStatus());
         assertEquals(1L, eventRepository.count());
+    }
+
+    @Test
+    void rollsBackBatchCreationAndBulkBoxDeletion() throws Exception {
+        BoxResponse box = create(project.getId(), room.getId(), 1, false);
+        ItemEntity preserved = itemRepository.saveAndFlush(ItemEntity.builder()
+                .box(boxRepository.findById(box.getId()).orElseThrow()).name("Сохранить").build());
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+
+        transaction.executeWithoutResult(status -> {
+            itemService.createBatch(project.getOwner().getId(), project.getId(), box.getId(),
+                    CreateItemsRequest.builder().names(List.of("A", "B")).build());
+            assertEquals(3L, itemRepository.count());
+            status.setRollbackOnly();
+        });
+        assertEquals(1L, itemRepository.count());
+
+        transaction.executeWithoutResult(status -> {
+            boxService.delete(project.getOwner().getId(), project.getId(), box.getId());
+            assertEquals(0L, itemRepository.count());
+            assertFalse(boxRepository.existsById(box.getId()));
+            status.setRollbackOnly();
+        });
+        assertTrue(boxRepository.existsById(box.getId()));
+        assertTrue(itemRepository.existsById(preserved.getId()));
     }
 
     private MoveProjectEntity project() {

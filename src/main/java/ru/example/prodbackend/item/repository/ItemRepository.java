@@ -4,6 +4,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -16,7 +17,9 @@ import java.util.UUID;
 @Repository
 public interface ItemRepository extends JpaRepository<ItemEntity, UUID> {
 
-    void deleteByBox_Id(UUID boxId);
+    @Modifying(flushAutomatically = true)
+    @Query("delete from ItemEntity i where i.box.id = :boxId")
+    int deleteByBox_Id(@Param("boxId") UUID boxId);
 
     @EntityGraph(attributePaths = {"box", "box.room", "box.project"})
     Page<ItemEntity> findAllByBox_Id(UUID boxId, Pageable pageable);
@@ -25,7 +28,16 @@ public interface ItemRepository extends JpaRepository<ItemEntity, UUID> {
     Optional<ItemEntity> findByIdAndBox_Id(UUID itemId, UUID boxId);
 
     @EntityGraph(attributePaths = {"box", "box.room", "box.project"})
-    Optional<ItemEntity> findByIdAndBoxProject_IdAndBoxProject_OwnerId(UUID itemId, UUID projectId, UUID ownerId);
+    @Query("""
+            select i from ItemEntity i
+            where i.id = :itemId and i.box.project.id = :projectId
+              and i.box.project.owner.id = :ownerId
+            """)
+    Optional<ItemEntity> findByIdAndBoxProject_IdAndBoxProjectOwnerId(
+            @Param("itemId") UUID itemId,
+            @Param("projectId") UUID projectId,
+            @Param("ownerId") UUID ownerId
+    );
 
     @EntityGraph(attributePaths = {"box", "box.room", "box.project"})
     @Query(value = """

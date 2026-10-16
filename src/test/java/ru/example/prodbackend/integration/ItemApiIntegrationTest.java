@@ -293,6 +293,26 @@ class ItemApiIntegrationTest {
     }
 
     @ParameterizedTest
+    @ValueSource(strings = {"%", "_", "!", "100%_!"})
+    void suggestionsEscapeWildcardsAndDoNotDuplicateMatchingBoxes(String name) throws Exception {
+        entityManager.find(ItemEntity.class, source.getId()).setName(name);
+        BoxEntity matching = entityManager.getReference(BoxEntity.class, matchingBox.getId());
+        item(matching, name + " USB", false);
+        item(matching, name + " HDMI", false);
+        entityManager.flush();
+        entityManager.clear();
+
+        perform(get(projectUrl + "/items/" + source.getId() + "/suggestions"), null)
+                .andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(3)))
+                .andExpect(jsonPath("$[0].boxNumber").value(3))
+                .andExpect(jsonPath("$[0].contentsMatch").value(true))
+                .andExpect(jsonPath("$[1].boxNumber").value(1))
+                .andExpect(jsonPath("$[1].contentsMatch").value(true))
+                .andExpect(jsonPath("$[2].boxNumber").value(2))
+                .andExpect(jsonPath("$[2].contentsMatch").value(false));
+    }
+
+    @ParameterizedTest
     @CsvSource({"GET, list", "POST, create", "POST, batch", "PATCH, update", "DELETE, delete", "GET, suggestions"})
     void deniesForeignUserForAllResourceOperations(String method, String operation) throws Exception {
         mockMvc.perform(operationRequest(method, operation)

@@ -12,6 +12,7 @@ import org.springframework.stereotype.Repository;
 import ru.example.prodbackend.box.entity.BoxEntity;
 import ru.example.prodbackend.box.entity.BoxStatus;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -70,4 +71,22 @@ public interface BoxRepository extends JpaRepository<BoxEntity, UUID> {
 
     @EntityGraph(attributePaths = "room")
     List<BoxEntity> findAllByProject_IdOrderByNumberAscIdAsc(UUID projectId);
+
+    @EntityGraph(attributePaths = "room")
+    @Query("""
+            select b from BoxEntity b
+            where b.project.id = :projectId and b.project.owner.id = :ownerId
+              and b.status <> BoxStatus.UNPACKED
+              and (b.id in :matchingBoxIds or b.room.id = :roomId)
+            order by case when b.id in :matchingBoxIds then 1 else 0 end desc,
+                     case when b.room.id = :roomId then 1 else 0 end desc,
+                     b.number, b.id
+            """)
+    List<BoxEntity> findSuggestions(
+            @Param("projectId") UUID projectId,
+            @Param("ownerId") UUID ownerId,
+            @Param("roomId") UUID roomId,
+            @Param("matchingBoxIds") Collection<UUID> matchingBoxIds,
+            Pageable pageable
+    );
 }

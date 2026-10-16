@@ -7,7 +7,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.example.prodbackend.box.entity.BoxEntity;
-import ru.example.prodbackend.box.entity.BoxStatus;
 import ru.example.prodbackend.box.repository.BoxRepository;
 import ru.example.prodbackend.common.dto.PageResponse;
 import ru.example.prodbackend.common.dto.PaginationRequest;
@@ -20,7 +19,6 @@ import ru.example.prodbackend.item.dto.UpdateItemRequest;
 import ru.example.prodbackend.item.entity.ItemEntity;
 import ru.example.prodbackend.item.repository.ItemRepository;
 
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -86,25 +84,18 @@ public class ItemService {
     }
 
     public List<ItemBoxSuggestionResponse> suggestions(UUID userId, UUID projectId, UUID itemId, int limit) {
-        ItemEntity item = itemRepository.findByIdAndBoxProject_IdAndBoxProject_OwnerId(itemId, projectId, userId)
+        ItemEntity item = itemRepository.findByIdAndBoxProject_IdAndBoxProjectOwnerId(itemId, projectId, userId)
                 .orElseThrow(() -> new ItemNotFoundException("Item not found"));
         UUID roomId = item.getBox().getRoom().getId();
         Set<UUID> matchingBoxes = new HashSet<>(itemRepository.findMatchingBoxIds(
                 projectId, userId, searchPattern(item.getName())));
 
-        return boxRepository.findAllByProject_IdOrderByNumberAscIdAsc(projectId).stream()
-                .filter(box -> box.getStatus() != BoxStatus.UNPACKED)
-                .filter(box -> matchingBoxes.contains(box.getId()) || box.getRoom().getId().equals(roomId))
+        return boxRepository.findSuggestions(projectId, userId, roomId, matchingBoxes, PageRequest.of(0, limit)).stream()
                 .map(box -> ItemBoxSuggestionResponse.builder()
                         .boxId(box.getId()).boxNumber(box.getNumber())
                         .roomId(box.getRoom().getId()).roomName(box.getRoom().getName())
                         .status(box.getStatus()).contentsMatch(matchingBoxes.contains(box.getId()))
                         .sameRoom(box.getRoom().getId().equals(roomId)).build())
-                .sorted(Comparator.comparing(ItemBoxSuggestionResponse::isContentsMatch).reversed()
-                        .thenComparing(Comparator.comparing(ItemBoxSuggestionResponse::isSameRoom).reversed())
-                        .thenComparingInt(ItemBoxSuggestionResponse::getBoxNumber)
-                        .thenComparing(ItemBoxSuggestionResponse::getBoxId))
-                .limit(limit)
                 .toList();
     }
 
