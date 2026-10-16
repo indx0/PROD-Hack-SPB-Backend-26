@@ -18,6 +18,7 @@ import ru.example.prodbackend.move.service.ProjectAccessService;
 import ru.example.prodbackend.task.dto.request.*;
 import ru.example.prodbackend.task.dto.response.MoveTaskResponse;
 import ru.example.prodbackend.task.dto.response.TaskTemplateResponse;
+import ru.example.prodbackend.task.dto.response.TaskSummaryResponse;
 import ru.example.prodbackend.task.entity.MoveTaskEntity;
 import ru.example.prodbackend.task.entity.TaskStage;
 import ru.example.prodbackend.task.entity.TaskTemplateEntity;
@@ -36,6 +37,14 @@ public class MoveTaskService {
     private final TaskTemplateRepository taskTemplateRepository;
     private final ProjectAccessService projectAccessService;
     private final ProjectEventService projectEventService;
+
+    public TaskSummaryResponse summary(UUID projectId, UUID userId) {
+        projectAccessService.getOwnedProject(projectId, userId);
+        return TaskSummaryResponse.builder()
+                .totalTasks(moveTaskRepository.countByProject_Id(projectId))
+                .completedTasks(moveTaskRepository.countByProject_IdAndCompletedAtIsNotNull(projectId))
+                .build();
+    }
 
     @Transactional
     public MoveTaskResponse create(UUID projectId, CreateMoveTaskRequest request, UUID userId) {

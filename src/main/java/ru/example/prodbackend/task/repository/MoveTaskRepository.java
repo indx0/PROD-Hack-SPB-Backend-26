@@ -13,6 +13,10 @@ import java.util.UUID;
 
 public interface MoveTaskRepository extends JpaRepository<MoveTaskEntity, UUID> {
 
+    long countByProject_Id(UUID projectId);
+
+    long countByProject_IdAndCompletedAtIsNotNull(UUID projectId);
+
     @EntityGraph(attributePaths = "template")
     Optional<MoveTaskEntity> findByIdAndProject_Id(UUID taskId, UUID projectId);
 

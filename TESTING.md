@@ -124,6 +124,21 @@ Spring `Page` используется внутри репозиториев, н
 
 Запуск: `mvn -Dit.test=BoxLifecycleIntegrationTest verify`.
 
+## Сводка прогресса
+
+`ProgressController` предоставляет два GET-эндпоинта:
+`/api/projects/{projectId}/progress/boxes` возвращает существующий `BoxSummaryResponse`,
+а `/api/projects/{projectId}/progress/tasks` — `totalTasks` и `completedTasks` типа long.
+Выполненной считается задача с заполненным `completedAt`. Подсчёт выполняется двумя COUNT-запросами
+после проверки владельца, без загрузки списка задач. Шаблоны и чек-лист первого дня
+не входят в статистику; задачи, созданные из шаблонов, учитываются как обычные задачи проекта.
+
+`ProgressIntegrationTest` проверяет совпадение сводки коробок с `/boxes/summary`, пустые проекты,
+начальные задачи, разные этапы и степени выполнения, создание/выполнение/возврат/удаление задач,
+изоляцию проектов, ошибки доступа и UUID, Swagger и отсутствие изменений при чтении.
+
+Запуск: `./mvnw -Dit.test=ProgressIntegrationTest verify`.
+
 ## Основа журнала событий
 
 `ProjectEventService.record(...)` сохраняет события через общий репозиторий.
