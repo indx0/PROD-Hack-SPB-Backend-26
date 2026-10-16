@@ -3,19 +3,25 @@ package ru.example.prodbackend.integration;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.DefaultApplicationArguments;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Transactional;
+import ru.example.prodbackend.auth.service.RefreshTokenService;
 import ru.example.prodbackend.box.entity.BoxEntity;
 import ru.example.prodbackend.box.entity.BoxStatus;
+import ru.example.prodbackend.config.DataLoader;
 import ru.example.prodbackend.config.TestcontainersConfig;
 import ru.example.prodbackend.move.entity.MoveProjectEntity;
+import ru.example.prodbackend.user.repository.UserRepository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest(properties = {"ADMIN_PASSWORD=test-admin-password", "USER1_PASSWORD=test-user-password"})
-@ActiveProfiles({"dev", "test"})
+@SpringBootTest
+@ActiveProfiles("test")
 @Import(TestcontainersConfig.class)
 @Transactional
 class DataLoaderIntegrationTest {
@@ -23,8 +29,25 @@ class DataLoaderIntegrationTest {
     @Autowired
     private EntityManager entityManager;
 
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private RefreshTokenService refreshTokenService;
+
     @Test
     void loadsDemoMoveForUser1() {
+        // Run inside the test transaction so demo data is rolled back, including in the shared CI database.
+        DataLoader loader = new DataLoader(entityManager, userRepository, passwordEncoder, refreshTokenService);
+        ReflectionTestUtils.setField(loader, "adminPassword", "test-admin-password");
+        ReflectionTestUtils.setField(loader, "user1Password", "test-user-password");
+        loader.run(new DefaultApplicationArguments(new String[0]));
+        entityManager.flush();
+        entityManager.clear();
+
         MoveProjectEntity project = entityManager.createQuery("from MoveProjectEntity", MoveProjectEntity.class)
                 .getSingleResult();
         assertThat(project.getOwner().getEmail()).isEqualTo("user1");
