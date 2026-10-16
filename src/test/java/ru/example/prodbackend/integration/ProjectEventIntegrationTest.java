@@ -24,6 +24,10 @@ import ru.example.prodbackend.move.entity.MoveProjectEntity;
 import ru.example.prodbackend.move.service.MoveProjectService;
 import ru.example.prodbackend.room.entity.RoomEntity;
 import ru.example.prodbackend.room.repository.RoomRepository;
+import ru.example.prodbackend.task.dto.request.CreateMoveTaskRequest;
+import ru.example.prodbackend.task.entity.TaskStage;
+import ru.example.prodbackend.task.repository.MoveTaskRepository;
+import ru.example.prodbackend.task.service.MoveTaskService;
 import ru.example.prodbackend.user.entity.UserEntity;
 
 import java.time.Instant;
@@ -45,6 +49,10 @@ class ProjectEventIntegrationTest extends AuthIntegrationTestSupport {
     private RoomRepository roomRepository;
     @Autowired
     private BoxRepository boxRepository;
+    @Autowired
+    private MoveTaskService moveTaskService;
+    @Autowired
+    private MoveTaskRepository taskRepository;
     @Autowired
     private PlatformTransactionManager transactionManager;
     @MockitoSpyBean
@@ -117,6 +125,22 @@ class ProjectEventIntegrationTest extends AuthIntegrationTestSupport {
 
     private CreateMoveProjectRequest request() {
         return CreateMoveProjectRequest.builder().name("Переезд").moveDate(Instant.parse("2026-11-01T09:00:00Z")).build();
+    }
+
+    @Test
+    void eventWriteFailureRollsBackTaskCompletion() {
+        var project = moveProjectService.createMoveProject(request(), owner);
+        var task = moveTaskService.create(project.getId(), CreateMoveTaskRequest.builder().title("Собрать вещи").stage(TaskStage.BEFORE_MOVE).build(), owner.getId());
+        var updatedAt = taskRepository.findById(task.getId()).orElseThrow().getUpdatedAt();
+        long initialEvents = eventRepository.count();
+        failEventWrite();
+
+        assertThrows(DataAccessResourceFailureException.class, () -> moveTaskService.changeCompletion(project.getId(), task.getId(), true, owner.getId()));
+
+        var saved = taskRepository.findById(task.getId()).orElseThrow();
+        assertNull(saved.getCompletedAt());
+        assertEquals(updatedAt, saved.getUpdatedAt());
+        assertEquals(initialEvents, eventRepository.count());
     }
 
     private void failEventWrite() {

@@ -13,7 +13,10 @@ import java.util.UUID;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name = "task_templates")
+@Table(name = "task_templates",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_task_templates_stage_title",
+                columnNames = {"stage", "title"}))
 public class TaskTemplateEntity {
 
     @Id
