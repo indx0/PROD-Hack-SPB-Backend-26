@@ -10,7 +10,7 @@ include:
 
 variables:
   APP_IMAGE: "registry.spirit.t-education.com/${CI_PROJECT_PATH}:${CI_COMMIT_SHA}"
-  DEPLOY_SSH_USER: root
+  DEPLOY_SSH_USER: sa-hack-led-01-spirit-docker-ci
   DEPLOY_VM: hack-lead-01-ru3-vm1-3a8de1
   PUBLIC_BASE_URL: https://hack-lead-01-ru3-vm1-3a8de1.vmaas-spirit.t-education.com
 
@@ -105,11 +105,12 @@ deploy:
     - dp auth configure-kaniko
     - test -s "$DOCKER_CONFIG/config.json"
     - DEPLOY_TARGET="${DEPLOY_SSH_USER}@${DEPLOY_VM}"
-    - tsh ssh "$DEPLOY_TARGET" 'install -d -m 0750 /opt/prod-backend && install -d -m 0700 /opt/prod-backend/.ci-docker'
+    - tsh ssh "$DEPLOY_TARGET" 'id && sudo -n true'
+    - tsh ssh "$DEPLOY_TARGET" 'sudo -n install -d -m 0750 -o "$(id -un)" -g "$(id -gn)" /opt/prod-backend && sudo -n install -d -m 0700 -o "$(id -un)" -g "$(id -gn)" /opt/prod-backend/.ci-docker'
     - tsh scp compose.prod.yaml "${DEPLOY_TARGET}:/opt/prod-backend/compose.prod.yaml"
     - tsh scp scripts/deploy.sh "${DEPLOY_TARGET}:/opt/prod-backend/deploy.sh"
     - tsh scp "$DOCKER_CONFIG/config.json" "${DEPLOY_TARGET}:/opt/prod-backend/.ci-docker/config.json"
-    - tsh ssh "$DEPLOY_TARGET" "bash /opt/prod-backend/deploy.sh '$APP_IMAGE'"
+    - tsh ssh "$DEPLOY_TARGET" "sudo -n bash /opt/prod-backend/deploy.sh '$APP_IMAGE'"
     - curl --fail --silent --show-error --max-time 30 --retry 5 --retry-delay 3 --retry-all-errors "$PUBLIC_BASE_URL/actuator/health/readiness"
     - curl --fail --silent --show-error --max-time 30 --retry 5 --retry-delay 3 --retry-all-errors --output /dev/null "$PUBLIC_BASE_URL/v3/api-docs"
   after_script:
