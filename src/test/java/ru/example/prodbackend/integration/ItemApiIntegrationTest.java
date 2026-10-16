@@ -192,19 +192,34 @@ class ItemApiIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"{}", "{\"name\":\"\"}", "{\"name\":\"  \"}"})
+    @ValueSource(strings = {"{}", "{\"name\":\"\"}", "{\"name\":\"  \"}", "{\"boxId\":\"anything\"}"})
     void rejectsInvalidPatchWithoutChangingItem(String body) throws Exception {
-        perform(patch(itemUrl), body).andExpect(status().is(422));
+        perform(patch(itemUrl), body).andExpect(status().is(422))
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
         assertThat(reloadSource().getName()).isEqualTo("Зарядка");
+        assertThat(reloadSource().isLost()).isTrue();
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"{\"name\":null}", "{\"lost\":null}", "{\"boxId\":\"anything\"}", "{"})
-    void rejectsNullsUnknownFieldsAndMalformedJson(String body) throws Exception {
+    @ValueSource(strings = {"{\"name\":null}", "{\"lost\":null}", "{"})
+    void rejectsNullsAndMalformedJson(String body) throws Exception {
         perform(patch(itemUrl), body).andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST_BODY"));
         assertThat(reloadSource().getName()).isEqualTo("Зарядка");
         assertThat(reloadSource().isLost()).isTrue();
+    }
+
+    @Test
+    void ignoresUnknownFieldsWithoutMovingItem() throws Exception {
+        perform(patch(itemUrl), "{\"name\":\"Кабель\",\"boxId\":\"anything\"}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Кабель"))
+                .andExpect(jsonPath("$.boxId").value(sourceBox.getId().toString()));
+
+        ItemEntity updated = reloadSource();
+        assertThat(updated.getName()).isEqualTo("Кабель");
+        assertThat(updated.getBox().getId()).isEqualTo(sourceBox.getId());
+        assertThat(updated.isLost()).isTrue();
     }
 
     @Test

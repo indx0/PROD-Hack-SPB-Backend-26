@@ -146,23 +146,27 @@ class BoxApiIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"{}", "{\"number\":0}", "{\"number\":-1}"})
+    @ValueSource(strings = {"{}", "{\"number\":0}", "{\"number\":-1}",
+            "{\"status\":\"UNPACKED\"}", "{\"unknown\":true}"})
     void rejectsInvalidUpdateWithValidationError(String body) throws Exception {
         patchJson(boxUrl, body)
                 .andExpect(status().is(422))
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.fieldErrors").isNotEmpty());
 
-        assertThat(reloadBox().getNumber()).isEqualTo(1);
+        BoxEntity unchanged = reloadBox();
+        assertThat(unchanged.getNumber()).isEqualTo(1);
+        assertThat(unchanged.getStatus()).isEqualTo(BoxStatus.PACKING);
+        assertThat(unchanged.isContentsDeferred()).isTrue();
     }
 
     @ParameterizedTest
     @ValueSource(strings = {
             "{\"number\":null}", "{\"roomId\":null}", "{\"contentsDeferred\":null}",
-            "{\"status\":\"UNPACKED\"}", "{\"unknown\":true}", "{",
+            "{",
             "{\"roomId\":\"not-a-uuid\"}"
     })
-    void rejectsMalformedOrUnsupportedUpdateFields(String body) throws Exception {
+    void rejectsMalformedUpdateFields(String body) throws Exception {
         patchJson(boxUrl, body)
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST_BODY"));
@@ -171,6 +175,18 @@ class BoxApiIntegrationTest {
         assertThat(unchanged.getNumber()).isEqualTo(1);
         assertThat(unchanged.getStatus()).isEqualTo(BoxStatus.PACKING);
         assertThat(unchanged.isContentsDeferred()).isTrue();
+    }
+
+    @Test
+    void ignoresUnknownFieldsWhenUpdatingSupportedFields() throws Exception {
+        patchJson(boxUrl, "{\"number\":12,\"status\":\"UNPACKED\",\"unknown\":true}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.number").value(12))
+                .andExpect(jsonPath("$.status").value("PACKING"));
+
+        BoxEntity updated = reloadBox();
+        assertThat(updated.getNumber()).isEqualTo(12);
+        assertThat(updated.getStatus()).isEqualTo(BoxStatus.PACKING);
     }
 
     @Test
