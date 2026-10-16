@@ -15,10 +15,14 @@ import java.util.UUID;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name = "move_tasks", indexes = {
-        @Index(name = "idx_move_tasks_project", columnList = "project_id"),
-        @Index(name = "idx_move_tasks_template", columnList = "template_id")
-    })
+@Table(name = "move_tasks",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_move_tasks_project_template",
+                columnNames = {"project_id", "template_id"}),
+        indexes = {
+                @Index(name = "idx_move_tasks_project", columnList = "project_id"),
+                @Index(name = "idx_move_tasks_template", columnList = "template_id")
+        })
 public class MoveTaskEntity {
 
     @Id

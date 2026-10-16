@@ -217,4 +217,27 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
     }
+
+
+    @ExceptionHandler(MoveTaskNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleMoveTaskNotFound(MoveTaskNotFoundException exception) {
+        ErrorResponse body = ErrorResponse.builder()
+                .code("TASK_NOT_FOUND")
+                .message(exception.getMessage())
+                .traceId(UUID.randomUUID())
+                .time(Instant.now())
+                .build();
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
+    }
+
+    @ExceptionHandler(TaskTemplateNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleTaskTemplateNotFound(TaskTemplateNotFoundException exception) {
+        ErrorResponse body = ErrorResponse.builder()
+                .code("TASK_TEMPLATE_NOT_FOUND")
+                .message(exception.getMessage())
+                .traceId(UUID.randomUUID())
+                .time(Instant.now())
+                .build();
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
+    }
 }
