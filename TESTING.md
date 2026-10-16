@@ -18,6 +18,13 @@ mvn clean verify
 `test`. Рабочая база не используется; перед каждым тестом тестовые таблицы очищаются.
 При первом запуске Maven скачает зависимости, а Testcontainers — Docker-образы.
 
+В GitLab CI PostgreSQL запускается как отдельный сервис job, без Docker socket
+и Docker-in-Docker. Переменная `TEST_DATABASE_EXTERNAL=true` отключает создание
+Testcontainers-контейнера; адрес и учётные данные задаются через `TEST_DB_URL`,
+`TEST_DB_USERNAME`, `TEST_DB_PASSWORD`. В CI это отдельная одноразовая тестовая БД.
+Не направляй эти переменные на рабочую БД: тесты пересоздают и очищают таблицы.
+Без `TEST_DATABASE_EXTERNAL=true` локальные тесты по-прежнему используют Testcontainers.
+
 Один unit-класс:
 
 ```bash

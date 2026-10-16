@@ -2,16 +2,17 @@
 
 Макет бэкенда: Java 17, Spring Boot, PostgreSQL, JWT access/refresh.
 
-- API: https://progr.puhlic.ru
-- Swagger: https://progr.puhlic.ru/docs
+- API: https://hack-lead-01-ru3-vm1-3a8de1.vmaas-spirit.t-education.com
+- Swagger: https://hack-lead-01-ru3-vm1-3a8de1.vmaas-spirit.t-education.com/docs
+- Подготовка ВМ и CI/CD Spirit: [DEPLOY.md](DEPLOY.md).
 
 ## Как вносить изменения
 
 Работаем в отдельных ветках.
 
 ```bash
-git switch main
-git pull --ff-only origin main
+git switch master
+git pull --ff-only origin master
 git switch -c feature/task-name
 ```
 
@@ -23,11 +24,12 @@ git commit -m "Add feature"
 git push -u origin feature/task-name
 ```
 
-1. В GitLab создай **Merge Request** из своей ветки в `main`.
+1. В GitLab создай **Merge Request** из своей ветки в `master`.
 2. В MR автоматически запустятся unit- и интеграционные тесты. Последующие push
    в эту же ветку снова запустят проверку. Без открытого MR feature-ветки не проверяются.
 3. После успешных тестов и проверки изменений мержим MR.
-4. В `main` запускается новый pipeline: **тесты → сборка Docker-образа → деплой на VPS**.
+4. В `master` запускается новый pipeline: **тесты → сборка Docker-образа → деплой на ВМ**.
+   Сборка использует Kaniko и Spirit Registry, деплой — Teleport.
 
 ## Локальный запуск
 
