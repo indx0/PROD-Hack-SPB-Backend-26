@@ -142,7 +142,6 @@ public class BoxService {
         BoxEntity box = requireOwnedBox(userId, projectId, boxId, true);
 
         itemRepository.deleteByBox_Id(boxId);
-        itemRepository.flush();
         boxRepository.delete(box);
         boxRepository.flush();
     }

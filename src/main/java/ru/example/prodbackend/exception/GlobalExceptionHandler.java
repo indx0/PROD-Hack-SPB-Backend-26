@@ -27,9 +27,9 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
     }
 
-    @ExceptionHandler(UserNotFoundException.class)
+    @ExceptionHandler({UserNotFoundException.class, ItemNotFoundException.class})
     public ResponseEntity<ErrorResponse> handleUserNotFoundException(
-            UserNotFoundException exception
+            RuntimeException exception
     ) {
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .code("NOT_FOUND")

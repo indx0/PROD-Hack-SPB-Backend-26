@@ -1,6 +1,5 @@
 package ru.example.prodbackend.box.dto;
 
-import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonSetter;
 import com.fasterxml.jackson.annotation.Nulls;
@@ -49,10 +48,4 @@ public class UpdateBoxRequest {
                 || contentsDeferred != null;
     }
 
-    @JsonAnySetter
-    public void rejectUnknownField(String name, Object value) {
-        throw new IllegalArgumentException(
-                "Unknown box update field: " + name
-        );
-    }
 }

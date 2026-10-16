@@ -11,6 +11,17 @@ class GlobalExceptionHandlerTest {
     private final GlobalExceptionHandler handler = new GlobalExceptionHandler();
 
     @Test
+    void checklistNotFoundPreservesSpecific404Code() {
+        assertError(handler.handleChecklistItemNotFound(new ChecklistItemNotFoundException()), 404, "CHECKLIST_ITEM_NOT_FOUND");
+    }
+
+    @Test
+    void userAndItemNotFoundPreserveShared404Code() {
+        assertError(handler.handleUserNotFoundException(new UserNotFoundException("Пользователь не найден")), 404, "NOT_FOUND");
+        assertError(handler.handleUserNotFoundException(new ItemNotFoundException("Вещь не найдена")), 404, "NOT_FOUND");
+    }
+
+    @Test
     void boxNotFoundReturns404() {
         assertError(handler.handleBoxNotFound(new BoxNotFoundException()), 404, "BOX_NOT_FOUND");
     }
