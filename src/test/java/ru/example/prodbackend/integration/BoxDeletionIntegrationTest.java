@@ -13,6 +13,7 @@ import org.springframework.test.context.ActiveProfiles;
 import ru.example.prodbackend.box.entity.BoxEntity;
 import ru.example.prodbackend.box.service.BoxService;
 import ru.example.prodbackend.config.TestcontainersConfig;
+import ru.example.prodbackend.event.service.ProjectEventService;
 import ru.example.prodbackend.exception.BoxNotFoundException;
 import ru.example.prodbackend.exception.MoveProjectNotFoundException;
 import ru.example.prodbackend.item.entity.ItemEntity;
@@ -31,7 +32,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @DataJpaTest(properties = "spring.jpa.show-sql=false")
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
-@Import({TestcontainersConfig.class, BoxService.class, ProjectAccessService.class})
+@Import({TestcontainersConfig.class, BoxService.class, ProjectAccessService.class, ProjectEventService.class})
 class BoxDeletionIntegrationTest {
 
     @Autowired

@@ -279,7 +279,7 @@ class BoxApiIntegrationTest {
     }
 
     @Test
-    void unfinishedCreateStillChecksProjectOwner() throws Exception {
+    void createChecksProjectOwnerBeforeSavingBox() throws Exception {
         UserEntity stranger = user();
         entityManager.flush();
 
@@ -322,7 +322,7 @@ class BoxApiIntegrationTest {
             "{\"roomId\":\"00000000-0000-0000-0000-000000000001\",\"contentsDeferred\":false}",
             "{\"number\":0,\"roomId\":\"00000000-0000-0000-0000-000000000001\",\"contentsDeferred\":false}"
     })
-    void validatesCreateRequestBeforeCallingUnfinishedService(String body) throws Exception {
+    void validatesCreateRequestBeforeSavingBox(String body) throws Exception {
         mockMvc.perform(post(baseUrl).header(HttpHeaders.AUTHORIZATION, bearer(token))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().is(422))

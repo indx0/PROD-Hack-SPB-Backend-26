@@ -205,4 +205,16 @@ public class GlobalExceptionHandler {
                 .build();
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT).body(body);
     }
+
+    @ExceptionHandler(RoomNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleRoomNotFound(RoomNotFoundException exception) {
+        ErrorResponse body = ErrorResponse.builder()
+                .code("ROOM_NOT_FOUND")
+                .message(exception.getMessage())
+                .traceId(UUID.randomUUID())
+                .time(Instant.now())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
+    }
 }

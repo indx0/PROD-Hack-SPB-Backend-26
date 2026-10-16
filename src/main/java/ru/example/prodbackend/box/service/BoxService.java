@@ -17,12 +17,17 @@ import ru.example.prodbackend.box.entity.BoxStatus;
 import ru.example.prodbackend.box.repository.BoxRepository;
 import ru.example.prodbackend.common.dto.PageResponse;
 import ru.example.prodbackend.common.dto.PaginationRequest;
+import ru.example.prodbackend.event.entity.EventObjectType;
+import ru.example.prodbackend.event.entity.ProjectEventType;
+import ru.example.prodbackend.event.service.ProjectEventService;
 import ru.example.prodbackend.exception.BoxNotFoundException;
 import ru.example.prodbackend.exception.RequestValidationException;
 import ru.example.prodbackend.exception.ResourceConflictException;
+import ru.example.prodbackend.exception.RoomNotFoundException;
 import ru.example.prodbackend.item.repository.ItemRepository;
 import ru.example.prodbackend.move.service.ProjectAccessService;
 import ru.example.prodbackend.room.entity.RoomEntity;
+import ru.example.prodbackend.room.repository.RoomRepository;
 
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
@@ -36,40 +41,29 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class BoxService {
 
-    /*
-     * Репозитории для полной реализации (TODO: MoveProject, Room, ProjectEvent):
-     *
-     * 1. ProjectAccessService уже проверяет владельца проекта во всех операциях Box.
-     *    Для создания ещё требуется загрузить комнату и сохранить коробку.
-     *
-     * 2. RoomRepository: findById(roomId).
-     *    Загрузка комнаты для создания коробки и смены комнаты;
-     *    принадлежность комнаты проекту проверяется в BoxService.
-     *
-     * 4. ProjectEventRepository: save(ProjectEventEntity).
-     *    Запись BOX_CREATED / BOX_STATUS_CHANGED в общей транзакции BoxService;
-     *    повтор текущего статуса не создаёт событие.
-     *
-     * 5. BoxRepository (уже есть): сохранение, поиск, фильтрация,
-     *    проверка уникальности номера и блокировка коробки.
-     */
     private final BoxRepository boxRepository;
     private final ItemRepository itemRepository;
     private final ProjectAccessService projectAccessService;
+    private final RoomRepository roomRepository;
+    private final ProjectEventService projectEventService;
 
     @Transactional
-    public BoxResponse create(
-            UUID userId,
-            UUID projectId,
-            CreateBoxRequest request
-    ) {
-        projectAccessService.getOwnedProject(projectId, userId);
-        // TODO Room: load a room belonging to the project.
-        // TODO Box: check number uniqueness, then save a box with status PACKING.
-        // TODO Event: save BOX_CREATED in the same transaction.
-        throw new UnsupportedOperationException(
-                "Box creation requires project and room integration"
-        );
+    public BoxResponse create(UUID userId, UUID projectId, CreateBoxRequest request) {
+        var project = projectAccessService.getOwnedProject(projectId, userId);
+        RoomEntity room = requireProjectRoom(request.getRoomId(), projectId);
+
+        if (request.getNumber() == null || request.getNumber() <= 0) {
+            throw new RequestValidationException("number", "Номер коробки должен быть положительным");
+        }
+        if (boxRepository.existsByProject_IdAndNumber(projectId, request.getNumber())) {
+            throw new ResourceConflictException("Номер коробки уже занят в этом проекте");
+        }
+
+        BoxEntity box = BoxEntity.builder().project(project).room(room).number(request.getNumber())
+                .contentsDeferred(request.isContentsDeferred()).build();
+        boxRepository.saveAndFlush(box);
+        recordEvent(box, ProjectEventType.BOX_CREATED, "Создана коробка №" + box.getNumber() + ", комната: " + room.getName());
+        return toResponse(box);
     }
 
     public PageResponse<BoxResponse> findAll(UUID userId, UUID projectId, BoxFilter filter, PaginationRequest pagination) {
@@ -93,12 +87,9 @@ public class BoxService {
             throw new RequestValidationException("request", "Укажите хотя бы одно поле для изменения");
         }
 
-        if (request.getRoomId() != null
-                && !request.getRoomId().equals(box.getRoom().getId())) {
-            // TODO Room: load the requested room and verify its project before assigning it.
-            throw new UnsupportedOperationException(
-                    "Changing the room requires room integration"
-            );
+        RoomEntity room = box.getRoom();
+        if (request.getRoomId() != null && !request.getRoomId().equals(room.getId())) {
+            room = requireProjectRoom(request.getRoomId(), projectId);
         }
 
         if (request.getNumber() != null) {
@@ -113,6 +104,7 @@ public class BoxService {
             box.setNumber(request.getNumber());
         }
 
+        box.setRoom(room);
         if (request.getContentsDeferred() != null) {
             box.setContentsDeferred(request.getContentsDeferred());
         }
@@ -141,8 +133,7 @@ public class BoxService {
         box.changeStatus(status);
         boxRepository.saveAndFlush(box);
 
-        // TODO Event: save BOX_STATUS_CHANGED here in the same transaction.
-        // Do not create an event for an idempotent repeat of the current status.
+        recordEvent(box, ProjectEventType.BOX_STATUS_CHANGED, "Коробка №" + box.getNumber() + ": " + previousStatus + " → " + status);
         return toResponse(box);
     }
 
@@ -187,6 +178,19 @@ public class BoxService {
         projectAccessService.getOwnedProject(projectId, userId);
         var box = forUpdate ? boxRepository.findForUpdate(boxId, projectId) : boxRepository.findByIdAndProject_Id(boxId, projectId);
         return box.orElseThrow(BoxNotFoundException::new);
+    }
+
+    private RoomEntity requireProjectRoom(UUID roomId, UUID projectId) {
+        if (roomId == null) {
+            throw new RequestValidationException("roomId", "Комната обязательна");
+        }
+        // Та же блокировка используется при удалении комнаты: её нельзя удалить во время назначения коробке.
+        return roomRepository.findForUpdate(roomId, projectId).orElseThrow(() -> new RoomNotFoundException("Комната не найдена в этом проекте"));
+    }
+
+    private void recordEvent(BoxEntity box, ProjectEventType type, String description) {
+        // Доступ к коробке разрешён только владельцу проекта; событие сохраняется в транзакции изменения коробки.
+        projectEventService.record(box.getProject(), box.getProject().getOwner(), type, EventObjectType.BOX, box.getId(), description);
     }
 
     private BoxResponse toResponse(BoxEntity box) {
