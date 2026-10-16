@@ -36,7 +36,7 @@ public class MoveProjectController {
 
     @PostMapping
     @Operation(summary = "Создать проект переезда",
-            description = "Создает проект для текущего пользователя. Адреса необязательны; дата передается в ISO 8601 с часовым поясом.",
+            description = "Создает проект для текущего пользователя. Адреса необязательны; дата передается в ISO 8601 с часовым поясом. Событие PROJECT_CREATED сохраняется в той же транзакции.",
             responses = {
                     @ApiResponse(responseCode = "201", description = "Проект создан", content = @Content(mediaType = "application/json", schema = @Schema(implementation = MoveProjectResponse.class))),
                     @ApiResponse(responseCode = "400", description = "INVALID_REQUEST_BODY: тело отсутствует, некорректный JSON или формат даты", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),

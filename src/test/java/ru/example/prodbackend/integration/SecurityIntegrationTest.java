@@ -169,4 +169,15 @@ class SecurityIntegrationTest extends AuthIntegrationTestSupport {
                     .andExpect(jsonPath(parameters + "[?(@.name == 'sort')]").isEmpty());
         }
     }
+
+    @Test
+    void openApiDescribesUnifiedBoxErrors() throws Exception {
+        var response = mockMvc.perform(get("/v3/api-docs")).andExpect(status().isOk());
+        String box = "$.paths['/api/projects/{projectId}/boxes/{boxId}']";
+        for (String operation : new String[]{box + ".get", box + ".patch", box + ".delete", "$.paths['/api/projects/{projectId}/boxes/{boxId}/status'].patch"}) {
+            response.andExpect(jsonPath(operation + ".responses['404'].content['application/json'].schema['$ref']").value("#/components/schemas/ErrorResponse"));
+        }
+        response.andExpect(jsonPath(box + ".patch.responses['409'].content['application/json'].schema['$ref']").value("#/components/schemas/ErrorResponse"))
+                .andExpect(jsonPath(box + ".patch.responses['422'].content['application/json'].schema['$ref']").value("#/components/schemas/ErrorResponse"));
+    }
 }

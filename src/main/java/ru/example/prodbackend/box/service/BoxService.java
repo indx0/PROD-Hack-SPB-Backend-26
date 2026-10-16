@@ -4,10 +4,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 import ru.example.prodbackend.box.dto.BoxFilter;
 import ru.example.prodbackend.box.dto.BoxResponse;
 import ru.example.prodbackend.box.dto.BoxSummaryResponse;
@@ -19,10 +17,17 @@ import ru.example.prodbackend.box.entity.BoxStatus;
 import ru.example.prodbackend.box.repository.BoxRepository;
 import ru.example.prodbackend.common.dto.PageResponse;
 import ru.example.prodbackend.common.dto.PaginationRequest;
-import ru.example.prodbackend.exception.MoveProjectNotFoundException;
+import ru.example.prodbackend.event.entity.EventObjectType;
+import ru.example.prodbackend.event.entity.ProjectEventType;
+import ru.example.prodbackend.event.service.ProjectEventService;
+import ru.example.prodbackend.exception.BoxNotFoundException;
+import ru.example.prodbackend.exception.RequestValidationException;
+import ru.example.prodbackend.exception.ResourceConflictException;
+import ru.example.prodbackend.exception.RoomNotFoundException;
 import ru.example.prodbackend.item.repository.ItemRepository;
-import ru.example.prodbackend.move.repository.MoveProjectRepository;
+import ru.example.prodbackend.move.service.ProjectAccessService;
 import ru.example.prodbackend.room.entity.RoomEntity;
+import ru.example.prodbackend.room.repository.RoomRepository;
 
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
@@ -36,43 +41,33 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class BoxService {
 
-    /*
-     * Репозитории для полной реализации (TODO: MoveProject, Room, ProjectEvent):
-     *
-     * 1. MoveProjectRepository уже используется для проверки доступа к списку и статистике.
-     *    Для создания ещё требуется загрузить проект и комнату.
-     *
-     * 2. RoomRepository: findById(roomId).
-     *    Загрузка комнаты для создания коробки и смены комнаты;
-     *    принадлежность комнаты проекту проверяется в BoxService.
-     *
-     * 4. ProjectEventRepository: save(ProjectEventEntity).
-     *    Запись BOX_CREATED / BOX_STATUS_CHANGED в общей транзакции BoxService;
-     *    повтор текущего статуса не создаёт событие.
-     *
-     * 5. BoxRepository (уже есть): сохранение, поиск, фильтрация,
-     *    проверка уникальности номера и блокировка коробки.
-     */
     private final BoxRepository boxRepository;
     private final ItemRepository itemRepository;
-    private final MoveProjectRepository moveProjectRepository;
+    private final ProjectAccessService projectAccessService;
+    private final RoomRepository roomRepository;
+    private final ProjectEventService projectEventService;
 
     @Transactional
-    public BoxResponse create(
-            UUID userId,
-            UUID projectId,
-            CreateBoxRequest request
-    ) {
-        // TODO Move/Room: load the owned project and a room belonging to it.
-        // TODO Box: check number uniqueness, then save a box with status PACKING.
-        // TODO Event: save BOX_CREATED in the same transaction.
-        throw new UnsupportedOperationException(
-                "Box creation requires project and room integration"
-        );
+    public BoxResponse create(UUID userId, UUID projectId, CreateBoxRequest request) {
+        var project = projectAccessService.getOwnedProject(projectId, userId);
+        RoomEntity room = requireProjectRoom(request.getRoomId(), projectId);
+
+        if (request.getNumber() == null || request.getNumber() <= 0) {
+            throw new RequestValidationException("number", "Номер коробки должен быть положительным");
+        }
+        if (boxRepository.existsByProject_IdAndNumber(projectId, request.getNumber())) {
+            throw new ResourceConflictException("Номер коробки уже занят в этом проекте");
+        }
+
+        BoxEntity box = BoxEntity.builder().project(project).room(room).number(request.getNumber())
+                .contentsDeferred(request.isContentsDeferred()).build();
+        boxRepository.saveAndFlush(box);
+        recordEvent(box, ProjectEventType.BOX_CREATED, "Создана коробка №" + box.getNumber() + ", комната: " + room.getName());
+        return toResponse(box);
     }
 
     public PageResponse<BoxResponse> findAll(UUID userId, UUID projectId, BoxFilter filter, PaginationRequest pagination) {
-        requireProjectAccess(userId, projectId);
+        projectAccessService.getOwnedProject(projectId, userId);
 
         PageRequest pageable = PageRequest.of(pagination.getPage(), pagination.getSize(), Sort.by("number", "id"));
 
@@ -85,47 +80,31 @@ public class BoxService {
     }
 
     @Transactional
-    public BoxResponse update(
-            UUID userId,
-            UUID projectId,
-            UUID boxId,
-            UpdateBoxRequest request
-    ) {
+    public BoxResponse update(UUID userId, UUID projectId, UUID boxId, UpdateBoxRequest request) {
         BoxEntity box = requireOwnedBox(userId, projectId, boxId, true);
 
         if (!request.isUpdatePresent()) {
-            throw new ResponseStatusException(
-                    HttpStatus.valueOf(422), "Specify at least one field to update"
-            );
+            throw new RequestValidationException("request", "Укажите хотя бы одно поле для изменения");
         }
 
-        if (request.getRoomId() != null
-                && !request.getRoomId().equals(box.getRoom().getId())) {
-            // TODO Room: load the requested room and verify its project before assigning it.
-            throw new UnsupportedOperationException(
-                    "Changing the room requires room integration"
-            );
+        RoomEntity room = box.getRoom();
+        if (request.getRoomId() != null && !request.getRoomId().equals(room.getId())) {
+            room = requireProjectRoom(request.getRoomId(), projectId);
         }
 
         if (request.getNumber() != null) {
             if (request.getNumber() <= 0) {
-                throw new ResponseStatusException(
-                        HttpStatus.valueOf(422), "Box number must be positive"
-                );
+                throw new RequestValidationException("number", "Номер коробки должен быть положительным");
             }
 
-            if (boxRepository.existsByProject_IdAndNumberAndIdNot(
-                    projectId, request.getNumber(), boxId
-            )) {
-                throw new ResponseStatusException(
-                        HttpStatus.CONFLICT,
-                        "Box number already exists in this project"
-                );
+            if (boxRepository.existsByProject_IdAndNumberAndIdNot(projectId, request.getNumber(), boxId)) {
+                throw new ResourceConflictException("Номер коробки уже занят в этом проекте");
             }
 
             box.setNumber(request.getNumber());
         }
 
+        box.setRoom(room);
         if (request.getContentsDeferred() != null) {
             box.setContentsDeferred(request.getContentsDeferred());
         }
@@ -135,26 +114,16 @@ public class BoxService {
     }
 
     @Transactional
-    public BoxResponse changeStatus(
-            UUID userId,
-            UUID projectId,
-            UUID boxId,
-            BoxStatus status
-    ) {
+    public BoxResponse changeStatus(UUID userId, UUID projectId, UUID boxId, BoxStatus status) {
         BoxEntity box = requireOwnedBox(userId, projectId, boxId, true);
         BoxStatus previousStatus = box.getStatus();
 
         if (status == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.valueOf(422), "Box status is required"
-            );
+            throw new RequestValidationException("status", "Статус коробки обязателен");
         }
 
         if (!previousStatus.canTransitionTo(status)) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Invalid box status transition: " + previousStatus + " -> " + status
-            );
+            throw new ResourceConflictException("Недопустимый переход статуса: " + previousStatus + " -> " + status);
         }
 
         if (previousStatus == status) {
@@ -164,8 +133,7 @@ public class BoxService {
         box.changeStatus(status);
         boxRepository.saveAndFlush(box);
 
-        // TODO Event: save BOX_STATUS_CHANGED here in the same transaction.
-        // Do not create an event for an idempotent repeat of the current status.
+        recordEvent(box, ProjectEventType.BOX_STATUS_CHANGED, "Коробка №" + box.getNumber() + ": " + previousStatus + " → " + status);
         return toResponse(box);
     }
 
@@ -180,7 +148,7 @@ public class BoxService {
     }
 
     public BoxSummaryResponse summary(UUID userId, UUID projectId) {
-        requireProjectAccess(userId, projectId);
+        projectAccessService.getOwnedProject(projectId, userId);
 
         List<BoxEntity> boxes =
                 boxRepository.findAllByProject_IdOrderByNumberAscIdAsc(projectId);
@@ -206,28 +174,23 @@ public class BoxService {
                 .build();
     }
 
-    private void requireProjectAccess(UUID userId, UUID projectId) {
-        moveProjectRepository.findByIdAndOwner_Id(projectId, userId).orElseThrow(() -> new MoveProjectNotFoundException("Project not found"));
+    private BoxEntity requireOwnedBox(UUID userId, UUID projectId, UUID boxId, boolean forUpdate) {
+        projectAccessService.getOwnedProject(projectId, userId);
+        var box = forUpdate ? boxRepository.findForUpdate(boxId, projectId) : boxRepository.findByIdAndProject_Id(boxId, projectId);
+        return box.orElseThrow(BoxNotFoundException::new);
     }
 
-    private BoxEntity requireOwnedBox(
-            UUID userId,
-            UUID projectId,
-            UUID boxId,
-            boolean forUpdate
-    ) {
-        BoxEntity box = (forUpdate
-                ? boxRepository.findForUpdate(boxId, projectId)
-                : boxRepository.findByIdAndProject_Id(boxId, projectId))
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Box not found"
-                ));
-
-        if (!box.getProject().getOwner().getId().equals(userId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Box not found");
+    private RoomEntity requireProjectRoom(UUID roomId, UUID projectId) {
+        if (roomId == null) {
+            throw new RequestValidationException("roomId", "Комната обязательна");
         }
+        // Та же блокировка используется при удалении комнаты: её нельзя удалить во время назначения коробке.
+        return roomRepository.findForUpdate(roomId, projectId).orElseThrow(() -> new RoomNotFoundException("Комната не найдена в этом проекте"));
+    }
 
-        return box;
+    private void recordEvent(BoxEntity box, ProjectEventType type, String description) {
+        // Доступ к коробке разрешён только владельцу проекта; событие сохраняется в транзакции изменения коробки.
+        projectEventService.record(box.getProject(), box.getProject().getOwner(), type, EventObjectType.BOX, box.getId(), description);
     }
 
     private BoxResponse toResponse(BoxEntity box) {

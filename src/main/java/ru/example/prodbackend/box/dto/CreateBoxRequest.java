@@ -1,5 +1,6 @@
 package ru.example.prodbackend.box.dto;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -12,7 +13,7 @@ import java.util.UUID;
 
 @Data
 @Builder
-@NoArgsConstructor
+@NoArgsConstructor(onConstructor_ = @JsonCreator)
 @AllArgsConstructor
 public class CreateBoxRequest {
 
@@ -25,6 +26,6 @@ public class CreateBoxRequest {
     @Schema(description = "Идентификатор комнаты этого же проекта")
     private UUID roomId;
 
-    @Schema(description = "Отложить заполнение содержимого")
+    @Schema(description = "Отложить заполнение содержимого", defaultValue = "false")
     private boolean contentsDeferred;
 }

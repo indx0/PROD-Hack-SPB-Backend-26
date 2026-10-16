@@ -10,8 +10,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 import ru.example.prodbackend.box.entity.BoxEntity;
 import ru.example.prodbackend.checklist.entity.FirstDayChecklistItemEntity;
 import ru.example.prodbackend.event.entity.EventObjectType;
-import ru.example.prodbackend.event.entity.ProjectEventEntity;
 import ru.example.prodbackend.event.entity.ProjectEventType;
+import ru.example.prodbackend.event.repository.ProjectEventRepository;
 import ru.example.prodbackend.item.entity.ItemEntity;
 import ru.example.prodbackend.move.dto.response.MoveProjectResponse;
 import ru.example.prodbackend.room.entity.RoomEntity;
@@ -38,6 +38,9 @@ class MoveProjectIntegrationTest extends AuthIntegrationTestSupport {
     @Autowired
     private PlatformTransactionManager transactionManager;
 
+    @Autowired
+    private ProjectEventRepository eventRepository;
+
     @Test
     void createPersistsProjectForCurrentUserAndGetReturnsIt() throws Exception {
         String token = registerUser().getAccessToken();
@@ -58,6 +61,16 @@ class MoveProjectIntegrationTest extends AuthIntegrationTestSupport {
                 .andExpect(jsonPath("$.id").value(project.getId().toString()))
                 .andExpect(jsonPath("$.name").value("Мой переезд"))
                 .andExpect(jsonPath("$.owner").doesNotExist());
+
+        assertEquals(1L, eventRepository.count());
+        var event = eventRepository.findAll().get(0);
+        assertEquals(ProjectEventType.PROJECT_CREATED, event.getEventType());
+        assertEquals(EventObjectType.PROJECT, event.getObjectType());
+        assertEquals(project.getId(), event.getProject().getId());
+        assertEquals(project.getId(), event.getObjectId());
+        assertEquals(saved.getOwner().getId(), event.getActor().getId());
+        assertNotNull(event.getOccurredAt());
+        assertTrue(event.getDescription().contains("Мой переезд"));
     }
 
     @Test
@@ -155,6 +168,7 @@ class MoveProjectIntegrationTest extends AuthIntegrationTestSupport {
                 .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"   \"}")), 422, "VALIDATION_ERROR");
 
         assertEquals(0, moveProjectRepository.count());
+        assertEquals(0L, eventRepository.count());
     }
 
     private MoveProjectResponse createProject(String token, String name) throws Exception {
@@ -176,9 +190,6 @@ class MoveProjectIntegrationTest extends AuthIntegrationTestSupport {
             entityManager.persist(ItemEntity.builder().box(box).name("Чайник").build());
             entityManager.persist(MoveTaskEntity.builder().project(project).title("Собрать вещи").stage(TaskStage.BEFORE_MOVE).build());
             entityManager.persist(FirstDayChecklistItemEntity.builder().project(project).name("Зарядка").build());
-            entityManager.persist(ProjectEventEntity.builder().project(project).actor(project.getOwner())
-                    .eventType(ProjectEventType.PROJECT_CREATED).objectType(EventObjectType.PROJECT)
-                    .objectId(projectId).description("Тестовое событие создания проекта").build());
         });
     }
 }
