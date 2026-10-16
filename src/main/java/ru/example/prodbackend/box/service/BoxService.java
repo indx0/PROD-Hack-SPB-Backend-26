@@ -114,7 +114,7 @@ public class BoxService {
                 );
             }
 
-            if (boxRepository.existsByProjectIdAndNumberAndIdNot(
+            if (boxRepository.existsByProject_IdAndNumberAndIdNot(
                     projectId, request.getNumber(), boxId
             )) {
                 throw new ResponseStatusException(
@@ -173,7 +173,7 @@ public class BoxService {
     public void delete(UUID userId, UUID projectId, UUID boxId) {
         BoxEntity box = requireOwnedBox(userId, projectId, boxId, true);
 
-        itemRepository.deleteByBoxId(boxId);
+        itemRepository.deleteByBox_Id(boxId);
         itemRepository.flush();
         boxRepository.delete(box);
         boxRepository.flush();
@@ -183,7 +183,7 @@ public class BoxService {
         requireProjectAccess(userId, projectId);
 
         List<BoxEntity> boxes =
-                boxRepository.findAllByProjectIdOrderByNumberAscIdAsc(projectId);
+                boxRepository.findAllByProject_IdOrderByNumberAscIdAsc(projectId);
 
         Map<UUID, List<BoxEntity>> boxesByRoom = boxes.stream()
                 .collect(Collectors.groupingBy(
@@ -218,7 +218,7 @@ public class BoxService {
     ) {
         BoxEntity box = (forUpdate
                 ? boxRepository.findForUpdate(boxId, projectId)
-                : boxRepository.findByIdAndProjectId(boxId, projectId))
+                : boxRepository.findByIdAndProject_Id(boxId, projectId))
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Box not found"
                 ));

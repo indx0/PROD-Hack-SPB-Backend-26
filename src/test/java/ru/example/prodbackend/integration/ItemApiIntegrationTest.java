@@ -228,7 +228,7 @@ class ItemApiIntegrationTest {
         entityManager.clear();
         assertThat(entityManager.find(ItemEntity.class, source.getId())).isNull();
         assertThat(entityManager.find(BoxEntity.class, sourceBox.getId())).isNotNull();
-        assertThat(itemRepository.findAllByBoxId(matchingBox.getId(), org.springframework.data.domain.PageRequest.of(0, 20))
+        assertThat(itemRepository.findAllByBox_Id(matchingBox.getId(), org.springframework.data.domain.PageRequest.of(0, 20))
                 .getTotalElements()).isEqualTo(1);
     }
 
@@ -390,7 +390,7 @@ class ItemApiIntegrationTest {
     }
 
     private long countSourceItems() {
-        return itemRepository.findAllByBoxId(sourceBox.getId(), org.springframework.data.domain.PageRequest.of(0, 20))
+        return itemRepository.findAllByBox_Id(sourceBox.getId(), org.springframework.data.domain.PageRequest.of(0, 20))
                 .getTotalElements();
     }
 

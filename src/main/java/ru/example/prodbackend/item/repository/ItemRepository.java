@@ -16,18 +16,16 @@ import java.util.UUID;
 @Repository
 public interface ItemRepository extends JpaRepository<ItemEntity, UUID> {
 
-    void deleteByBoxId(UUID boxId);
+    void deleteByBox_Id(UUID boxId);
 
     @EntityGraph(attributePaths = {"box", "box.room", "box.project"})
-    Page<ItemEntity> findAllByBoxId(UUID boxId, Pageable pageable);
+    Page<ItemEntity> findAllByBox_Id(UUID boxId, Pageable pageable);
 
     @EntityGraph(attributePaths = {"box", "box.room", "box.project"})
-    Optional<ItemEntity> findByIdAndBoxId(UUID itemId, UUID boxId);
+    Optional<ItemEntity> findByIdAndBox_Id(UUID itemId, UUID boxId);
 
     @EntityGraph(attributePaths = {"box", "box.room", "box.project"})
-    Optional<ItemEntity> findByIdAndBoxProjectIdAndBoxProjectOwnerId(
-            UUID itemId, UUID projectId, UUID ownerId
-    );
+    Optional<ItemEntity> findByIdAndBoxProject_IdAndBoxProject_OwnerId(UUID itemId, UUID projectId, UUID ownerId);
 
     @EntityGraph(attributePaths = {"box", "box.room", "box.project"})
     @Query(value = """

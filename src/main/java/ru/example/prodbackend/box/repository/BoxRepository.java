@@ -19,31 +19,21 @@ import java.util.UUID;
 @Repository
 public interface BoxRepository extends JpaRepository<BoxEntity, UUID> {
     @EntityGraph(attributePaths = "room")
-    Optional<BoxEntity> findByIdAndProjectId(
-            UUID boxId,
-            UUID projectId
-    );
+    Optional<BoxEntity> findByIdAndProject_Id(UUID boxId, UUID projectId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             select b from BoxEntity b
             where b.id = :boxId and b.project.id = :projectId
             """)
-    Optional<BoxEntity> findForUpdate(
-            @Param("boxId") UUID boxId,
-            @Param("projectId") UUID projectId
-    );
+    Optional<BoxEntity> findForUpdate(@Param("boxId") UUID boxId, @Param("projectId") UUID projectId);
 
-    boolean existsByProjectIdAndNumber(
+    boolean existsByProject_IdAndNumber(
             UUID projectId,
             int number
     );
 
-    boolean existsByProjectIdAndNumberAndIdNot(
-            UUID projectId,
-            int number,
-            UUID boxId
-    );
+    boolean existsByProject_IdAndNumberAndIdNot(UUID projectId, int number, UUID boxId);
 
     @EntityGraph(attributePaths = "room")
     @Query(
@@ -76,7 +66,5 @@ public interface BoxRepository extends JpaRepository<BoxEntity, UUID> {
     );
 
     @EntityGraph(attributePaths = "room")
-    List<BoxEntity> findAllByProjectIdOrderByNumberAscIdAsc(
-            UUID projectId
-    );
+    List<BoxEntity> findAllByProject_IdOrderByNumberAscIdAsc(UUID projectId);
 }

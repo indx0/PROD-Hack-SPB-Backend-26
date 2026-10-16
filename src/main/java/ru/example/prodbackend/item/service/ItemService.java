@@ -39,7 +39,7 @@ public class ItemService {
         requireOwnedBox(userId, projectId, boxId, false);
         Pageable ordered = PageRequest.of(pagination.getPage(), pagination.getSize(),
                 Sort.by("createdAt", "id"));
-        return PageResponse.from(itemRepository.findAllByBoxId(boxId, ordered).map(this::toResponse));
+        return PageResponse.from(itemRepository.findAllByBox_Id(boxId, ordered).map(this::toResponse));
     }
 
     @Transactional
@@ -86,13 +86,13 @@ public class ItemService {
     }
 
     public List<ItemBoxSuggestionResponse> suggestions(UUID userId, UUID projectId, UUID itemId, int limit) {
-        ItemEntity item = itemRepository.findByIdAndBoxProjectIdAndBoxProjectOwnerId(itemId, projectId, userId)
+        ItemEntity item = itemRepository.findByIdAndBoxProject_IdAndBoxProject_OwnerId(itemId, projectId, userId)
                 .orElseThrow(() -> new ItemNotFoundException("Item not found"));
         UUID roomId = item.getBox().getRoom().getId();
         Set<UUID> matchingBoxes = new HashSet<>(itemRepository.findMatchingBoxIds(
                 projectId, userId, searchPattern(item.getName())));
 
-        return boxRepository.findAllByProjectIdOrderByNumberAscIdAsc(projectId).stream()
+        return boxRepository.findAllByProject_IdOrderByNumberAscIdAsc(projectId).stream()
                 .filter(box -> box.getStatus() != BoxStatus.UNPACKED)
                 .filter(box -> matchingBoxes.contains(box.getId()) || box.getRoom().getId().equals(roomId))
                 .map(box -> ItemBoxSuggestionResponse.builder()
@@ -110,7 +110,7 @@ public class ItemService {
 
     private BoxEntity requireOwnedBox(UUID userId, UUID projectId, UUID boxId, boolean forUpdate) {
         BoxEntity box = (forUpdate ? boxRepository.findForUpdate(boxId, projectId)
-                : boxRepository.findByIdAndProjectId(boxId, projectId))
+                : boxRepository.findByIdAndProject_Id(boxId, projectId))
                 .orElseThrow(() -> new ItemNotFoundException("Box not found"));
         if (!box.getProject().getOwner().getId().equals(userId)) {
             throw new ItemNotFoundException("Box not found");
@@ -119,7 +119,7 @@ public class ItemService {
     }
 
     private ItemEntity requireItem(UUID boxId, UUID itemId) {
-        return itemRepository.findByIdAndBoxId(itemId, boxId)
+        return itemRepository.findByIdAndBox_Id(itemId, boxId)
                 .orElseThrow(() -> new ItemNotFoundException("Item not found"));
     }
 

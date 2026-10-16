@@ -145,16 +145,16 @@ class BoxRepositoryIntegrationTest {
 
     @Test
     void scopesLookupAndNumberChecksToProjectAndExcludesCurrentBox() {
-        assertThat(boxRepository.findByIdAndProjectId(first.getId(), project.getId())).isPresent();
-        assertThat(boxRepository.findByIdAndProjectId(first.getId(), otherProject.getId())).isEmpty();
+        assertThat(boxRepository.findByIdAndProject_Id(first.getId(), project.getId())).isPresent();
+        assertThat(boxRepository.findByIdAndProject_Id(first.getId(), otherProject.getId())).isEmpty();
         assertThat(boxRepository.findForUpdate(first.getId(), otherProject.getId())).isEmpty();
-        assertThat(boxRepository.existsByProjectIdAndNumber(project.getId(), 1)).isTrue();
-        assertThat(boxRepository.existsByProjectIdAndNumber(otherProject.getId(), 3)).isFalse();
-        assertThat(boxRepository.existsByProjectIdAndNumberAndIdNot(
+        assertThat(boxRepository.existsByProject_IdAndNumber(project.getId(), 1)).isTrue();
+        assertThat(boxRepository.existsByProject_IdAndNumber(otherProject.getId(), 3)).isFalse();
+        assertThat(boxRepository.existsByProject_IdAndNumberAndIdNot(
                 project.getId(), 1, first.getId())).isFalse();
-        assertThat(boxRepository.existsByProjectIdAndNumberAndIdNot(
+        assertThat(boxRepository.existsByProject_IdAndNumberAndIdNot(
                 project.getId(), 2, first.getId())).isTrue();
-        assertThat(boxRepository.findAllByProjectIdOrderByNumberAscIdAsc(project.getId()))
+        assertThat(boxRepository.findAllByProject_IdOrderByNumberAscIdAsc(project.getId()))
                 .extracting(BoxEntity::getNumber).containsExactly(1, 2, 3);
     }
 
