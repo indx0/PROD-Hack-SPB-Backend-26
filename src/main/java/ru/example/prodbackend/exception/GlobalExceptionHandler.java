@@ -20,9 +20,9 @@ import java.util.UUID;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(UserNotFoundException.class)
+    @ExceptionHandler({UserNotFoundException.class, ItemNotFoundException.class})
     public ResponseEntity<ErrorResponse> handleUserNotFoundException(
-            UserNotFoundException exception
+            RuntimeException exception
     ) {
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .code("NOT_FOUND")
