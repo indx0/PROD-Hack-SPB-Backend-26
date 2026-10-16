@@ -8,6 +8,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import ru.example.prodbackend.exception.dto.ErrorResponse;
 import ru.example.prodbackend.exception.dto.FieldErrorResponse;
 
@@ -100,6 +101,19 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
     }
 
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleMethodArgumentTypeMismatch(MethodArgumentTypeMismatchException exception) {
+        ErrorResponse body = ErrorResponse.builder()
+                .code("INVALID_REQUEST_PARAMETER")
+                .message("Invalid format for parameter: " + exception.getName())
+                .traceId(UUID.randomUUID())
+                .time(Instant.now())
+                .fieldErrors(List.of(new FieldErrorResponse(exception.getName(), "Invalid parameter format")))
+                .build();
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(
             DataIntegrityViolationException exception
@@ -144,4 +158,17 @@ public class GlobalExceptionHandler {
                 .body(errorResponse);
     }
 
+    @ExceptionHandler(MoveProjectNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleMoveProjectNotFound(
+            MoveProjectNotFoundException exception
+    ) {
+        ErrorResponse body = ErrorResponse.builder()
+                .code("MOVE_PROJECT_NOT_FOUND")
+                .message(exception.getMessage())
+                .traceId(UUID.randomUUID())
+                .time(Instant.now())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
+    }
 }
