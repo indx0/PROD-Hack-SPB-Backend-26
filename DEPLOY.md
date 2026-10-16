@@ -39,13 +39,16 @@ Docker Engine и Compose уже установлены. На ВМ не нужн�
    sudo nano /etc/nginx/sites-available/movermate
    ```
 
-   Скопируй в файл содержимое `deploy/nginx.conf`, затем:
+   Скопируй в файл содержимое `deploy/nginx.conf`.
+
+   Из-за длинного доменного имени открой `sudo nano /etc/nginx/nginx.conf`.
+   Внутри блока `http { ... }` установи одну активную директиву
+   `server_names_hash_bucket_size 128;`: если строка уже есть, измени её,
+   если закомментирована — раскомментируй. Затем:
 
    ```bash
    sudo ln -s /etc/nginx/sites-available/movermate /etc/nginx/sites-enabled/movermate
-   sudo nginx -t
-   sudo systemctl enable --now nginx
-   sudo systemctl reload nginx
+   sudo nginx -t && sudo systemctl enable --now nginx && sudo systemctl reload nginx
    sudo certbot --nginx -d hack-lead-01-ru3-vm1-3a8de1.vmaas-spirit.t-education.com --redirect
    ```
 
