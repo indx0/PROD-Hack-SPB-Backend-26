@@ -78,7 +78,7 @@ class BoxApiIntegrationTest {
         entityManager.flush();
         entityManager.clear();
         token = jwtService.generateToken(owner);
-        baseUrl = "/api/projects/" + project.getId() + "/boxes";
+        baseUrl = "/api/move-projects/" + project.getId() + "/boxes";
         boxUrl = baseUrl + "/" + box.getId();
     }
 
@@ -260,7 +260,7 @@ class BoxApiIntegrationTest {
     void returns404ForMissingBoxOrMismatchedProject(String scenario) throws Exception {
         String url = scenario.equals("missing-box")
                 ? baseUrl + "/" + UUID.randomUUID()
-                : "/api/projects/" + UUID.randomUUID() + "/boxes/" + box.getId();
+                : "/api/move-projects/" + UUID.randomUUID() + "/boxes/" + box.getId();
 
         mockMvc.perform(get(url).header(HttpHeaders.AUTHORIZATION, bearer(token)))
                 .andExpect(status().isNotFound());
@@ -297,6 +297,13 @@ class BoxApiIntegrationTest {
     void rejectsInvalidListFiltersBeforeCallingUnfinishedService(String query) throws Exception {
         mockMvc.perform(get(baseUrl + "?" + query).header(HttpHeaders.AUTHORIZATION, bearer(token)))
                 .andExpect(status().isBadRequest());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"page=-1", "size=0", "size=-1", "size=101", "page=invalid", "size=invalid"})
+    void rejectsInvalidPaginationBeforeCallingUnfinishedService(String query) throws Exception {
+        mockMvc.perform(get(baseUrl + "?" + query).header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                .andExpect(status().is4xxClientError());
     }
 
     private ResultActions patchJson(String url, String body) throws Exception {

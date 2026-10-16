@@ -1,7 +1,6 @@
 package ru.example.prodbackend.box.service;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -18,6 +17,8 @@ import ru.example.prodbackend.box.dto.UpdateBoxRequest;
 import ru.example.prodbackend.box.entity.BoxEntity;
 import ru.example.prodbackend.box.entity.BoxStatus;
 import ru.example.prodbackend.box.repository.BoxRepository;
+import ru.example.prodbackend.common.dto.PageResponse;
+import ru.example.prodbackend.common.dto.PaginationRequest;
 import ru.example.prodbackend.item.repository.ItemRepository;
 import ru.example.prodbackend.room.entity.RoomEntity;
 
@@ -67,28 +68,28 @@ public class BoxService {
         );
     }
 
-    public Page<BoxResponse> findAll(
+    public PageResponse<BoxResponse> findAll(
             UUID userId,
             UUID projectId,
             BoxFilter filter,
-            Pageable pageable
+            PaginationRequest pagination
     ) {
         requireProjectAccess(userId, projectId);
 
         Pageable sortedPageable = PageRequest.of(
-                pageable.getPageNumber(),
-                pageable.getPageSize(),
+                pagination.getPage(),
+                pagination.getSize(),
                 Sort.by(Sort.Order.asc("number"), Sort.Order.asc("id"))
         );
 
-        return boxRepository.findAllByFilters(
+        return PageResponse.from(boxRepository.findAllByFilters(
                 projectId,
                 filter.getNumber(),
                 filter.getRoomId(),
                 filter.getStatus(),
                 filter.getContentsDeferred(),
                 sortedPageable
-        ).map(this::toResponse);
+        ).map(this::toResponse));
     }
 
     public BoxResponse findById(UUID userId, UUID projectId, UUID boxId) {
@@ -125,7 +126,7 @@ public class BoxService {
                 );
             }
 
-            if (boxRepository.existsByProject_IdAndNumberAndIdNot(
+            if (boxRepository.existsByProjectIdAndNumberAndIdNot(
                     projectId, request.getNumber(), boxId
             )) {
                 throw new ResponseStatusException(
@@ -184,7 +185,7 @@ public class BoxService {
     public void delete(UUID userId, UUID projectId, UUID boxId) {
         BoxEntity box = requireOwnedBox(userId, projectId, boxId, true);
 
-        itemRepository.deleteByBox_Id(boxId);
+        itemRepository.deleteByBoxId(boxId);
         itemRepository.flush();
         boxRepository.delete(box);
         boxRepository.flush();
@@ -194,7 +195,7 @@ public class BoxService {
         requireProjectAccess(userId, projectId);
 
         List<BoxEntity> boxes =
-                boxRepository.findAllByProject_IdOrderByNumberAscIdAsc(projectId);
+                boxRepository.findAllByProjectIdOrderByNumberAscIdAsc(projectId);
 
         Map<UUID, List<BoxEntity>> boxesByRoom = boxes.stream()
                 .collect(Collectors.groupingBy(
@@ -233,7 +234,7 @@ public class BoxService {
     ) {
         BoxEntity box = (forUpdate
                 ? boxRepository.findForUpdate(boxId, projectId)
-                : boxRepository.findByIdAndProject_Id(boxId, projectId))
+                : boxRepository.findByIdAndProjectId(boxId, projectId))
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Box not found"
                 ));

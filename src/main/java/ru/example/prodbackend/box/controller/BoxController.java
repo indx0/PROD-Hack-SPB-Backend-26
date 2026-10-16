@@ -12,9 +12,6 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -27,6 +24,8 @@ import ru.example.prodbackend.box.dto.CreateBoxRequest;
 import ru.example.prodbackend.box.dto.UpdateBoxRequest;
 import ru.example.prodbackend.box.entity.BoxStatus;
 import ru.example.prodbackend.box.service.BoxService;
+import ru.example.prodbackend.common.dto.PageResponse;
+import ru.example.prodbackend.common.dto.PaginationRequest;
 import ru.example.prodbackend.exception.dto.ErrorResponse;
 import ru.example.prodbackend.user.entity.UserEntity;
 
@@ -34,7 +33,7 @@ import java.net.URI;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/projects/{projectId}/boxes")
+@RequestMapping("/api/move-projects/{projectId}/boxes")
 @RequiredArgsConstructor
 @Tag(name = "Boxes", description = "Коробки проекта переезда")
 @SecurityRequirement(name = "jwtAuth")
@@ -83,17 +82,19 @@ public class BoxController {
             description = """
                     Возвращает страницу коробок проекта. Фильтры объединяются через AND.
                     Поиск по номеру использует точное совпадение; отсутствие результата означает пустую страницу.
-                    page начинается с 0, размер страницы по умолчанию — 20.
+                    page начинается с 0, size — от 1 до 100, по умолчанию 20.
                     Сортировка фиксирована в сервисе: number ASC, id ASC; параметр sort игнорируется.
                     Пока недоступно: в сервисе не реализована проверка доступа через модуль Move.
                     """,
             responses = {
                     @ApiResponse(responseCode = "200", description = "Страница коробок проекта"),
+                    @ApiResponse(responseCode = "422", description = "Ошибка валидации пагинации",
+                            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "500", description = "Проверка доступа к проекту пока не реализована")
             }
     )
     @GetMapping
-    public ResponseEntity<Page<BoxResponse>> findAll(
+    public ResponseEntity<PageResponse<BoxResponse>> findAll(
             @Parameter(hidden = true) @AuthenticationPrincipal UserEntity user,
             @PathVariable UUID projectId,
             @Parameter(description = "Точный номер коробки внутри проекта")
@@ -104,7 +105,7 @@ public class BoxController {
             @RequestParam(required = false) BoxStatus status,
             @Parameter(description = "Признак отложенного заполнения содержимого")
             @RequestParam(required = false) Boolean contentsDeferred,
-            @ParameterObject @PageableDefault(size = 20, sort = {"number", "id"}) Pageable pageable
+            @Valid @ModelAttribute @ParameterObject PaginationRequest pagination
     ) {
         BoxFilter filter = BoxFilter.builder()
                 .number(number)
@@ -114,7 +115,7 @@ public class BoxController {
                 .build();
 
         return ResponseEntity.ok(
-                boxService.findAll(user.getId(), projectId, filter, pageable)
+                boxService.findAll(user.getId(), projectId, filter, pagination)
         );
     }
 

@@ -19,7 +19,7 @@ import java.util.UUID;
 @Repository
 public interface BoxRepository extends JpaRepository<BoxEntity, UUID> {
     @EntityGraph(attributePaths = "room")
-    Optional<BoxEntity> findByIdAndProject_Id(
+    Optional<BoxEntity> findByIdAndProjectId(
             UUID boxId,
             UUID projectId
     );
@@ -34,12 +34,12 @@ public interface BoxRepository extends JpaRepository<BoxEntity, UUID> {
             @Param("projectId") UUID projectId
     );
 
-    boolean existsByProject_IdAndNumber(
+    boolean existsByProjectIdAndNumber(
             UUID projectId,
             int number
     );
 
-    boolean existsByProject_IdAndNumberAndIdNot(
+    boolean existsByProjectIdAndNumberAndIdNot(
             UUID projectId,
             int number,
             UUID boxId
@@ -76,7 +76,7 @@ public interface BoxRepository extends JpaRepository<BoxEntity, UUID> {
     );
 
     @EntityGraph(attributePaths = "room")
-    List<BoxEntity> findAllByProject_IdOrderByNumberAscIdAsc(
+    List<BoxEntity> findAllByProjectIdOrderByNumberAscIdAsc(
             UUID projectId
     );
 }

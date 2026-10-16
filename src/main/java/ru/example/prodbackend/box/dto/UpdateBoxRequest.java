@@ -49,10 +49,4 @@ public class UpdateBoxRequest {
                 || contentsDeferred != null;
     }
 
-    @JsonAnySetter
-    public void rejectUnknownField(String name, Object value) {
-        throw new IllegalArgumentException(
-                "Unknown box update field: " + name
-        );
-    }
 }
