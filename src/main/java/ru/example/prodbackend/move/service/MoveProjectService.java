@@ -8,7 +8,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.example.prodbackend.common.dto.PageResponse;
 import ru.example.prodbackend.common.dto.PaginationRequest;
-import ru.example.prodbackend.exception.MoveProjectNotFoundException;
 import ru.example.prodbackend.exception.UserNotFoundException;
 import ru.example.prodbackend.move.dto.request.CreateMoveProjectRequest;
 import ru.example.prodbackend.move.dto.request.UpdateMoveProjectRequest;
@@ -27,6 +26,7 @@ public class MoveProjectService {
 
     private final MoveProjectRepository moveProjectRepository;
     private final UserRepository userRepository;
+    private final ProjectAccessService projectAccessService;
 
     @Transactional
     public MoveProjectResponse createMoveProject(CreateMoveProjectRequest request, UserEntity user) {
@@ -54,12 +54,12 @@ public class MoveProjectService {
     }
 
     public MoveProjectResponse getMoveProject(UUID projectId, UserEntity user) {
-        return toResponse(findOwnedProject(projectId, user.getId()));
+        return toResponse(projectAccessService.getOwnedProject(projectId, user.getId()));
     }
 
     @Transactional
     public MoveProjectResponse updateMoveProject(UUID projectId, UpdateMoveProjectRequest request, UserEntity user) {
-        MoveProjectEntity project = findOwnedProject(projectId, user.getId());
+        MoveProjectEntity project = projectAccessService.getOwnedProject(projectId, user.getId());
 
         if (request.getName() != null) {
             project.setName(request.getName().strip());
@@ -83,7 +83,7 @@ public class MoveProjectService {
 
     @Transactional
     public void deleteMoveProject(UUID projectId, UserEntity user) {
-        MoveProjectEntity project = findOwnedProject(projectId, user.getId());
+        MoveProjectEntity project = projectAccessService.getOwnedProject(projectId, user.getId());
 
         // Порядок важен из-за внешних ключей.
         moveProjectRepository.deleteProjectItems(projectId);
@@ -95,10 +95,6 @@ public class MoveProjectService {
 
         moveProjectRepository.delete(project);
         moveProjectRepository.flush();
-    }
-
-    private MoveProjectEntity findOwnedProject(UUID projectId, UUID ownerId) {
-        return moveProjectRepository.findByIdAndOwner_Id(projectId, ownerId).orElseThrow(() -> new MoveProjectNotFoundException("move project not found by id and owner_id"));
     }
 
     private MoveProjectResponse toResponse(MoveProjectEntity project) {

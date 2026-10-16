@@ -171,4 +171,38 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
     }
+
+    @ExceptionHandler(BoxNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleBoxNotFound(BoxNotFoundException exception) {
+        ErrorResponse body = ErrorResponse.builder()
+                .code("BOX_NOT_FOUND")
+                .message(exception.getMessage())
+                .traceId(UUID.randomUUID())
+                .time(Instant.now())
+                .build();
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
+    }
+
+    @ExceptionHandler(ResourceConflictException.class)
+    public ResponseEntity<ErrorResponse> handleResourceConflict(ResourceConflictException exception) {
+        ErrorResponse body = ErrorResponse.builder()
+                .code("DATA_CONFLICT")
+                .message(exception.getMessage())
+                .traceId(UUID.randomUUID())
+                .time(Instant.now())
+                .build();
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    }
+
+    @ExceptionHandler(RequestValidationException.class)
+    public ResponseEntity<ErrorResponse> handleRequestValidation(RequestValidationException exception) {
+        ErrorResponse body = ErrorResponse.builder()
+                .code("VALIDATION_ERROR")
+                .message("Request validation failed")
+                .traceId(UUID.randomUUID())
+                .time(Instant.now())
+                .fieldErrors(List.of(new FieldErrorResponse(exception.getField(), exception.getMessage())))
+                .build();
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT).body(body);
+    }
 }
