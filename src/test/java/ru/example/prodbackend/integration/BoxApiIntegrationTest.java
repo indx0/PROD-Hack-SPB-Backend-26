@@ -310,9 +310,11 @@ class BoxApiIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"number=0", "number=-1", "status=UNKNOWN", "roomId=invalid"})
-    void rejectsInvalidListFiltersBeforeCallingUnfinishedService(String query) throws Exception {
+    void rejectsInvalidListFiltersWithSharedValidationError(String query) throws Exception {
         mockMvc.perform(get(baseUrl + "?" + query).header(HttpHeaders.AUTHORIZATION, bearer(token)))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().is(422))
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.fieldErrors").isNotEmpty());
     }
 
     @ParameterizedTest

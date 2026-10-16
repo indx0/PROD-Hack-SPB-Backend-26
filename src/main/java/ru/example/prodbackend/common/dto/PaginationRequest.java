@@ -17,4 +17,3 @@ public class PaginationRequest {
     @Schema(description = "Количество элементов на странице", defaultValue = "20")
     private int size = 20;
 }
-

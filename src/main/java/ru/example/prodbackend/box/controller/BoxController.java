@@ -9,9 +9,9 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -22,7 +22,6 @@ import ru.example.prodbackend.box.dto.BoxSummaryResponse;
 import ru.example.prodbackend.box.dto.ChangeBoxStatusRequest;
 import ru.example.prodbackend.box.dto.CreateBoxRequest;
 import ru.example.prodbackend.box.dto.UpdateBoxRequest;
-import ru.example.prodbackend.box.entity.BoxStatus;
 import ru.example.prodbackend.box.service.BoxService;
 import ru.example.prodbackend.common.dto.PageResponse;
 import ru.example.prodbackend.common.dto.PaginationRequest;
@@ -33,7 +32,7 @@ import java.net.URI;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/move-projects/{projectId}/boxes")
+@RequestMapping(value = "/api/projects/{projectId}/boxes", produces = MediaType.APPLICATION_JSON_VALUE)
 @RequiredArgsConstructor
 @Tag(name = "Boxes", description = "Коробки проекта переезда")
 @SecurityRequirement(name = "jwtAuth")
@@ -82,41 +81,23 @@ public class BoxController {
             description = """
                     Возвращает страницу коробок проекта. Фильтры объединяются через AND.
                     Поиск по номеру использует точное совпадение; отсутствие результата означает пустую страницу.
-                    page начинается с 0, size — от 1 до 100, по умолчанию 20.
-                    Сортировка фиксирована в сервисе: number ASC, id ASC; параметр sort игнорируется.
-                    Пока недоступно: в сервисе не реализована проверка доступа через модуль Move.
+                    page начинается с 0, size — от 1 до 100, по умолчанию page=0 и size=20.
+                    Сортировка фиксирована: number ASC, id ASC. Пользовательская сортировка не поддерживается.
+                    Пустая или выходящая за пределы списка страница возвращает пустой content.
                     """,
             responses = {
                     @ApiResponse(responseCode = "200", description = "Страница коробок проекта"),
-                    @ApiResponse(responseCode = "422", description = "Ошибка валидации пагинации",
-                            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "500", description = "Проверка доступа к проекту пока не реализована")
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не существует или принадлежит другому пользователю", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: некорректные фильтры или параметры пагинации; page >= 0, size от 1 до 100, number > 0; подробности в fieldErrors", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             }
     )
     @GetMapping
     public ResponseEntity<PageResponse<BoxResponse>> findAll(
             @Parameter(hidden = true) @AuthenticationPrincipal UserEntity user,
             @PathVariable UUID projectId,
-            @Parameter(description = "Точный номер коробки внутри проекта")
-            @RequestParam(required = false) @Positive Integer number,
-            @Parameter(description = "Идентификатор комнаты назначения")
-            @RequestParam(required = false) UUID roomId,
-            @Parameter(description = "Статус коробки")
-            @RequestParam(required = false) BoxStatus status,
-            @Parameter(description = "Признак отложенного заполнения содержимого")
-            @RequestParam(required = false) Boolean contentsDeferred,
-            @Valid @ModelAttribute @ParameterObject PaginationRequest pagination
-    ) {
-        BoxFilter filter = BoxFilter.builder()
-                .number(number)
-                .roomId(roomId)
-                .status(status)
-                .contentsDeferred(contentsDeferred)
-                .build();
-
-        return ResponseEntity.ok(
-                boxService.findAll(user.getId(), projectId, filter, pagination)
-        );
+            @Valid @ModelAttribute @ParameterObject BoxFilter filter,
+            @Valid @ModelAttribute @ParameterObject PaginationRequest pagination) {
+        return ResponseEntity.ok(boxService.findAll(user.getId(), projectId, filter, pagination));
     }
 
     @Operation(
@@ -145,7 +126,7 @@ public class BoxController {
             summary = "Редактирование коробки",
             description = """
                     Изменяет номер и признак contentsDeferred. Отсутствующие поля сохраняют значения.
-                    Неизвестные поля игнорируются. Запрос без поддерживаемых полей и явный null запрещены.
+                    Пустой запрос, явный null и неизвестные поля запрещены.
                     Статус изменяется отдельным запросом.
                     Смена комнаты пока недоступна: требуется интеграция с Room.
                     Передача идентификатора текущей комнаты допустима.
@@ -226,12 +207,11 @@ public class BoxController {
                     количество коробок с отложенным заполнением и прогресс распаковки по комнатам.
                     Включает только комнаты с коробками. Процент распаковки округляется до целого.
                     Для пустого проекта возвращаются нули и пустой список комнат.
-                    Пока недоступно: в сервисе не реализована проверка доступа через модуль Move.
                     """,
             responses = {
                     @ApiResponse(responseCode = "200", description = "Статистика коробок проекта",
                             content = @Content(schema = @Schema(implementation = BoxSummaryResponse.class))),
-                    @ApiResponse(responseCode = "500", description = "Проверка доступа к проекту пока не реализована")
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не существует или принадлежит другому пользователю", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             }
     )
     @GetMapping("/summary")

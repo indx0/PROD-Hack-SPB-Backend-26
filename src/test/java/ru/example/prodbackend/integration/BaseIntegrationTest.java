@@ -11,6 +11,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import ru.example.prodbackend.auth.repository.RefreshTokenRepository;
 import ru.example.prodbackend.config.TestcontainersConfig;
+import ru.example.prodbackend.move.repository.MoveProjectRepository;
 import ru.example.prodbackend.user.repository.UserRepository;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -37,11 +38,25 @@ public abstract class BaseIntegrationTest {
     protected RefreshTokenRepository refreshTokenRepository;
 
     @Autowired
+    protected MoveProjectRepository moveProjectRepository;
+
+    @Autowired
     private PlatformTransactionManager transactionManager;
 
     @BeforeEach
     protected void cleanDatabase() {
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            // Проекты с содержимым должны удаляться раньше пользователей-владельцев.
+            for (var project : moveProjectRepository.findAll()) {
+                var projectId = project.getId();
+                moveProjectRepository.deleteProjectItems(projectId);
+                moveProjectRepository.deleteProjectBoxes(projectId);
+                moveProjectRepository.deleteProjectRooms(projectId);
+                moveProjectRepository.deleteProjectTasks(projectId);
+                moveProjectRepository.deleteProjectChecklist(projectId);
+                moveProjectRepository.deleteProjectEvents(projectId);
+            }
+            moveProjectRepository.deleteAllInBatch();
             refreshTokenRepository.deleteAllInBatch();
             userRepository.deleteAllInBatch();
         });
