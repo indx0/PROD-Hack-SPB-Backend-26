@@ -20,6 +20,13 @@ import java.util.UUID;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(ChecklistItemNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleChecklistItemNotFound(ChecklistItemNotFoundException exception) {
+        ErrorResponse body = ErrorResponse.builder().code("CHECKLIST_ITEM_NOT_FOUND").message(exception.getMessage())
+                .traceId(UUID.randomUUID()).time(Instant.now()).build();
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
+    }
+
     @ExceptionHandler({UserNotFoundException.class, ItemNotFoundException.class})
     public ResponseEntity<ErrorResponse> handleUserNotFoundException(
             RuntimeException exception

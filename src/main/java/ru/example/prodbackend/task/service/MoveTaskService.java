@@ -192,6 +192,7 @@ public class MoveTaskService {
                 .title(template.getTitle())
                 .description(template.getDescription())
                 .stage(template.getStage())
+                .dueDateOffsetDays(template.getDueDateOffsetDays())
                 .build();
     }
 }

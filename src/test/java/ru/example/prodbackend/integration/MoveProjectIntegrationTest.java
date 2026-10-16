@@ -150,7 +150,12 @@ class MoveProjectIntegrationTest extends AuthIntegrationTestSupport {
             for (String entity : new String[]{"RoomEntity", "BoxEntity", "MoveTaskEntity", "FirstDayChecklistItemEntity", "ProjectEventEntity"}) {
                 assertEquals(0L, entityManager.createQuery("select count(e) from " + entity + " e where e.project.id = :id", Long.class)
                         .setParameter("id", removed.getId()).getSingleResult(), entity);
-                assertEquals(1L, entityManager.createQuery("select count(e) from " + entity + " e where e.project.id = :id", Long.class)
+                long expected = switch (entity) {
+                    case "MoveTaskEntity" -> 12L;
+                    case "FirstDayChecklistItemEntity" -> 5L;
+                    default -> 1L;
+                };
+                assertEquals(expected, entityManager.createQuery("select count(e) from " + entity + " e where e.project.id = :id", Long.class)
                         .setParameter("id", retained.getId()).getSingleResult(), entity);
             }
             assertEquals(1L, entityManager.createQuery("select count(i) from ItemEntity i where i.box.project.id = :id", Long.class)

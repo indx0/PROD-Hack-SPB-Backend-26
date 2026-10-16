@@ -28,12 +28,14 @@ import ru.example.prodbackend.task.dto.request.CreateMoveTaskRequest;
 import ru.example.prodbackend.task.entity.TaskStage;
 import ru.example.prodbackend.task.repository.MoveTaskRepository;
 import ru.example.prodbackend.task.service.MoveTaskService;
+import ru.example.prodbackend.checklist.repository.FirstDayChecklistRepository;
 import ru.example.prodbackend.user.entity.UserEntity;
 
 import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyIterable;
 import static org.mockito.Mockito.doThrow;
 
 /** Настоящие бизнес-транзакции и PostgreSQL; сбой записи журнала имитируется только в отдельных сценариях. */
@@ -57,6 +59,8 @@ class ProjectEventIntegrationTest extends AuthIntegrationTestSupport {
     private PlatformTransactionManager transactionManager;
     @MockitoSpyBean
     private ProjectEventRepository eventRepository;
+    @MockitoSpyBean
+    private FirstDayChecklistRepository checklistRepository;
 
     private UserEntity owner;
 
@@ -84,11 +88,15 @@ class ProjectEventIntegrationTest extends AuthIntegrationTestSupport {
             eventRepository.flush();
             assertEquals(1L, moveProjectRepository.count());
             assertEquals(1L, eventRepository.count());
+            assertEquals(11L, taskRepository.count());
+            assertEquals(4L, checklistRepository.count());
             status.setRollbackOnly();
         });
 
         assertEquals(0L, moveProjectRepository.count());
         assertEquals(0L, eventRepository.count());
+        assertEquals(0L, taskRepository.count());
+        assertEquals(0L, checklistRepository.count());
     }
 
     @Test
@@ -98,6 +106,18 @@ class ProjectEventIntegrationTest extends AuthIntegrationTestSupport {
         assertThrows(DataAccessResourceFailureException.class, () -> moveProjectService.createMoveProject(request(), owner));
 
         assertEquals(0L, moveProjectRepository.count());
+        assertEquals(0L, eventRepository.count());
+        assertEquals(0L, taskRepository.count());
+        assertEquals(0L, checklistRepository.count());
+    }
+
+    @Test
+    void checklistInitializationFailureRollsBackProjectTasksAndEvent() {
+        doThrow(new DataAccessResourceFailureException("Тестовый сбой создания чек-листа")).when(checklistRepository).saveAll(anyIterable());
+        assertThrows(DataAccessResourceFailureException.class, () -> moveProjectService.createMoveProject(request(), owner));
+        assertEquals(0L, moveProjectRepository.count());
+        assertEquals(0L, taskRepository.count());
+        assertEquals(0L, checklistRepository.count());
         assertEquals(0L, eventRepository.count());
     }
 
