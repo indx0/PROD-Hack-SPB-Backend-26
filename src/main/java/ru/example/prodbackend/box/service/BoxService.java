@@ -3,7 +3,6 @@ package ru.example.prodbackend.box.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -18,7 +17,11 @@ import ru.example.prodbackend.box.dto.UpdateBoxRequest;
 import ru.example.prodbackend.box.entity.BoxEntity;
 import ru.example.prodbackend.box.entity.BoxStatus;
 import ru.example.prodbackend.box.repository.BoxRepository;
+import ru.example.prodbackend.common.dto.PageResponse;
+import ru.example.prodbackend.common.dto.PaginationRequest;
+import ru.example.prodbackend.exception.MoveProjectNotFoundException;
 import ru.example.prodbackend.item.repository.ItemRepository;
+import ru.example.prodbackend.move.repository.MoveProjectRepository;
 import ru.example.prodbackend.room.entity.RoomEntity;
 
 import java.util.EnumMap;
@@ -36,8 +39,8 @@ public class BoxService {
     /*
      * Репозитории для полной реализации (TODO: MoveProject, Room, ProjectEvent):
      *
-     * 1. MoveProjectRepository: findByIdAndOwner_Id(projectId, userId).
-     *    Загрузка проекта и проверка владельца для создания, списка и статистики.
+     * 1. MoveProjectRepository уже используется для проверки доступа к списку и статистике.
+     *    Для создания ещё требуется загрузить проект и комнату.
      *
      * 2. RoomRepository: findById(roomId).
      *    Загрузка комнаты для создания коробки и смены комнаты;
@@ -52,6 +55,7 @@ public class BoxService {
      */
     private final BoxRepository boxRepository;
     private final ItemRepository itemRepository;
+    private final MoveProjectRepository moveProjectRepository;
 
     @Transactional
     public BoxResponse create(
@@ -67,28 +71,13 @@ public class BoxService {
         );
     }
 
-    public Page<BoxResponse> findAll(
-            UUID userId,
-            UUID projectId,
-            BoxFilter filter,
-            Pageable pageable
-    ) {
+    public PageResponse<BoxResponse> findAll(UUID userId, UUID projectId, BoxFilter filter, PaginationRequest pagination) {
         requireProjectAccess(userId, projectId);
 
-        Pageable sortedPageable = PageRequest.of(
-                pageable.getPageNumber(),
-                pageable.getPageSize(),
-                Sort.by(Sort.Order.asc("number"), Sort.Order.asc("id"))
-        );
+        PageRequest pageable = PageRequest.of(pagination.getPage(), pagination.getSize(), Sort.by("number", "id"));
 
-        return boxRepository.findAllByFilters(
-                projectId,
-                filter.getNumber(),
-                filter.getRoomId(),
-                filter.getStatus(),
-                filter.getContentsDeferred(),
-                sortedPageable
-        ).map(this::toResponse);
+        Page<BoxEntity> boxes = boxRepository.findAllByFilters(projectId, filter.getNumber(), filter.getRoomId(), filter.getStatus(), filter.getContentsDeferred(), pageable);
+        return PageResponse.from(boxes.map(this::toResponse));
     }
 
     public BoxResponse findById(UUID userId, UUID projectId, UUID boxId) {
@@ -218,11 +207,7 @@ public class BoxService {
     }
 
     private void requireProjectAccess(UUID userId, UUID projectId) {
-        // TODO Move: verify project existence and owner.id == userId; otherwise return 404.
-        // A box query cannot distinguish an empty project from a missing/foreign project.
-        throw new UnsupportedOperationException(
-                "Project access verification requires move integration"
-        );
+        moveProjectRepository.findByIdAndOwner_Id(projectId, userId).orElseThrow(() -> new MoveProjectNotFoundException("Project not found"));
     }
 
     private BoxEntity requireOwnedBox(

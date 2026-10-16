@@ -16,6 +16,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -108,5 +109,64 @@ class SecurityIntegrationTest extends AuthIntegrationTestSupport {
                 .andExpect(jsonPath("$.paths['/api/user/change-password'].post").exists())
                 .andExpect(jsonPath("$.paths['/api/auth/profile']").doesNotExist())
                 .andExpect(jsonPath("$.paths['/api/auth/change-password']").doesNotExist());
+    }
+
+    @Test
+    void openApiDescribesMoveProjectResponsesAndErrors() throws Exception {
+        var response = mockMvc.perform(get("/v3/api-docs")).andExpect(status().isOk());
+        String collection = "$.paths['/api/v1/move-projects']";
+        String project = "$.paths['/api/v1/move-projects/{projectId}']";
+
+        response.andExpect(jsonPath(collection + ".post.responses['201'].content['application/json'].schema['$ref']").value("#/components/schemas/MoveProjectResponse"))
+                .andExpect(jsonPath(collection + ".get.responses['200'].content['application/json'].schema['$ref']").value("#/components/schemas/PageResponseMoveProjectResponse"))
+                .andExpect(jsonPath(project + ".delete.responses['204'].content").doesNotExist());
+
+        for (String operation : new String[]{collection + ".post", collection + ".get", project + ".get", project + ".patch", project + ".delete"}) {
+            response.andExpect(jsonPath(operation + ".responses['401'].content['application/json'].schema['$ref']").value("#/components/schemas/ErrorResponse"));
+        }
+        for (String operation : new String[]{project + ".get", project + ".patch", project + ".delete"}) {
+            response.andExpect(jsonPath(operation + ".responses['400'].content['application/json'].schema['$ref']").value("#/components/schemas/ErrorResponse"))
+                    .andExpect(jsonPath(operation + ".responses['404'].description").value("MOVE_PROJECT_NOT_FOUND: проект не существует или принадлежит другому пользователю"));
+        }
+        response.andExpect(jsonPath(collection + ".get.responses['422'].content['application/json'].schema['$ref']").value("#/components/schemas/ErrorResponse"))
+                .andExpect(jsonPath(project + ".patch.responses['422'].content['application/json'].schema['$ref']").value("#/components/schemas/ErrorResponse"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"POST", "LIST", "GET", "PATCH", "DELETE"})
+    void moveProjectEndpointsRequireAccessToken(String operation) throws Exception {
+        String path = "/api/v1/move-projects";
+        if (!operation.equals("POST") && !operation.equals("LIST")) {
+            path += "/550e8400-e29b-41d4-a716-446655440000";
+        }
+        var method = org.springframework.http.HttpMethod.valueOf(operation.equals("LIST") ? "GET" : operation);
+        var requestBuilder = request(method, path).contentType(MediaType.APPLICATION_JSON).content("{}");
+
+        assertErrorResponse(mockMvc.perform(requestBuilder), 401, "UNAUTHORIZED")
+                .andExpect(header().string(HttpHeaders.WWW_AUTHENTICATE, "Bearer"));
+        assertDatabaseIsEmpty();
+    }
+
+    @Test
+    void openApiDescribesGenericPagesWithTypedItemsAndSharedParameters() throws Exception {
+        var response = mockMvc.perform(get("/v3/api-docs")).andExpect(status().isOk());
+        for (String item : new String[]{"MoveProjectResponse", "BoxResponse"}) {
+            String schema = "$.components.schemas.PageResponse" + item;
+            response.andExpect(jsonPath(schema + ".properties.content.items['$ref']").value("#/components/schemas/" + item))
+                    .andExpect(jsonPath(schema + ".properties.page.type").value("integer"))
+                    .andExpect(jsonPath(schema + ".properties.size.type").value("integer"))
+                    .andExpect(jsonPath(schema + ".properties.totalElements.type").value("integer"))
+                    .andExpect(jsonPath(schema + ".properties.totalPages.type").value("integer"));
+        }
+        String boxes = "$.paths['/api/projects/{projectId}/boxes'].get";
+        response.andExpect(jsonPath(boxes + ".responses['200'].content['application/json'].schema['$ref']").value("#/components/schemas/PageResponseBoxResponse"))
+                .andExpect(jsonPath(boxes + ".responses['422'].content['application/json'].schema['$ref']").value("#/components/schemas/ErrorResponse"));
+        for (String path : new String[]{"/api/v1/move-projects", "/api/projects/{projectId}/boxes"}) {
+            String parameters = "$.paths['" + path + "'].get.parameters";
+            response.andExpect(jsonPath(parameters + "[?(@.name == 'page')].schema.default").value(org.hamcrest.Matchers.contains(0)))
+                    .andExpect(jsonPath(parameters + "[?(@.name == 'size')].schema.default").value(org.hamcrest.Matchers.contains(20)))
+                    .andExpect(jsonPath(parameters + "[?(@.name == 'size')].schema.maximum").value(org.hamcrest.Matchers.contains(100)))
+                    .andExpect(jsonPath(parameters + "[?(@.name == 'sort')]").isEmpty());
+        }
     }
 }
