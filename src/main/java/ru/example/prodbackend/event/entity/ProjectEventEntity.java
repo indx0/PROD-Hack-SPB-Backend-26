@@ -4,9 +4,7 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import ru.example.prodbackend.move.entity.MoveProjectEntity;
 import ru.example.prodbackend.user.entity.UserEntity;
 
@@ -14,9 +12,11 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
+@Builder
 @Getter
 @Setter
 @NoArgsConstructor
+@AllArgsConstructor
 @Table(name = "project_events", indexes = {
         @Index(name = "idx_project_events_project_time", columnList = "project_id,occurred_at"),
         @Index(name = "idx_project_events_actor", columnList = "actor_id")

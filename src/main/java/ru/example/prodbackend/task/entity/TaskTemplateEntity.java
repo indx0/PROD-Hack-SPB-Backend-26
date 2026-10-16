@@ -2,22 +2,23 @@ package ru.example.prodbackend.task.entity;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
-import ru.example.prodbackend.common.entity.AuditedEntity;
+import lombok.*;
 
+import java.time.Instant;
+import java.util.UUID;
 
 @Entity
+@Builder
 @Getter
 @Setter
 @NoArgsConstructor
+@AllArgsConstructor
 @Table(name = "task_templates", uniqueConstraints = @UniqueConstraint(name = "uk_task_templates_code", columnNames = "code"))
-public class TaskTemplateEntity extends AuditedEntity {
-    @NotBlank
-    @Size(max = 100)
-    @Column(name = "code", nullable = false, length = 100)
-    private String code;
+public class TaskTemplateEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @NotBlank
     @Size(max = 255)
@@ -33,11 +34,20 @@ public class TaskTemplateEntity extends AuditedEntity {
     @Column(nullable = false, length = 32)
     private TaskStage stage;
 
-    @Column(name = "due_offset_days")
-    private Integer dueOffsetDays;
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
 
-    @PositiveOrZero
-    @Column(name = "display_order", nullable = false)
-    private int displayOrder;
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
 
+    @PrePersist
+    protected void onCreate() {
+        createdAt = Instant.now();
+        updatedAt = createdAt;
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = Instant.now();
+    }
 }

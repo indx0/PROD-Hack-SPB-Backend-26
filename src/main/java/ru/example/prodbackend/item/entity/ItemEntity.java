@@ -1,22 +1,29 @@
-package ru.example.prodbackend.inventory.entity;
+package ru.example.prodbackend.item.entity;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
-import ru.example.prodbackend.common.entity.AuditedEntity;
+import lombok.*;
 import ru.example.prodbackend.box.entity.BoxEntity;
 
+import java.time.Instant;
+import java.util.UUID;
+
 @Entity
+@Builder
 @Getter
 @Setter
 @NoArgsConstructor
+@AllArgsConstructor
 @Table(name = "items", indexes = {
         @Index(name = "idx_items_box", columnList = "box_id"),
         @Index(name = "idx_items_name", columnList = "name")
     })
-public class ItemEntity extends AuditedEntity {
+public class ItemEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "box_id", nullable = false)
     private BoxEntity box;
@@ -29,4 +36,20 @@ public class ItemEntity extends AuditedEntity {
     @Column(nullable = false)
     private boolean lost;
 
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
+
+    @PrePersist
+    protected void onCreate() {
+        createdAt = Instant.now();
+        updatedAt = createdAt;
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = Instant.now();
+    }
 }
