@@ -33,6 +33,11 @@ public class RoomEntity {
     @Column(name = "name", nullable = false, length = 255)
     private String name;
 
+    @Size(min = 1, max = 64)
+    @Pattern(regexp = "(?Us).*\\S.*")
+    @Column(name = "icon_key", length = 64)
+    private String iconKey;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

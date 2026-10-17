@@ -18,4 +18,5 @@
     <include file="1.1/2026-10-17-0012-add-item-packing-marks.sql" relativeToChangelogFile="true"/>
     <include file="1.1/2026-10-17-0013-link-checklist-items.sql" relativeToChangelogFile="true"/>
     <include file="1.1/2026-10-17-0014-add-box-details.sql" relativeToChangelogFile="true"/>
+    <include file="1.1/2026-10-17-0015-add-room-icon-key.sql" relativeToChangelogFile="true"/>
 </databaseChangeLog>

@@ -42,12 +42,17 @@ public class RoomController {
 
     @PostMapping
     @Operation(summary = "Создать комнату",
-            description = "Создает комнату в своем проекте. Пробелы по краям названия удаляются. Название уникально внутри проекта с учетом регистра.",
+            description = """
+                    Создаёт комнату в своём проекте. Пробелы по краям названия удаляются; название уникально с учётом регистра.
+                    iconKey — необязательный ключ значка клиента, непустая строка до 64 символов.
+                    Отсутствие или null означает стандартное оформление; неизвестный клиенту ключ требует стандартного значка.
+                    Сервер хранит ключ без определения значка по названию комнаты.
+                    """,
             responses = {
                     @ApiResponse(responseCode = "201", description = "Комната создана", content = @Content(schema = @Schema(implementation = RoomResponse.class))),
                     @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не существует или принадлежит другому пользователю", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: название уже занято в этом проекте", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: название пустое или длиннее 255 символов", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+                    @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: название пустое или длиннее 255 символов; iconKey пустой, пробельный или длиннее 64 символов", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             })
     public ResponseEntity<RoomResponse> createRoom(
             @PathVariable("projectId") UUID projectId,
@@ -72,13 +77,19 @@ public class RoomController {
     }
 
     @PatchMapping("/{roomId}")
-    @Operation(summary = "Переименовать комнату",
-            description = "Меняет название комнаты своего проекта. Отсутствующее поле или null сохраняет название. Пустой объект допустим.",
+    @Operation(summary = "Изменить комнату",
+            description = """
+                    Изменяет название и выбранный значок комнаты своего проекта. Пустой объект допустим.
+                    Отсутствующее name или name=null сохраняет название; переименование не меняет значок.
+                    Отсутствующий iconKey сохраняет выбор; строка меняет его; iconKey=null очищает явный выбор.
+                    Пустая или пробельная строка и ключ длиннее 64 символов запрещены.
+                    Следующее чтение коробок, вещей, поиска, подсказок, чек-листа и сводки возвращает актуальный roomIconKey.
+                    """,
             responses = {
                     @ApiResponse(responseCode = "200", description = "Комната обновлена", content = @Content(schema = @Schema(implementation = RoomResponse.class))),
                     @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект недоступен; ROOM_NOT_FOUND: комнаты нет в этом проекте", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: название уже занято другой комнатой проекта", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: название пустое или длиннее 255 символов", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+                    @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: название пустое или длиннее 255 символов; iconKey пустой, пробельный или длиннее 64 символов", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             })
     public ResponseEntity<RoomResponse> updateRoom(
             @PathVariable("projectId") UUID projectId,

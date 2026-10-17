@@ -1,5 +1,6 @@
 package ru.example.prodbackend.box.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -18,6 +19,9 @@ public class RoomBoxSummaryResponse {
     private UUID roomId;
 
     private String roomName;
+
+    @Schema(types = {"string", "null"}, description = "Актуальный ключ значка комнаты; null — стандартное оформление")
+    private String roomIconKey;
 
     private long totalBoxes;
 

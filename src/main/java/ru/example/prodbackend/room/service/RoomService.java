@@ -43,6 +43,7 @@ public class RoomService {
         RoomEntity room = RoomEntity.builder()
                 .project(project)
                 .name(name)
+                .iconKey(request.getIconKey())
                 .build();
 
         return toResponse(roomRepository.saveAndFlush(room));
@@ -70,6 +71,7 @@ public class RoomService {
 
             room.setName(name);
         }
+        if (request.isIconKeyPresent()) room.setIconKey(request.getIconKey());
 
         return toResponse(roomRepository.saveAndFlush(room));
     }
@@ -107,6 +109,7 @@ public class RoomService {
                 .id(room.getId())
                 .projectId(room.getProject().getId())
                 .name(room.getName())
+                .iconKey(room.getIconKey())
                 .createdAt(room.getCreatedAt())
                 .updatedAt(room.getUpdatedAt())
                 .build();

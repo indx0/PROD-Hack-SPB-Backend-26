@@ -134,7 +134,7 @@ public class FirstDayChecklistService {
             var linked = item.getItem();
             var box = linked.getBox();
             response.itemId(linked.getId()).itemName(linked.getName()).boxId(box.getId()).boxNumber(box.getNumber())
-                    .roomId(box.getRoom().getId()).roomName(box.getRoom().getName());
+                    .roomId(box.getRoom().getId()).roomName(box.getRoom().getName()).roomIconKey(box.getRoom().getIconKey());
         }
         return response.build();
     }

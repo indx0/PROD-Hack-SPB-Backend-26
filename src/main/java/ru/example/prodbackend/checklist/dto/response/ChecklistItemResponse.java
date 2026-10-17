@@ -26,6 +26,8 @@ public class ChecklistItemResponse {
     private Integer boxNumber;
     private UUID roomId;
     private String roomName;
+    @Schema(types = {"string", "null"}, description = "Актуальный ключ значка комнаты; null — без значка или без связи с вещью")
+    private String roomIconKey;
     private Instant createdAt;
     private Instant updatedAt;
 }

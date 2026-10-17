@@ -50,8 +50,9 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                 // Roll back only the new columns, then upgrade a schema that already has items.
                 var items = jdbc.queryForList("SELECT id, name, quantity, first_day FROM items ORDER BY id");
                 var boxes = jdbc.queryForList("SELECT id, status FROM boxes ORDER BY id");
+                var rooms = jdbc.queryForList("SELECT id, name FROM rooms ORDER BY id");
                 var checklist = jdbc.queryForList("SELECT id, name, completed_at FROM first_day_checklist_items ORDER BY id");
-                runLiquibase(schema, 3);
+                runLiquibase(schema, 4);
                 assertThat(jdbc.queryForList("""
                         SELECT column_name FROM information_schema.columns
                         WHERE table_schema = ? AND table_name = 'items'
@@ -60,10 +61,16 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                         SELECT column_name FROM information_schema.columns
                         WHERE table_schema = ? AND table_name = 'boxes'
                         """, String.class, schema)).doesNotContain("title", "fragile", "first_day", "carry_with_me");
+                assertThat(jdbc.queryForList("""
+                        SELECT column_name FROM information_schema.columns
+                        WHERE table_schema = ? AND table_name = 'rooms'
+                        """, String.class, schema)).doesNotContain("icon_key");
                 runLiquibase(schema, 0);
                 assertHistory(jdbc);
                 assertThat(jdbc.queryForList("SELECT id, name, quantity, first_day FROM items ORDER BY id")).isEqualTo(items);
                 assertThat(jdbc.queryForList("SELECT id, status FROM boxes ORDER BY id")).isEqualTo(boxes);
+                assertThat(jdbc.queryForList("SELECT id, name FROM rooms ORDER BY id")).isEqualTo(rooms);
+                assertThat(jdbc.queryForObject("SELECT count(*) FROM rooms WHERE icon_key IS NOT NULL", Long.class)).isZero();
                 assertThat(jdbc.queryForObject("SELECT count(*) FROM boxes WHERE title <> '' OR fragile OR first_day OR carry_with_me", Long.class)).isZero();
                 assertThat(jdbc.queryForList("SELECT id, name, completed_at FROM first_day_checklist_items ORDER BY id")).isEqualTo(checklist);
                 assertThat(jdbc.queryForObject("SELECT count(*) FROM first_day_checklist_items WHERE item_id IS NOT NULL", Long.class)).isZero();
@@ -75,7 +82,7 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                 assertHistory(jdbc);
                 assertThat(jdbc.queryForList("SELECT id, email FROM users ORDER BY email")).isEqualTo(users);
 
-                runLiquibase(schema, 14);
+                runLiquibase(schema, 15);
                 assertThat(jdbc.queryForList("""
                         SELECT tablename FROM pg_tables
                         WHERE schemaname = ? AND tablename NOT IN ('databasechangelog', 'databasechangeloglock')
@@ -129,7 +136,7 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
 
     private void assertHistory(JdbcTemplate jdbc) {
         assertThat(jdbc.queryForList("SELECT author FROM databasechangelog", String.class))
-                .hasSize(14).containsOnly("indx0", "timn2020");
+                .hasSize(15).containsOnly("indx0", "timn2020");
     }
 
     private void assertConstraints(JdbcTemplate jdbc) {
@@ -164,6 +171,12 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                 room, project);
         jdbc.update("INSERT INTO rooms (id, project_id, name, created_at, updated_at) VALUES (?, ?, 'Room', now(), now())",
                 otherRoom, otherProject);
+        assertThat(jdbc.queryForObject("SELECT icon_key FROM rooms WHERE id = ?", String.class, room)).isNull();
+        jdbc.update("UPDATE rooms SET icon_key = ? WHERE id = ?", "k".repeat(64), room);
+        assertThat(jdbc.queryForObject("SELECT icon_key FROM rooms WHERE id = ?", String.class, room)).hasSize(64);
+        rejects(jdbc, "UPDATE rooms SET icon_key = ? WHERE id = ?", "22001", "k".repeat(65), room);
+        jdbc.update("UPDATE rooms SET icon_key = 'kitchen' WHERE id = ?", room);
+        jdbc.update("UPDATE rooms SET icon_key = NULL WHERE id = ?", otherRoom);
         String insertBox = """
                 INSERT INTO boxes (id, number, project_id, room_id, status, contents_deferred, created_at, updated_at)
                 VALUES (?, ?, ?, ?, 'PACKING', false, now(), now())

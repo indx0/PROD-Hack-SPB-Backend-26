@@ -25,6 +25,9 @@ public class BoxResponse {
 
     private String roomName;
 
+    @Schema(types = {"string", "null"}, description = "Актуальный ключ значка комнаты; null — стандартное оформление")
+    private String roomIconKey;
+
     private BoxStatus status;
 
     private boolean contentsDeferred;

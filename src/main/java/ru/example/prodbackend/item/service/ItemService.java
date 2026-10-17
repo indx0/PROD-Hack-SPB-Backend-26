@@ -150,6 +150,7 @@ public class ItemService {
                 .map(box -> ItemBoxSuggestionResponse.builder()
                         .boxId(box.getId()).boxNumber(box.getNumber())
                         .roomId(box.getRoom().getId()).roomName(box.getRoom().getName())
+                        .roomIconKey(box.getRoom().getIconKey())
                         .status(box.getStatus()).contentsMatch(matchingBoxes.contains(box.getId()))
                         .sameRoom(box.getRoom().getId().equals(roomId)).build())
                 .toList();
@@ -206,6 +207,7 @@ public class ItemService {
                 .boxNumber(box.getNumber())
                 .roomId(box.getRoom().getId())
                 .roomName(box.getRoom().getName())
+                .roomIconKey(box.getRoom().getIconKey())
                 .boxStatus(box.getStatus())
                 .createdAt(item.getCreatedAt())
                 .updatedAt(item.getUpdatedAt())

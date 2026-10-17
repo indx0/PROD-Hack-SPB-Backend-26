@@ -25,6 +25,7 @@ import ru.example.prodbackend.box.service.BoxService;
 import ru.example.prodbackend.checklist.service.FirstDayChecklistService;
 import ru.example.prodbackend.move.service.MoveProjectService;
 import ru.example.prodbackend.room.service.RoomService;
+import ru.example.prodbackend.room.entity.RoomEntity;
 import ru.example.prodbackend.task.service.MoveTaskService;
 
 import java.time.LocalDate;
@@ -87,6 +88,16 @@ class DataLoaderIntegrationTest extends BaseIntegrationTest {
                 "select count(t) from RefreshTokenEntity t group by t.user.id", Long.class).getResultList())
                 .containsExactlyInAnyOrder(1L, 1L);
         assertThat(count("RoomEntity")).isEqualTo(4);
+        assertThat(entityManager.createQuery("from RoomEntity", RoomEntity.class).getResultList()).allSatisfy(room -> {
+            String icon = switch (room.getName()) {
+                case "Кухня" -> "kitchen";
+                case "Гостиная" -> "sofa";
+                case "Спальня" -> "bed";
+                case "Ванная" -> "bath";
+                default -> throw new AssertionError("Неожиданная демо-комната: " + room.getName());
+            };
+            assertThat(room.getIconKey()).isEqualTo(icon);
+        });
         assertThat(count("ItemEntity")).isEqualTo(12);
         assertThat(entityManager.createQuery("from ItemEntity", ItemEntity.class).getResultList()).allSatisfy(item -> {
             if (item.getBox().getStatus() != BoxStatus.PACKING) assertThat(item.getPackedAt()).isNotNull();
@@ -154,6 +165,9 @@ class DataLoaderIntegrationTest extends BaseIntegrationTest {
         existingBox.setFirstDay(true);
         existingBox.setCarryWithMe(true);
         UUID existingBoxId = existingBox.getId();
+        var existingRoom = existingBox.getRoom();
+        existingRoom.setIconKey("heart");
+        UUID existingRoomId = existingRoom.getId();
         ReflectionTestUtils.setField(loader, "user1Password", "new-password-must-not-overwrite-user");
         loader.run(args);
         entityManager.flush();
@@ -165,6 +179,7 @@ class DataLoaderIntegrationTest extends BaseIntegrationTest {
         assertThat(preserved.isFragile()).isFalse();
         assertThat(preserved.isFirstDay()).isTrue();
         assertThat(preserved.isCarryWithMe()).isTrue();
+        assertThat(entityManager.find(RoomEntity.class, existingRoomId).getIconKey()).isEqualTo("heart");
     }
 
     private DataLoader loader() {

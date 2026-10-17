@@ -29,6 +29,8 @@ public class ItemResponse {
     private int boxNumber;
     private UUID roomId;
     private String roomName;
+    @Schema(types = {"string", "null"}, description = "Актуальный ключ значка комнаты; null — стандартное оформление")
+    private String roomIconKey;
     private BoxStatus boxStatus;
     private Instant createdAt;
     private Instant updatedAt;

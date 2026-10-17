@@ -91,10 +91,10 @@ public class DataLoader implements ApplicationRunner {
                 .moveDate(moveDate.atStartOfDay(ZoneOffset.UTC).toInstant()).originAddress("Москва, ул. Лесная, д. 10, кв. 15")
                 .destinationAddress("Москва, ул. Садовая, д. 25, кв. 42").build(), user);
         UUID projectId = project.getId();
-        UUID kitchen = roomService.createRoom(projectId, CreateRoomRequest.builder().name("Кухня").build(), user.getId()).getId();
-        UUID livingRoom = roomService.createRoom(projectId, CreateRoomRequest.builder().name("Гостиная").build(), user.getId()).getId();
-        UUID bedroom = roomService.createRoom(projectId, CreateRoomRequest.builder().name("Спальня").build(), user.getId()).getId();
-        UUID bathroom = roomService.createRoom(projectId, CreateRoomRequest.builder().name("Ванная").build(), user.getId()).getId();
+        UUID kitchen = roomService.createRoom(projectId, CreateRoomRequest.builder().name("Кухня").iconKey("kitchen").build(), user.getId()).getId();
+        UUID livingRoom = roomService.createRoom(projectId, CreateRoomRequest.builder().name("Гостиная").iconKey("sofa").build(), user.getId()).getId();
+        UUID bedroom = roomService.createRoom(projectId, CreateRoomRequest.builder().name("Спальня").iconKey("bed").build(), user.getId()).getId();
+        UUID bathroom = roomService.createRoom(projectId, CreateRoomRequest.builder().name("Ванная").iconKey("bath").build(), user.getId()).getId();
 
         createBox(user.getId(), projectId, livingRoom, 1, BoxStatus.PACKING, true);
         createBox(user.getId(), projectId, kitchen, 2, BoxStatus.PACKED, false, "Тарелки", "Кружки", "Столовые приборы");
