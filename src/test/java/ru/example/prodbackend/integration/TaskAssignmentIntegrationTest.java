@@ -13,8 +13,9 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import ru.example.prodbackend.config.JdbcCaptureConfig;
 import ru.example.prodbackend.move.service.ProjectParticipantService;
+import ru.example.prodbackend.support.AuthIntegrationTestSupport;
+import ru.example.prodbackend.support.config.JdbcCaptureConfig;
 import ru.example.prodbackend.user.entity.UserEntity;
 import tools.jackson.databind.JsonNode;
 
