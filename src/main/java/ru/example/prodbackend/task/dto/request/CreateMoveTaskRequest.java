@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
+import java.util.UUID;
 import lombok.*;
 import ru.example.prodbackend.task.entity.TaskDueType;
 import ru.example.prodbackend.task.entity.TaskStage;
@@ -50,7 +51,21 @@ public class CreateMoveTaskRequest {
     @Schema(description = "Смещение в днях, только для RELATIVE", example = "-2")
     private Integer offsetDays;
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @Schema(description = "UUID аккаунта участника этого переезда, включая создателя. Имеет приоритет над assigneeName; явный null снимает назначение. Отсутствие в PATCH сохраняет назначение")
+    private UUID assigneeId;
+
+    @JsonIgnore
+    @Schema(hidden = true)
+    private boolean assigneeIdPresent;
+
+    @JsonSetter(value = "assigneeId", nulls = Nulls.SET)
+    public void setAssigneeId(UUID assigneeId) {
+        this.assigneeId = assigneeId;
+        this.assigneeIdPresent = true;
+    }
+
     @Size(max = 255)
-    @Schema(description = "Необязательное имя ответственного")
+    @Schema(description = "Свободное имя ответственного, если assigneeId не передан; пробелы по краям удаляются")
     private String assigneeName;
 }

@@ -29,7 +29,9 @@ public class MoveTaskResponse {
     private TaskDueType dueType;
     @Schema(description = "Смещение в календарных днях для следующего явного пересчёта; только для RELATIVE", example = "-2")
     private Integer offsetDays;
-    @Schema(description = "Имя ответственного; null, если ответственный не назначен")
+    @Schema(description = "UUID аккаунта ответственного участника; null для свободного имени или отсутствующего назначения")
+    private UUID assigneeId;
+    @Schema(description = "Актуальные имя и фамилия назначенного аккаунта, при отсутствии имени — email; иначе сохранённое свободное имя или null")
     private String assigneeName;
     @Schema(description = "Признак выполнения")
     private boolean completed;

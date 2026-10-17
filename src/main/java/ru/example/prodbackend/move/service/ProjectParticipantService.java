@@ -5,6 +5,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import ru.example.prodbackend.exception.RequestValidationException;
+import ru.example.prodbackend.exception.ResourceConflictException;
+import ru.example.prodbackend.task.repository.MoveTaskRepository;
 import ru.example.prodbackend.exception.UserNotFoundException;
 import ru.example.prodbackend.move.dto.request.AddProjectParticipantRequest;
 import ru.example.prodbackend.move.dto.response.ProjectParticipantResponse;
@@ -27,6 +29,7 @@ public class ProjectParticipantService {
     private final ProjectParticipantRepository participantRepository;
     private final ProjectAccessService projectAccessService;
     private final UserRepository userRepository;
+    private final MoveTaskRepository moveTaskRepository;
 
     public List<ProjectParticipantResponse> findAll(UUID projectId, UUID userId) {
         var project = projectAccessService.getAccessibleProject(projectId, userId);
@@ -46,6 +49,17 @@ public class ProjectParticipantService {
         var participant = participantRepository.findByProject_IdAndUser_Id(projectId, user.getId())
                 .orElseGet(() -> participantRepository.saveAndFlush(ProjectParticipantEntity.builder().project(project).user(user).build()));
         return toResponse(user, false, participant.getAddedAt());
+    }
+
+    @Transactional
+    public void remove(UUID projectId, UUID actorId, UUID userId) {
+        var project = projectAccessService.getAccessibleProjectForUpdate(projectId, actorId);
+        if (project.getOwner().getId().equals(userId)) {
+            throw new ResourceConflictException("Нельзя отозвать доступ создателя переезда");
+        }
+        moveTaskRepository.clearAssignments(projectId, userId, Instant.now());
+        participantRepository.findByProject_IdAndUser_Id(projectId, userId).ifPresent(participantRepository::delete);
+        participantRepository.flush();
     }
 
     /** Resolve before creating the project; an unavailable account aborts the whole transaction. */

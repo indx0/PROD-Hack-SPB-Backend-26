@@ -25,7 +25,7 @@ public class LlmProxyConfig {
     @Bean(destroyMethod = "shutdownNow")
     ExecutorService llmExecutor() {
         // No queue: bound retained image payloads and reject overload immediately.
-        return new ThreadPoolExecutor(0, 4, 60, TimeUnit.SECONDS, new SynchronousQueue<>(), task -> {
+        return new ThreadPoolExecutor(0, 20, 60, TimeUnit.SECONDS, new SynchronousQueue<>(), task -> {
             Thread thread = new Thread(task, "llm-proxy-request");
             thread.setDaemon(true);
             return thread;

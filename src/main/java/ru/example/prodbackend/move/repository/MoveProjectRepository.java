@@ -20,6 +20,12 @@ public interface MoveProjectRepository extends JpaRepository<MoveProjectEntity, 
             and (p.owner.id = :userId or exists (select m.id from ProjectParticipantEntity m where m.project.id = p.id and m.user.id = :userId))
             """)
     Optional<MoveProjectEntity> findAccessibleById(@Param("projectId") UUID projectId, @Param("userId") UUID userId);
+    @Query("""
+            select count(p) > 0 from MoveProjectEntity p where p.id = :projectId
+            and (p.owner.id = :userId or exists (select m.id from ProjectParticipantEntity m where m.project.id = p.id and m.user.id = :userId))
+            """)
+    boolean hasAccess(@Param("projectId") UUID projectId, @Param("userId") UUID userId);
+
     boolean existsByOwner_IdAndName(UUID ownerId, String name);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

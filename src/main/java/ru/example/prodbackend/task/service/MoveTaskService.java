@@ -43,6 +43,7 @@ public class MoveTaskService {
     private final TaskTemplateRepository taskTemplateRepository;
     private final ProjectAccessService projectAccessService;
     private final ProjectEventService projectEventService;
+    private final TaskAssignmentService taskAssignmentService;
 
     public TaskSummaryResponse summary(UUID projectId, UUID userId) {
         projectAccessService.getAccessibleProject(projectId, userId);
@@ -62,9 +63,9 @@ public class MoveTaskService {
                 .description(normalizeOptional(request.getDescription()))
                 .stage(request.getStage())
                 .dueDate(request.getDueDate())
-                .assigneeName(normalizeOptional(request.getAssigneeName()))
                 .build();
 
+        taskAssignmentService.apply(task, request.getAssigneeId(), request.isAssigneeIdPresent(), request.getAssigneeName());
         TaskDeadline.resolve(project.getMoveDate(), request.getDueType(), request.getOffsetDays(), request.getDueDate(),
                 request.isDueDatePresent() || request.getDueDate() != null).applyTo(task);
         return toResponse(moveTaskRepository.saveAndFlush(task));
@@ -108,8 +109,8 @@ public class MoveTaskService {
                     request.isDueDatePresent() ? request.getDueDate() : type == TaskDueType.FIXED ? task.getDueDate() : null,
                     request.isDueDatePresent()).applyTo(task);
         }
-        if (request.isAssigneeNamePresent()) {
-            task.setAssigneeName(normalizeOptional(request.getAssigneeName()));
+        if (request.isAssigneeIdPresent() || request.isAssigneeNamePresent()) {
+            taskAssignmentService.apply(task, request.getAssigneeId(), request.isAssigneeIdPresent(), request.getAssigneeName());
         }
 
         return toResponse(moveTaskRepository.saveAndFlush(task));
@@ -164,9 +165,9 @@ public class MoveTaskService {
                 .description(template.getDescription())
                 .stage(template.getStage())
                 .dueDate(request.getDueDate())
-                .assigneeName(normalizeOptional(request.getAssigneeName()))
                 .build();
 
+        taskAssignmentService.apply(task, request.getAssigneeId(), request.isAssigneeIdPresent(), request.getAssigneeName());
         boolean dateProvided = request.isDueDatePresent() || request.getDueDate() != null;
         var dueType = request.getDueType() != null ? request.getDueType() : dateProvided ? TaskDueType.FIXED : TaskDueType.RELATIVE;
         var offset = request.getOffsetDays() != null ? request.getOffsetDays()

@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.*;
 import ru.example.prodbackend.move.entity.MoveProjectEntity;
+import ru.example.prodbackend.user.entity.UserEntity;
 import ru.example.prodbackend.taskset.entity.TaskSetApplicationEntity;
 
 import java.time.Instant;
@@ -23,7 +24,8 @@ import java.util.UUID;
                 columnNames = {"project_id", "template_id"}),
         indexes = {
                 @Index(name = "idx_move_tasks_project", columnList = "project_id"),
-                @Index(name = "idx_move_tasks_template", columnList = "template_id")
+                @Index(name = "idx_move_tasks_template", columnList = "template_id"),
+                @Index(name = "idx_move_tasks_project_assignee", columnList = "project_id,assignee_id")
         })
 public class MoveTaskEntity {
 
@@ -60,6 +62,10 @@ public class MoveTaskEntity {
 
     @Column(name = "offset_days")
     private Integer offsetDays;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "assignee_id")
+    private UserEntity assignee;
 
     @Size(max = 255)
     @Column(name = "assignee_name", nullable = true, length = 255)

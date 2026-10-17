@@ -40,7 +40,21 @@ public class ApplyTaskTemplateRequest {
     @Schema(description = "Смещение в днях, только для RELATIVE", example = "-2")
     private Integer offsetDays;
 
-    @Schema(description = "Имя ответственного; null, если ответственный не назначен")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @Schema(description = "UUID аккаунта участника этого переезда, включая создателя. Имеет приоритет над assigneeName; явный null снимает назначение. Отсутствие в PATCH сохраняет назначение")
+    private UUID assigneeId;
+
+    @JsonIgnore
+    @Schema(hidden = true)
+    private boolean assigneeIdPresent;
+
+    @JsonSetter(value = "assigneeId", nulls = Nulls.SET)
+    public void setAssigneeId(UUID assigneeId) {
+        this.assigneeId = assigneeId;
+        this.assigneeIdPresent = true;
+    }
+
+    @Schema(description = "Свободное имя ответственного, если assigneeId не передан; null снимает назначение")
     @Size(max = 255)
     private String assigneeName;
 }

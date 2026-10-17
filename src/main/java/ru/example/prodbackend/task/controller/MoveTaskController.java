@@ -38,7 +38,7 @@ public class MoveTaskController {
 
     @PostMapping
     @Operation(summary = "Создать задачу",
-            description = "Создаёт невыполненную задачу доступного проекта. Без dueType используется FIXED, без dueDate — без срока. RELATIVE требует offsetDays и запрещает dueDate; срок считает сервер от даты переезда в UTC. FIXED запрещает offsetDays. Противоречия — 422.",
+            description = "Создаёт невыполненную задачу доступного проекта. Без dueType используется FIXED, без dueDate — без срока. RELATIVE требует offsetDays и запрещает dueDate; срок считает сервер от даты переезда в UTC. FIXED запрещает offsetDays. Противоречия — 422. Ответственного можно назначить по assigneeId участника, включая создателя: ID имеет приоритет над свободным assigneeName, явный null снимает назначение. Без assigneeId свободное имя снимает связь с аккаунтом. Чужой ID — 422 без изменений.",
             responses = {
                     @ApiResponse(responseCode = "201", description = "Задача создана",
                             content = @Content(mediaType = "application/json", schema = @Schema(implementation = MoveTaskResponse.class))),
@@ -47,7 +47,7 @@ public class MoveTaskController {
                 content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: Проект не найден или недоступен", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: Переезд в архиве; сначала восстановите его", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: Название пустое или длиннее 255 символов, этап отсутствует, описание длиннее 10000 или ответственный длиннее 255 символов",
+                    @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: Название пустое или длиннее 255 символов, этап отсутствует, описание длиннее 10000 или ответственный длиннее 255 символов или assigneeId не принадлежит участнику переезда",
                             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
             })
     public ResponseEntity<MoveTaskResponse> create(
@@ -96,7 +96,7 @@ public class MoveTaskController {
 
     @PatchMapping("/{taskId}")
     @Operation(summary = "Изменить задачу",
-            description = "Отсутствующие поля сохраняются. Старый запрос с dueDate устанавливает FIXED и очищает offsetDays; dueDate:null снимает срок. RELATIVE запрещает dueDate, требует offsetDays при первом включении, иначе сохраняет текущее смещение. Изменение только offsetDays допустимо для RELATIVE. FIXED без dueDate сохраняет текущую дату. null для dueType и offsetDays запрещён. null очищает description и assigneeName. Пустой объект, неизвестные поля и completed запрещены; выполнение меняется отдельным запросом. Противоречивый срок — 422.",
+            description = "Отсутствующие поля сохраняются. Старый запрос с dueDate устанавливает FIXED и очищает offsetDays; dueDate:null снимает срок. RELATIVE запрещает dueDate, требует offsetDays при первом включении, иначе сохраняет текущее смещение. Изменение только offsetDays допустимо для RELATIVE. FIXED без dueDate сохраняет текущую дату. null для dueType и offsetDays запрещён. null очищает description и assigneeName. Пустой объект, неизвестные поля и completed запрещены; выполнение меняется отдельным запросом. Противоречивый срок — 422. Ответственного можно назначить по assigneeId участника, включая создателя: ID имеет приоритет над свободным assigneeName, явный null снимает назначение. Без assigneeId свободное имя снимает связь с аккаунтом. Чужой ID — 422 без изменений.",
             responses = {
                     @ApiResponse(responseCode = "200", description = "Задача обновлена",
                             content = @Content(mediaType = "application/json", schema = @Schema(implementation = MoveTaskResponse.class))),
@@ -105,7 +105,7 @@ public class MoveTaskController {
                 content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: Проект не найден или недоступен; TASK_NOT_FOUND: Задачи нет в этом проекте", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: Переезд в архиве; сначала восстановите его", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: Пустой запрос, пустое название или превышение допустимой длины",
+                    @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: Пустой запрос, пустое название, превышение допустимой длины или assigneeId не принадлежит участнику переезда",
                             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
             })
     public ResponseEntity<MoveTaskResponse> update(
@@ -179,7 +179,7 @@ public class MoveTaskController {
 
     @PostMapping("/from-template")
     @Operation(summary = "Создать задачу из шаблона",
-            description = "Копирует название, описание, этап и смещение общего или своего личного образца в новую RELATIVE-задачу. Чужой или удалённый образец — 404. Последующее изменение или удаление образца не меняет созданную задачу. Срок = дата переезда UTC + offsetDays; смещение сохраняется у задачи независимо от шаблона. Можно переопределить offsetDays или явно выбрать FIXED и dueDate; старый запрос только с dueDate также означает FIXED. dueDate:null задаёт FIXED без срока. Противоречивый срок — 422. Один шаблон применяется один раз, пока соответствующая задача существует.",
+            description = "Копирует название, описание, этап и смещение общего или своего личного образца в новую RELATIVE-задачу. Чужой или удалённый образец — 404. Последующее изменение или удаление образца не меняет созданную задачу. Срок = дата переезда UTC + offsetDays; смещение сохраняется у задачи независимо от шаблона. Можно переопределить offsetDays или явно выбрать FIXED и dueDate; старый запрос только с dueDate также означает FIXED. dueDate:null задаёт FIXED без срока. Противоречивый срок — 422. Один шаблон применяется один раз, пока соответствующая задача существует. Ответственного можно назначить по assigneeId участника, включая создателя: ID имеет приоритет над свободным assigneeName, явный null снимает назначение. Без assigneeId свободное имя снимает связь с аккаунтом. Чужой ID — 422 без изменений.",
             responses = {
                     @ApiResponse(responseCode = "201", description = "Задача создана из шаблона",
                             content = @Content(mediaType = "application/json", schema = @Schema(implementation = MoveTaskResponse.class))),
@@ -190,7 +190,7 @@ public class MoveTaskController {
                             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: Задача из этого шаблона уже существует в проекте; для изменений — переезд в архиве, сначала восстановите его",
                             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: templateId отсутствует или ответственный длиннее 255 символов",
+                    @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: templateId отсутствует или ответственный длиннее 255 символов или assigneeId не принадлежит участнику переезда",
                             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
             })
     public ResponseEntity<MoveTaskResponse> applyTemplate(
