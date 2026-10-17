@@ -1,6 +1,7 @@
 package ru.example.prodbackend.ml.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -51,6 +52,10 @@ public class UnpackingVerificationController {
             @ApiResponse(responseCode = "415", description = "UNSUPPORTED_IMAGE_FORMAT: Используйте JPEG, PNG или WebP; UNSUPPORTED_MEDIA_TYPE: Неподдерживаемый Content-Type запроса",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "422", description = "EMPTY_INVENTORY: Опись пуста; INVENTORY_TOO_LARGE: В описи больше 100 вещей; EMPTY_IMAGE: Фотография пуста; IMAGE_NOT_RECOGNIZED: Предметы не распознаны",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "429", description = "ML_RATE_LIMIT_EXCEEDED: Превышен общий лимит ML-запросов пользователя (по умолчанию 15 за 60 секунд)",
+                    headers = @Header(name = "Retry-After", description = "Количество секунд до повторной попытки",
+                            schema = @Schema(type = "integer", format = "int64", minimum = "1", example = "60")),
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "502", description = "LLM_INVALID_RESPONSE: Некорректный ответ модели; LLM_UPSTREAM_ERROR: Ошибка LLM Proxy",
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),

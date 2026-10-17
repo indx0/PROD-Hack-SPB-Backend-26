@@ -114,7 +114,7 @@ class ProgressIntegrationTest extends AuthIntegrationTestSupport {
                         .content("{\"name\":\"Начальный план\",\"moveDate\":\"2026-11-01T09:00:00Z\"}"))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsByteArray();
         UUID createdProjectId = UUID.fromString(jsonMapper.readTree(body).get("id").asText());
-        assertEquals(4, checklistRepository.count());
+        assertEquals(0, checklistRepository.count());
 
         summary(createdProjectId.toString(), "tasks", token).andExpect(status().isOk())
                 .andExpect(content().json("{\"totalTasks\":0,\"completedTasks\":0}"));

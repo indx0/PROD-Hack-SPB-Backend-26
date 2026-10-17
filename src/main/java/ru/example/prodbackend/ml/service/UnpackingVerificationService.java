@@ -20,10 +20,12 @@ public class UnpackingVerificationService {
     private final UnpackingInventoryService inventories;
     private final PhotoValidator photos;
     private final LlmProxyClient client;
+    private final MlRateLimiter rateLimiter;
 
     public UnpackingVerificationResponse verify(UUID userId, UUID projectId, UUID boxId, MultipartFile photo) {
         var inventory = inventories.snapshot(userId, projectId, boxId);
         var validated = photos.validate(photo);
+        rateLimiter.acquire(userId);
         var observed = client.verifyUnpacking(validated.bytes(), validated.mime(), inventory);
         var byId = inventory.stream().collect(Collectors.toMap(item -> item.itemId(), Function.identity()));
         var matched = new ArrayList<MatchedItem>();

@@ -21,7 +21,7 @@ import ru.example.prodbackend.task.entity.MoveTaskEntity;
 import ru.example.prodbackend.task.entity.TaskDueType;
 import ru.example.prodbackend.user.repository.UserRepository;
 import ru.example.prodbackend.box.service.BoxService;
-import ru.example.prodbackend.checklist.service.FirstDayChecklistService;
+import ru.example.prodbackend.taskfolder.service.TaskFolderService;
 import ru.example.prodbackend.move.service.MoveProjectService;
 import ru.example.prodbackend.room.service.RoomService;
 import ru.example.prodbackend.room.entity.RoomEntity;
@@ -61,7 +61,7 @@ class DataLoaderIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private MoveTaskService moveTaskService;
     @Autowired
-    private FirstDayChecklistService checklistService;
+    private TaskFolderService taskFolderService;
     @Autowired
     private ItemService itemService;
     @Autowired private TaskSetService taskSetService;
@@ -110,12 +110,12 @@ class DataLoaderIntegrationTest extends BaseIntegrationTest {
         assertThat(entityManager.createQuery(
                 "select i.firstDay from ItemEntity i where i.name = 'Постельное бельё'", Boolean.class)
                 .getSingleResult()).isTrue();
-        assertThat(count("MoveTaskEntity")).isEqualTo(12);
+        assertThat(count("MoveTaskEntity")).isEqualTo(14);
         assertThat(count("TaskSetEntity")).isEqualTo(1);
         assertThat(count("TaskSetItemEntity")).isEqualTo(11);
         assertThat(count("TaskSetApplicationEntity")).isEqualTo(1);
         assertThat(entityManager.createQuery("from MoveTaskEntity", MoveTaskEntity.class).getResultList()).allSatisfy(task -> {
-            if (task.getTitle().equals("Отключить интернет")) {
+            if (List.of("Отключить интернет", "Документы", "Аптечка").contains(task.getTitle())) {
                 assertThat(task.getDueType()).isEqualTo(TaskDueType.FIXED);
                 assertThat(task.getOffsetDays()).isNull();
             } else {
@@ -124,15 +124,11 @@ class DataLoaderIntegrationTest extends BaseIntegrationTest {
                 assertThat(task.getDueDate()).isEqualTo(moveDate.plusDays(task.getOffsetDays()));
             }
         });
-        assertThat(count("FirstDayChecklistItemEntity")).isEqualTo(6);
+        assertThat(count("FirstDayChecklistItemEntity")).isZero();
         var linked = entityManager.createQuery("select c from FirstDayChecklistItemEntity c where c.item is not null", FirstDayChecklistItemEntity.class).getResultList();
-        assertThat(linked).singleElement().satisfies(point -> {
-            assertThat(point.getName()).isEqualTo("Постельное бельё");
-            assertThat(point.getItem().getName()).isEqualTo("Постельное бельё");
-            assertThat(point.getItem().isFirstDay()).isTrue();
-        });
-        assertThat(entityManager.createQuery("select count(c) from FirstDayChecklistItemEntity c where c.item is null", Long.class).getSingleResult()).isEqualTo(5);
-        assertThat(count("ProjectEventEntity")).isEqualTo(18);
+        assertThat(linked).isEmpty();
+        assertThat(entityManager.createQuery("select count(c) from FirstDayChecklistItemEntity c where c.item is null", Long.class).getSingleResult()).isZero();
+        assertThat(count("ProjectEventEntity")).isEqualTo(19);
         assertThat(entityManager.createQuery("from BoxEntity", BoxEntity.class).getResultList())
                 .hasSize(5)
                 .allSatisfy(box -> {
@@ -156,8 +152,8 @@ class DataLoaderIntegrationTest extends BaseIntegrationTest {
         assertTaskDueDate("Передать ключи", moveDate);
         assertTaskDueDate("Подключить интернет", moveDate.plusDays(1));
         assertTaskDueDate("Упаковать кухню", moveDate.minusDays(2));
-        assertThat(entityManager.createQuery("select count(t) from MoveTaskEntity t where t.completedAt is not null", Long.class).getSingleResult()).isEqualTo(2);
-        assertThat(entityManager.createQuery("select count(i) from FirstDayChecklistItemEntity i where i.completedAt is not null", Long.class).getSingleResult()).isEqualTo(2);
+        assertThat(entityManager.createQuery("select count(t) from MoveTaskEntity t where t.completedAt is not null", Long.class).getSingleResult()).isEqualTo(3);
+        assertThat(entityManager.createQuery("select count(i) from FirstDayChecklistItemEntity i where i.completedAt is not null", Long.class).getSingleResult()).isZero();
         assertThat(entityManager.createQuery("select count(e) from ProjectEventEntity e where e.eventType = ru.example.prodbackend.event.entity.ProjectEventType.PROJECT_CREATED", Long.class).getSingleResult()).isEqualTo(1);
         assertThat(passwordEncoder.matches("test-user-password", userRepository.findByEmail("user1").orElseThrow().getPassword())).isTrue();
     }
@@ -198,7 +194,7 @@ class DataLoaderIntegrationTest extends BaseIntegrationTest {
 
     private DataLoader loader() {
         var loader = new DataLoader(itemService, userRepository, passwordEncoder, refreshTokenService, moveProjectRepository,
-                moveProjectService, roomService, boxService, moveTaskService, checklistService, taskSetService, taskTemplateService);
+                moveProjectService, roomService, boxService, moveTaskService, taskFolderService, taskSetService, taskTemplateService);
         ReflectionTestUtils.setField(loader, "adminPassword", "test-admin-password");
         ReflectionTestUtils.setField(loader, "user1Password", "test-user-password");
         return loader;

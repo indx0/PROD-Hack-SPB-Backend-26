@@ -15,6 +15,9 @@ import ru.example.prodbackend.task.entity.TaskDueType;
 @AllArgsConstructor
 public class ApplyTaskTemplateRequest {
 
+    @Schema(types = {"string", "null"}, format = "uuid", description = "Папка этого переезда для создаваемой задачи; отсутствие или null — без папки. Чужая или отсутствующая папка — 404 TASK_FOLDER_NOT_FOUND. Подтверждается folderId в ответе")
+    private UUID folderId;
+
     @Schema(example = "550e8400-e29b-41d4-a716-446655440000", description = "Идентификатор готовой задачи")
     @NotNull
     private UUID templateId;

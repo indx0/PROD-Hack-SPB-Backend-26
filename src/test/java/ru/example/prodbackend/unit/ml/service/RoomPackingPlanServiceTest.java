@@ -1,6 +1,8 @@
 package ru.example.prodbackend.unit.ml.service;
 
 import ru.example.prodbackend.ml.service.RoomPackingPlanService;
+import ru.example.prodbackend.ml.service.MlRateLimiter;
+import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
@@ -12,8 +14,10 @@ import static org.mockito.Mockito.*;
 import static ru.example.prodbackend.support.fixtures.RoomPackingPlanFixtures.*;
 
 class RoomPackingPlanServiceTest {
+    private final UUID userId = UUID.randomUUID();
+    private final MlRateLimiter limiter = mock(MlRateLimiter.class);
     private final LlmProxyClient client = mock(LlmProxyClient.class);
-    private final RoomPackingPlanService service = new RoomPackingPlanService(new PhotoValidator(), client);
+    private final RoomPackingPlanService service = new RoomPackingPlanService(new PhotoValidator(), client, limiter);
     private final byte[] jpeg = {(byte)255, (byte)216, (byte)255};
 
     @Test
@@ -22,10 +26,17 @@ class RoomPackingPlanServiceTest {
         when(client.planRoomPacking("Кухня", null, null)).thenReturn(response);
         when(client.planRoomPacking("", jpeg, "image/jpeg")).thenReturn(response);
         when(client.planRoomPacking("Кухня", jpeg, "image/jpeg")).thenReturn(response);
-        assertThat(service.plan(" Кухня ", null)).isEqualTo(response);
+        assertThat(service.plan(userId, " Кухня ", null)).isEqualTo(response);
         var photo = new MockMultipartFile("photo", jpeg);
-        assertThat(service.plan(null, photo)).isEqualTo(response);
-        assertThat(service.plan("Кухня", photo)).isEqualTo(response);
+        assertThat(service.plan(userId, null, photo)).isEqualTo(response);
+        assertThat(service.plan(userId, "Кухня", photo)).isEqualTo(response);
+        var order = inOrder(limiter, client);
+        order.verify(limiter).acquire(userId);
+        order.verify(client).planRoomPacking("Кухня", null, null);
+        order.verify(limiter).acquire(userId);
+        order.verify(client).planRoomPacking("", jpeg, "image/jpeg");
+        order.verify(limiter).acquire(userId);
+        order.verify(client).planRoomPacking("Кухня", jpeg, "image/jpeg");
     }
 
     @Test
@@ -37,17 +48,17 @@ class RoomPackingPlanServiceTest {
         code("Кухня", new MockMultipartFile("photo", new byte[0]), "EMPTY_IMAGE");
         code("Кухня", new MockMultipartFile("photo", new byte[]{1}), "UNSUPPORTED_IMAGE_FORMAT");
         code(null, new MockMultipartFile("photo", new byte[10 * 1024 * 1024 + 1]), "IMAGE_TOO_LARGE");
-        verifyNoInteractions(client);
+        verifyNoInteractions(client, limiter);
     }
 
     @Test
     void trimsBeforeCheckingDescriptionLimit() {
-        service.plan("  " + "x".repeat(4000) + "  ", null);
+        service.plan(userId, "  " + "x".repeat(4000) + "  ", null);
         verify(client).planRoomPacking("x".repeat(4000), null, null);
     }
 
     private void code(String text, MockMultipartFile photo, String expected) {
-        assertThatThrownBy(() -> service.plan(text, photo)).isInstanceOfSatisfying(MlException.class,
+        assertThatThrownBy(() -> service.plan(userId, text, photo)).isInstanceOfSatisfying(MlException.class,
                 e -> assertThat(e.getCode()).isEqualTo(expected));
     }
 }

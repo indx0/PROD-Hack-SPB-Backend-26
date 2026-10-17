@@ -59,15 +59,17 @@ class ProjectEventIntegrationTest extends AuthIntegrationTestSupport {
     private BoxRepository boxRepository;
     @Autowired
     private MoveTaskService moveTaskService;
-    @Autowired
+    @MockitoSpyBean
     private MoveTaskRepository taskRepository;
+    @Autowired
+    private ru.example.prodbackend.taskfolder.repository.TaskFolderRepository taskFolderRepository;
     @Autowired
     private PlatformTransactionManager transactionManager;
     @Autowired
     private ItemRepository itemRepository;
     @MockitoSpyBean
     private ProjectEventRepository eventRepository;
-    @MockitoSpyBean
+    @Autowired
     private FirstDayChecklistRepository checklistRepository;
 
     private UserEntity owner;
@@ -97,7 +99,7 @@ class ProjectEventIntegrationTest extends AuthIntegrationTestSupport {
             assertEquals(1L, moveProjectRepository.count());
             assertEquals(1L, eventRepository.count());
             assertEquals(0L, taskRepository.count());
-            assertEquals(4L, checklistRepository.count());
+            assertEquals(0L, checklistRepository.count());
             status.setRollbackOnly();
         });
 
@@ -120,10 +122,13 @@ class ProjectEventIntegrationTest extends AuthIntegrationTestSupport {
     }
 
     @Test
-    void checklistInitializationFailureRollsBackProjectTasksAndEvent() {
-        doThrow(new DataAccessResourceFailureException("Тестовый сбой создания чек-листа")).when(checklistRepository).saveAll(anyIterable());
-        assertThrows(DataAccessResourceFailureException.class, () -> moveProjectService.createMoveProject(request(), owner));
+    void compatibilityTaskInitializationFailureRollsBackProjectFolderTasksAndEvent() {
+        doThrow(new DataAccessResourceFailureException("Тестовый сбой создания обычных задач")).when(taskRepository).saveAllAndFlush(anyIterable());
+        var request = request();
+        request.setIncludeFirstDayChecklist(true);
+        assertThrows(DataAccessResourceFailureException.class, () -> moveProjectService.createMoveProject(request, owner));
         assertEquals(0L, moveProjectRepository.count());
+        assertEquals(0L, taskFolderRepository.count());
         assertEquals(0L, taskRepository.count());
         assertEquals(0L, checklistRepository.count());
         assertEquals(0L, eventRepository.count());

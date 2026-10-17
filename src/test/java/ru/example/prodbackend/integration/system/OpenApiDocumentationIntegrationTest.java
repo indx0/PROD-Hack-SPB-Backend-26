@@ -74,7 +74,14 @@ class OpenApiDocumentationIntegrationTest extends BaseIntegrationTest {
             boolean publicEndpoint = path.getKey().startsWith("/api/auth/") || path.getKey().equals("/api/demo/ping");
             if (publicEndpoint) assertTrue(operation.path("security").isEmpty(), label);
             else assertTrue(operation.path("security").toString().contains("jwtAuth"), label);
-            assertTrue(operation.path("responses").properties().stream().anyMatch(entry -> entry.getKey().matches("2\\d\\d")), label + ": нет успешного ответа");
+            boolean retiredChecklistWrite = path.getKey().startsWith("/api/move-projects/{projectId}/first-day-checklist")
+                    && !method.getKey().equals("get");
+            boolean hasSuccess = operation.path("responses").properties().stream().anyMatch(entry -> entry.getKey().matches("2\\d\\d"));
+            if (retiredChecklistWrite) {
+                assertTrue(operation.path("deprecated").asBoolean(), label);
+                assertTrue(operation.path("responses").has("410"), label);
+                assertFalse(hasSuccess, label + ": отключённая запись не должна обещать успех");
+            } else assertTrue(hasSuccess, label + ": нет успешного ответа");
             operation.path("responses").properties().forEach(response -> {
                 russian(response.getValue().path("description"), label + ": " + response.getKey());
                 JsonNode value = response.getValue();

@@ -92,7 +92,9 @@ class SharedProjectIntegrationTest extends BaseIntegrationTest {
         itemId = id(perform(ownerToken, post(itemsUrl), Map.of("name", "Зарядка USB-C", "quantity", 2)).andExpect(status().isCreated()));
         perform(ownerToken, patch(itemsUrl + "/" + itemId), Map.of("packed", true)).andExpect(status().isOk());
         taskId = id(perform(ownerToken, post(tasksUrl), Map.of("title", "Собрать вещи", "stage", "BEFORE_MOVE")).andExpect(status().isCreated()));
-        pointId = id(perform(ownerToken, post(checklistUrl), Map.of("name", "Первый день", "itemId", itemId)).andExpect(status().isCreated()));
+        pointId = UUID.randomUUID();
+        jdbc.update("INSERT INTO first_day_checklist_items(id,project_id,name,item_id,created_at,updated_at) VALUES (?,?,'Первый день',?,now(),now())", pointId, projectId, itemId);
+        ru.example.prodbackend.support.LegacyChecklistTestSupport.snapshot(jdbc);
         templateId = jdbc.queryForObject("SELECT id FROM task_templates ORDER BY id LIMIT 1", UUID.class);
         jdbc.update("DELETE FROM move_tasks WHERE project_id = ? AND template_id = ?", projectId, templateId);
     }
@@ -149,6 +151,7 @@ class SharedProjectIntegrationTest extends BaseIntegrationTest {
     void participantHasSameMutationRightsAsCreator(String operation) throws Exception {
         if (operation.equals("box-correct")) jdbc.update("UPDATE boxes SET status = 'DELIVERED' WHERE id = ?", boxId);
         int expected = operation.endsWith("delete") ? 204 : operation.endsWith("create") || operation.startsWith("item-batch") || operation.equals("task-template") ? 201 : 200;
+        if (operation.startsWith("checklist-")) expected = 410;
         mutate(memberToken, operation).andExpect(status().is(expected));
         if (operation.equals("project-delete")) {
             perform(ownerToken, get(projectUrl), null).andExpect(status().isNotFound());
@@ -168,7 +171,8 @@ class SharedProjectIntegrationTest extends BaseIntegrationTest {
     void archiveRulesApplyToEveryoneAndAnyParticipantCanArchiveRestoreAndManageUsers() throws Exception {
         var archived = json(perform(memberToken, put(projectUrl + "/archive"), null).andExpect(status().isOk()));
         assertThat(json(perform(ownerToken, put(projectUrl + "/archive"), null).andExpect(status().isOk()))).isEqualTo(archived);
-        for (String operation : OPERATIONS) mutate(memberToken, operation).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DATA_CONFLICT"));
+        for (String operation : OPERATIONS) mutate(memberToken, operation).andExpect(status().is(operation.startsWith("checklist-") ? 410 : 409))
+                .andExpect(jsonPath("$.code").value(operation.startsWith("checklist-") ? "FIRST_DAY_CHECKLIST_RETIRED" : "DATA_CONFLICT"));
         perform(memberToken, get(participantsUrl), null).andExpect(status().isOk());
         perform(memberToken, get("/api/move-projects").param("archived", "true"), null).andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1));
         perform(memberToken, delete(projectUrl + "/archive"), null).andExpect(status().isOk());
@@ -250,7 +254,7 @@ class SharedProjectIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void movedItemAndChecklistStayAccessibleToBothUsersWithCurrentLocation() throws Exception {
+    void movedItemStaysAccessibleAndHistoricalChecklistKeepsSnapshotForBothUsers() throws Exception {
         perform(memberToken, put(itemsUrl + "/" + itemId + "/box"), Map.of("targetBoxId", targetId)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(itemId.toString())).andExpect(jsonPath("$.quantity").value(2));
         for (String token : List.of(ownerToken, memberToken)) {
@@ -260,7 +264,7 @@ class SharedProjectIntegrationTest extends BaseIntegrationTest {
             boolean found = false;
             for (var point : points) {
                 if (!point.get("id").asText().equals(pointId.toString())) continue;
-                assertThat(point.get("boxId").asText()).isEqualTo(targetId.toString());
+                assertThat(point.get("boxId").asText()).isEqualTo(boxId.toString());
                 found = true;
             }
             assertThat(found).isTrue();

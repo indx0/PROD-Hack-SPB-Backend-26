@@ -112,6 +112,7 @@ class ProjectArchiveIntegrationTest extends BaseIntegrationTest {
         itemsUrl = projectUrl + "/boxes/" + boxId + "/items";
         tasksUrl = projectUrl + "/tasks";
         checklistUrl = projectUrl + "/first-day-checklist";
+        ru.example.prodbackend.support.LegacyChecklistTestSupport.snapshot(jdbc);
     }
 
     @Test
@@ -172,15 +173,16 @@ class ProjectArchiveIntegrationTest extends BaseIntegrationTest {
         var before = contentSnapshot();
         var project = jdbc.queryForMap("SELECT * FROM move_projects WHERE id = ?", projectId);
         var events = jdbc.queryForList("SELECT * FROM project_events WHERE project_id = ?", projectId);
-        mutate(operation).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DATA_CONFLICT"))
-                .andExpect(jsonPath("$.message", containsString("архиве")));
+        var rejected = mutate(operation).andExpect(status().is(operation.startsWith("checklist-") ? 410 : 409))
+                .andExpect(jsonPath("$.code").value(operation.startsWith("checklist-") ? "FIRST_DAY_CHECKLIST_RETIRED" : "DATA_CONFLICT"));
+        if (!operation.startsWith("checklist-")) rejected.andExpect(jsonPath("$.message", containsString("архиве")));
         assertThat(contentSnapshot()).isEqualTo(before);
         assertThat(jdbc.queryForMap("SELECT * FROM move_projects WHERE id = ?", projectId)).isEqualTo(project);
         assertThat(jdbc.queryForList("SELECT * FROM project_events WHERE project_id = ?", projectId)).isEqualTo(events);
         perform(delete(archiveUrl), null).andExpect(status().isOk());
         int expected = operation.endsWith("delete") ? 204
                 : operation.endsWith("create") || operation.startsWith("item-batch") || operation.equals("task-template") ? 201 : 200;
-        mutate(operation).andExpect(status().is(expected));
+        mutate(operation).andExpect(status().is(operation.startsWith("checklist-") ? 410 : expected));
     }
 
     @Test

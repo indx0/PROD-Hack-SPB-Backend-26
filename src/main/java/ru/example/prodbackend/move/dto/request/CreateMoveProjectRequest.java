@@ -13,6 +13,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import ru.example.prodbackend.taskfolder.dto.CreateTaskFolderRequest;
+import ru.example.prodbackend.taskset.dto.InitialTaskSetApplicationRequest;
 
 @Data
 @Builder
@@ -39,13 +41,27 @@ public class CreateMoveProjectRequest {
 
     @Builder.Default
     @NotNull
-    @Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED, description = "Создать четыре стандартных пункта первого дня. false — пустой чек-лист; отсутствие поля — true для совместимости", defaultValue = "true")
-    private Boolean includeFirstDayChecklist = true;
+    @Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED, deprecated = true, description = "Совместимость со старым клиентом: явный true создаёт четыре обычные задачи BEFORE_MOVE без срока в отдельной обычной папке «Личные задачи», mint. Legacy-записи не создаются. Отсутствие/false ничего не добавляет; null запрещён. Новый клиент всегда отправляет false", defaultValue = "false")
+    private Boolean includeFirstDayChecklist = false;
+
+    @Builder.Default
+    @Valid
+    @Size(max = 100)
+    @JsonSetter(nulls = Nulls.FAIL)
+    @Schema(description = "Необязательные папки нового переезда, по умолчанию []. Максимум 100; UUID уникальны в запросе, имя и цвет независимы от шаблонов. Пустые папки допустимы. Создаются атомарно со всем планом")
+    private List<@NotNull CreateTaskFolderRequest> folders = List.of();
+
+    @Builder.Default
+    @Valid
+    @Size(max = 100)
+    @JsonSetter(nulls = Nulls.FAIL)
+    @Schema(description = "Необязательные применения собственных шаблонов, по умолчанию []. Максимум 100; повтор taskSetId — 422. Ненулевой folderId должен присутствовать в folders этого запроса. Нельзя одновременно с непустым taskSetIds. Ошибка любого применения откатывает весь проект")
+    private List<@NotNull InitialTaskSetApplicationRequest> taskSetApplications = List.of();
 
     @Builder.Default
     @Size(max = 100)
     @JsonSetter(nulls = Nulls.FAIL)
-    @Schema(description = "Добровольный выбор собственных наборов: без поля или [] проект создаётся без задач. Повторные UUID объединяются; недоступный набор откатывает всё создание")
+    @Schema(deprecated = true, description = "Совместимый старый выбор собственных наборов без папки, максимум 100 UUID; повторы объединяются. Нельзя одновременно с непустым taskSetApplications — 422. Отсутствие или [] ничего не добавляет; недоступный набор откатывает всё создание")
     private List<@NotNull UUID> taskSetIds = List.of();
 
     @Builder.Default

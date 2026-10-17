@@ -11,6 +11,7 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @JsonInclude(JsonInclude.Include.ALWAYS)
+@Schema(description = "Архивный снимок старого чек-листа; актуальные задачи доступны через API задач", deprecated = true)
 public class ChecklistItemResponse {
     @Schema(example = "550e8400-e29b-41d4-a716-446655440000", description = "Уникальный идентификатор записи")
     private UUID id;
@@ -22,9 +23,9 @@ public class ChecklistItemResponse {
     private boolean completed;
     @Schema(example = "2026-11-01T09:00:00Z", description = "Дата и время выполнения в UTC; null для невыполненной записи")
     private Instant completedAt;
-    @Schema(example = "550e8400-e29b-41d4-a716-446655440000", description = "UUID связанной вещи; null для самостоятельного пункта")
+    @Schema(example = "550e8400-e29b-41d4-a716-446655440000", description = "UUID вещи на момент переноса, сохраняется после её удаления; null для самостоятельного пункта")
     private UUID itemId;
-    @Schema(description = "Актуальное название связанной вещи; null, если пункт не связан с вещью")
+    @Schema(description = "Название связанной вещи на момент переноса; null, если пункт не связан с вещью")
     private String itemName;
     @Schema(example = "550e8400-e29b-41d4-a716-446655440000", description = "Идентификатор коробки; null, если пункт не связан с вещью")
     private UUID boxId;
@@ -34,7 +35,7 @@ public class ChecklistItemResponse {
     private UUID roomId;
     @Schema(example = "Кухня", description = "Название комнаты назначения; null, если пункт не связан с вещью")
     private String roomName;
-    @Schema(types = {"string", "null"}, description = "Актуальный ключ значка комнаты; null — без значка или без связи с вещью")
+    @Schema(types = {"string", "null"}, description = "Ключ значка комнаты на момент переноса; null — без значка или без связи с вещью")
     private String roomIconKey;
     @Schema(example = "2026-11-01T09:00:00Z", description = "Дата и время создания в UTC")
     private Instant createdAt;

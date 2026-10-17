@@ -17,6 +17,12 @@ import ru.example.prodbackend.task.entity.TaskStage;
 @AllArgsConstructor
 public class CreateMoveTaskRequest {
 
+    @Schema(types = {"string", "null"}, format = "uuid", description = "Папка этого переезда. Отсутствие или null создаёт задачу без папки; чужая или отсутствующая папка — 404 TASK_FOLDER_NOT_FOUND")
+    private UUID folderId;
+
+    @Schema(types = {"string", "null"}, format = "uuid", description = "Связанная вещь этого переезда. Отсутствие или null означает отсутствие связи; чужая или отсутствующая вещь — 404. Не изменяет item.firstDay или упаковку")
+    private UUID linkedItemId;
+
     @Schema(example = "Упаковать кухню", description = "Название задачи")
     @NotBlank(message = "title is blank")
     @Size(max = 255)

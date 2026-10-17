@@ -8,11 +8,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.example.prodbackend.common.dto.PageResponse;
 import ru.example.prodbackend.common.dto.PaginationRequest;
-import ru.example.prodbackend.checklist.service.FirstDayChecklistService;
 import ru.example.prodbackend.event.entity.EventObjectType;
 import ru.example.prodbackend.event.entity.ProjectEventType;
 import ru.example.prodbackend.event.service.ProjectEventService;
 import ru.example.prodbackend.exception.UserNotFoundException;
+import ru.example.prodbackend.exception.RequestValidationException;
 import ru.example.prodbackend.move.dto.request.CreateMoveProjectRequest;
 import ru.example.prodbackend.move.dto.request.UpdateMoveProjectRequest;
 import ru.example.prodbackend.move.dto.request.RescheduleMoveProjectRequest;
@@ -22,13 +22,16 @@ import ru.example.prodbackend.move.entity.MoveProjectEntity;
 import ru.example.prodbackend.move.repository.MoveProjectRepository;
 import ru.example.prodbackend.user.entity.UserEntity;
 import ru.example.prodbackend.user.repository.UserRepository;
-import ru.example.prodbackend.task.repository.MoveTaskRepository;
+import ru.example.prodbackend.taskfolder.service.TaskFolderService;
+import ru.example.prodbackend.taskfolder.dto.CreateTaskFolderRequest;
 import ru.example.prodbackend.task.service.MoveTaskService;
 import ru.example.prodbackend.taskset.service.TaskSetService;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
+import java.util.HashSet;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -39,14 +42,14 @@ public class MoveProjectService {
     private final UserRepository userRepository;
     private final ProjectAccessService projectAccessService;
     private final ProjectEventService projectEventService;
-    private final MoveTaskRepository moveTaskRepository;
-    private final FirstDayChecklistService checklistService;
+    private final TaskFolderService taskFolderService;
     private final ProjectParticipantService participantService;
     private final MoveTaskService moveTaskService;
     private final TaskSetService taskSetService;
 
     @Transactional
     public MoveProjectResponse createMoveProject(CreateMoveProjectRequest request, UserEntity user) {
+        validateInitialPlan(request);
         UserEntity owner = userRepository.findById(user.getId()).orElseThrow(() -> new UserNotFoundException("Current user not found"));
         var participants = participantService.resolveUsers(request.getParticipants());
 
@@ -60,12 +63,40 @@ public class MoveProjectService {
 
         MoveProjectEntity savedProject = moveProjectRepository.save(project);
         participantService.addInitialParticipants(savedProject, participants);
+        taskFolderService.createInitialFolders(savedProject, request.getFolders());
         taskSetService.applyInitialSets(savedProject, request.getTaskSetIds(), owner.getId());
-        if (Boolean.TRUE.equals(request.getIncludeFirstDayChecklist())) checklistService.createDefaults(savedProject);
+        taskSetService.applyInitialApplications(savedProject, request.getTaskSetApplications(), owner.getId());
+        if (Boolean.TRUE.equals(request.getIncludeFirstDayChecklist())) {
+            UUID folderId = UUID.randomUUID();
+            taskFolderService.createInitialFolders(savedProject, List.of(new CreateTaskFolderRequest(folderId, "Личные задачи", "mint")));
+            moveTaskService.createInitialFirstDayTasks(savedProject, folderId);
+        }
         projectEventService.record(savedProject, owner, ProjectEventType.PROJECT_CREATED, EventObjectType.PROJECT,
                 savedProject.getId(), "Создан проект переезда «" + savedProject.getName() + "»");
 
         return toResponse(savedProject);
+    }
+
+    private void validateInitialPlan(CreateMoveProjectRequest request) {
+        if (!request.getTaskSetIds().isEmpty() && !request.getTaskSetApplications().isEmpty()) {
+            throw new RequestValidationException("taskSetApplications", "Нельзя одновременно выбирать шаблоны через taskSetIds и taskSetApplications");
+        }
+        var folderIds = new HashSet<UUID>();
+        for (int i = 0; i < request.getFolders().size(); i++) {
+            if (!folderIds.add(request.getFolders().get(i).id())) {
+                throw new RequestValidationException("folders[" + i + "].id", "UUID папки повторяется в запросе");
+            }
+        }
+        var setIds = new HashSet<UUID>();
+        for (int i = 0; i < request.getTaskSetApplications().size(); i++) {
+            var application = request.getTaskSetApplications().get(i);
+            if (!setIds.add(application.taskSetId())) {
+                throw new RequestValidationException("taskSetApplications[" + i + "].taskSetId", "Шаблон можно выбрать только один раз");
+            }
+            if (application.folderId() != null && !folderIds.contains(application.folderId())) {
+                throw new RequestValidationException("taskSetApplications[" + i + "].folderId", "Папка должна присутствовать в folders этого же запроса");
+            }
+        }
     }
 
     public PageResponse<MoveProjectResponse> getMoveProjects(PaginationRequest request, Boolean archived, UserEntity user) {

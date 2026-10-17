@@ -289,7 +289,7 @@ class TaskRescheduleIntegrationTest extends AuthIntegrationTestSupport {
     }
 
     private void deleteDefaultTemplateTask(UUID templateId) {
-        new TransactionTemplate(transactionManager).executeWithoutResult(s -> tasks.deleteAll(tasks.findAllByFilters(projectId, null, null,
+        new TransactionTemplate(transactionManager).executeWithoutResult(s -> tasks.deleteAll(tasks.findAllByFilters(projectId, null, null, null,
                 org.springframework.data.domain.PageRequest.of(0, 100)).stream().filter(t -> t.getTemplate() != null && t.getTemplate().getId().equals(templateId)).toList()));
     }
     private MoveTaskResponse relative(int offset) throws Exception { return create(Map.of("title", "Относительная", "stage", "BEFORE_MOVE", "dueType", "RELATIVE", "offsetDays", offset)); }
