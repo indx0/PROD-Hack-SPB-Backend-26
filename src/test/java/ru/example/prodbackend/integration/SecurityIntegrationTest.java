@@ -24,6 +24,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class SecurityIntegrationTest extends AuthIntegrationTestSupport {
 
     @Test
+    void metricsAreClosedWhenScrapeTokenIsNotConfigured() throws Exception {
+        mockMvc.perform(get("/actuator/prometheus")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/actuator/prometheus").header("Authorization", "Bearer "))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void validAccessTokenAuthenticatesUser() throws Exception {
         AuthenticationResponse tokens = registerUser();
         assertAccessTokenWorks(tokens.getAccessToken());
