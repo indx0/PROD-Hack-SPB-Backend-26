@@ -75,10 +75,10 @@
         document.addEventListener("visibilitychange", syncVisibility);
         reducedMotion.addEventListener("change", syncLeaves);
         window.addEventListener("storage", event => {
-            if (event.key === storageKey || event.key === null) setEnabled(event.newValue === "true", false);
+            if (event.key === storageKey || event.key === null) setEnabled(event.newValue !== "false", false);
         });
-        let saved = false;
-        try { saved = localStorage.getItem(storageKey) === "true"; } catch (_) { /* The toggle still works. */ }
+        let saved = true;
+        try { saved = localStorage.getItem(storageKey) !== "false"; } catch (_) { /* Keep the default when storage is disabled. */ }
         setEnabled(saved, false);
     }
 

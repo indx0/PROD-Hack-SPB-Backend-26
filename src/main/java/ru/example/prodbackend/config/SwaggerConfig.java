@@ -20,7 +20,8 @@ import org.springframework.context.annotation.Configuration;
         info = @Info(
                 title = "MoverMate API",
                 description = """
-                        API для планирования переезда, совместной работы, упаковки и поиска вещей.
+                        API для корпоративных переездов офисов и отделов: совместная опись коробок,
+                        поиск вещей, контроль погрузки, доставки и распаковки.
 
                         **Пагинация.** `page` — номер страницы от 0, `size` — от 1 до 100, по умолчанию 20.
                         Ответ содержит `content`, `page`, `size`, `totalElements`, `totalPages`.
