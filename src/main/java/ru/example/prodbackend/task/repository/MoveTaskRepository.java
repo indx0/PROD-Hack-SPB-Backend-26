@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 import ru.example.prodbackend.task.entity.MoveTaskEntity;
 import ru.example.prodbackend.task.entity.TaskStage;
+import ru.example.prodbackend.taskfolder.repository.TaskFolderCounts;
 
 import java.time.Instant;
 import java.util.Optional;
@@ -15,6 +16,13 @@ import java.util.Collection;
 import java.util.UUID;
 
 public interface MoveTaskRepository extends JpaRepository<MoveTaskEntity, UUID> {
+
+    @Query("""
+            select new ru.example.prodbackend.taskfolder.repository.TaskFolderCounts(
+                t.folder.id, count(t), sum(case when t.completedAt is not null then 1L else 0L end))
+            from MoveTaskEntity t where t.folder.id in :folderIds group by t.folder.id
+            """)
+    List<TaskFolderCounts> countByFolderIds(@Param("folderIds") Collection<UUID> folderIds);
 
     // Все изменения задач сначала блокируют проект, в том числе перенос сроков.
     @EntityGraph(attributePaths = {"template", "assignee"})

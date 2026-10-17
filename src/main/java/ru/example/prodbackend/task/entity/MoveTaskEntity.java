@@ -6,6 +6,7 @@ import lombok.*;
 import ru.example.prodbackend.move.entity.MoveProjectEntity;
 import ru.example.prodbackend.user.entity.UserEntity;
 import ru.example.prodbackend.taskset.entity.TaskSetApplicationEntity;
+import ru.example.prodbackend.taskfolder.entity.TaskFolderEntity;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -36,6 +37,10 @@ public class MoveTaskEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "project_id", nullable = false)
     private MoveProjectEntity project;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "folder_id")
+    private TaskFolderEntity folder;
 
     @NotBlank
     @Size(max = 255)

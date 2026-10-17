@@ -15,6 +15,7 @@ public final class SwaggerTags {
     public static final String BOXES = "Коробки";
     public static final String ITEMS = "Вещи";
     public static final String TASKS = "Задачи переезда";
+    public static final String TASK_FOLDERS = "Папки задач";
     public static final String TEMPLATES = "Готовые задачи";
     public static final String TASK_SETS = "Личные наборы задач";
     public static final String CHECKLIST = "Чек-лист первого дня";
@@ -34,6 +35,7 @@ public final class SwaggerTags {
                 new Tag().name(BOXES).description("Коробки проекта, их содержимое, особенности и последовательность статусов упаковки и доставки."),
                 new Tag().name(ITEMS).description("Содержимое коробок, отметки упаковки и распаковки, перенос и поиск вещей."),
                 new Tag().name(TASKS).description("Задачи проекта, сроки и выполнение; применение готовых задач."),
+                new Tag().name(TASK_FOLDERS).description("Цветные папки обычных задач переезда. Равные права участников; архив доступен только для чтения."),
                 new Tag().name(TEMPLATES).description("Общие образцы и личные готовые задачи аккаунта. Сохранение в каталог не добавляет задачу в переезд."),
                 new Tag().name(TASK_SETS).description("Личный каталог наборов и их применение к переездам. Каталог доступен только владельцу аккаунта."),
                 new Tag().name(CHECKLIST).description("Пункты первого дня после переезда и их связи с вещами проекта."),

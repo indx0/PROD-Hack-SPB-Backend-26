@@ -22,6 +22,13 @@ import java.util.UUID;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(TaskFolderNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleTaskFolderNotFound(TaskFolderNotFoundException exception) {
+        var body = ErrorResponse.builder().code("TASK_FOLDER_NOT_FOUND").message(exception.getMessage())
+                .traceId(UUID.randomUUID()).time(Instant.now()).build();
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
+    }
+
     @ExceptionHandler(ru.example.prodbackend.ml.exception.MlException.class)
     public ResponseEntity<ErrorResponse> handleMl(ru.example.prodbackend.ml.exception.MlException exception) {
         var response = ResponseEntity.status(exception.getStatus());
