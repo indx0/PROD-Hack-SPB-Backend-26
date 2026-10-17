@@ -8,11 +8,14 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.UUID;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import ru.example.prodbackend.config.SwaggerTags;
+import ru.example.prodbackend.common.dto.PageResponse;
+import ru.example.prodbackend.common.dto.PaginationRequest;
 import ru.example.prodbackend.exception.dto.ErrorResponse;
 import ru.example.prodbackend.taskset.dto.TaskSetApplicationResponse;
 import ru.example.prodbackend.taskset.dto.ApplyTaskSetRequest;
@@ -21,13 +24,38 @@ import ru.example.prodbackend.user.entity.UserEntity;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping(value = "/api/move-projects/{projectId}/task-sets", produces = MediaType.APPLICATION_JSON_VALUE)
+@RequestMapping(value = "/api/move-projects/{projectId}", produces = MediaType.APPLICATION_JSON_VALUE)
 @Tag(name = SwaggerTags.TASK_SETS)
 @SecurityRequirement(name = "jwtAuth")
 public class TaskSetApplicationController {
     private final TaskSetService service;
 
-    @PutMapping("/{setId}")
+    @GetMapping("/task-set-applications")
+    @Operation(summary = "Получить сохранённые применения шаблонов переезда", description = """
+            Только чтение: не применяет шаблоны, не создаёт задачи или папки и не восстанавливает удалённые задачи.
+            Возвращает все применения проекта, включая шаблоны других участников и удалённые из личного каталога.
+            Доступ разрешён создателю и любому участнику, включая чтение архивного переезда.
+            Пагинация page >= 0, size 1–100; по умолчанию page=0 и size=20. Порядок appliedAt ASC, id ASC.
+            Пустой список и страница за пределами списка возвращаются с 200 и обычными полями пагинации.
+            Верхнеуровневый folderId — неизменяемый исторический UUID первоначальной папки, даже после её удаления.
+            tasks содержит актуальные оставшиеся задачи в исходном порядке; tasks[].folderId показывает текущее
+            положение после переносов и удаления папок. Название, выполнение, ответственные и связи с вещами актуальны.
+            Позволяет проверить результат создания переезда без повторного POST и без изменяющего PUT.
+            """, responses = {
+                    @ApiResponse(responseCode = "200", description = "Страница сохранённых применений с актуальными оставшимися задачами"),
+                    @ApiResponse(responseCode = "400", description = "INVALID_REQUEST_PARAMETER: Некорректный формат UUID проекта", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "401", description = "UNAUTHORIZED: Токен доступа отсутствует, недействителен или истёк", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: Проект не найден или недоступен", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: Некорректный формат пагинации, page меньше 0 либо size вне диапазона 1–100", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+            })
+    public ResponseEntity<PageResponse<TaskSetApplicationResponse>> findAll(
+            @Parameter(description = "Идентификатор проекта переезда") @PathVariable UUID projectId,
+            @Valid @ModelAttribute @ParameterObject PaginationRequest pagination,
+            @Parameter(hidden = true) @AuthenticationPrincipal UserEntity user) {
+        return ResponseEntity.ok(service.findApplications(user.getId(), projectId, pagination));
+    }
+
+    @PutMapping("/task-sets/{setId}")
     @Operation(summary = "Применить свой шаблон задач к доступному переезду", description = """
             Необязательное тело {folderId: UUID|null} выбирает существующую папку этого переезда; null — без папки.
             Без тела или поля первое применение остаётся без папки, повтор сохраняет первоначальное назначение.

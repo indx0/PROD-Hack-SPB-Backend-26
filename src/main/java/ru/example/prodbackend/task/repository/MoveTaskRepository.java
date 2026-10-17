@@ -31,6 +31,9 @@ public interface MoveTaskRepository extends JpaRepository<MoveTaskEntity, UUID> 
     @EntityGraph(attributePaths = {"template", "assignee", "linkedItem", "linkedItem.box", "linkedItem.box.room"})
     List<MoveTaskEntity> findAllByTaskSetApplication_IdOrderByTaskSetPositionAscIdAsc(UUID applicationId);
 
+    @EntityGraph(attributePaths = {"template", "assignee", "linkedItem", "linkedItem.box", "linkedItem.box.room"})
+    List<MoveTaskEntity> findAllByTaskSetApplication_IdInOrderByTaskSetPositionAscIdAsc(Collection<UUID> applicationIds);
+
     @Modifying
     @Query("update MoveTaskEntity t set t.assignee = null, t.assigneeName = null, t.updatedAt = :updatedAt where t.project.id = :projectId and t.assignee.id = :userId")
     int clearAssignments(@Param("projectId") UUID projectId, @Param("userId") UUID userId, @Param("updatedAt") Instant updatedAt);
