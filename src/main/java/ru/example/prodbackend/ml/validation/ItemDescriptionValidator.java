@@ -32,13 +32,17 @@ public class ItemDescriptionValidator {
         return new ItemsDescriptionResponse(java.util.List.copyOf(items));
     }
 
-    private JsonNode content(String body) {
+    JsonNode content(String body) {
+        return content(body, this::unrecognized);
+    }
+
+    JsonNode content(String body, java.util.function.Supplier<MlException> refused) {
         JsonNode envelope = parse(body);
         JsonNode choice = envelope.path("choices").path(0);
         JsonNode message = choice.path("message");
         if ((!message.path("refusal").isMissingNode() && !message.path("refusal").isNull()
                 && !message.path("refusal").asText().isEmpty())
-                || "content_filter".equals(choice.path("finish_reason").asText())) throw unrecognized();
+                || "content_filter".equals(choice.path("finish_reason").asText())) throw refused.get();
         if (!"stop".equals(choice.path("finish_reason").asText())
                 || !message.path("content").isString()) throw invalid();
         return parse(message.path("content").asText());

@@ -13,6 +13,12 @@ import org.springframework.web.client.RestClient;
 import ru.example.prodbackend.item.entity.ItemFlag;
 import ru.example.prodbackend.ml.config.LlmProxyProperties;
 import ru.example.prodbackend.ml.dto.ItemDescriptionResponse;
+import ru.example.prodbackend.ml.dto.InventoryItem;
+import ru.example.prodbackend.ml.dto.ObservedItem;
+import ru.example.prodbackend.ml.dto.RoomPackingPlanResponse;
+import ru.example.prodbackend.ml.validation.RoomPackingPlanValidator;
+import ru.example.prodbackend.ml.validation.UnpackingVerificationValidator;
+import tools.jackson.databind.json.JsonMapper;
 import ru.example.prodbackend.ml.dto.ItemsDescriptionResponse;
 import ru.example.prodbackend.ml.exception.MlException;
 import ru.example.prodbackend.ml.validation.ItemDescriptionValidator;
@@ -33,13 +39,24 @@ public class HttpLlmProxyClient implements LlmProxyClient {
     private final ItemDescriptionValidator validator;
     private final String prompt;
     private final String itemsPrompt;
+    private final String unpackingPrompt;
+    private final UnpackingVerificationValidator unpackingValidator;
+    private final JsonMapper mapper;
+    private final RoomPackingPlanValidator roomPackingValidator;
+    private final String roomPackingPrompt;
 
     public HttpLlmProxyClient(@Qualifier("llmRestClient") RestClient restClient,
             LlmProxyProperties properties, @Qualifier("llmExecutor") ExecutorService executor,
-            ItemDescriptionValidator validator, MeterRegistry meters) throws IOException {
+            ItemDescriptionValidator validator, UnpackingVerificationValidator unpackingValidator,
+            JsonMapper mapper, RoomPackingPlanValidator roomPackingValidator, MeterRegistry meters) throws IOException {
+        this.roomPackingValidator = roomPackingValidator;
+        this.roomPackingPrompt = new ClassPathResource("ml/room-packing-plan-prompt.txt")
+                .getContentAsString(StandardCharsets.UTF_8);
+        this.unpackingValidator = unpackingValidator;
+        this.mapper = mapper;
         this.meters = meters;
         meters.gauge("movermate.llm.active", active);
-        for (String scenario : List.of("single", "multiple")) {
+        for (String scenario : List.of("single", "multiple", "unpacking", "room_packing")) {
             meters.counter("movermate.llm.overload", "scenario", scenario);
             for (String outcome : List.of("success", "timeout", "overload", "upstream_error",
                     "invalid_response", "not_recognized", "unavailable", "interrupted")) {
@@ -51,6 +68,8 @@ public class HttpLlmProxyClient implements LlmProxyClient {
         this.executor = executor;
         this.validator = validator;
         this.prompt = new ClassPathResource("ml/item-description-prompt.txt")
+                .getContentAsString(StandardCharsets.UTF_8);
+        this.unpackingPrompt = new ClassPathResource("ml/unpacking-verification-prompt.txt")
                 .getContentAsString(StandardCharsets.UTF_8);
         this.itemsPrompt = new ClassPathResource("ml/items-description-prompt.txt")
                 .getContentAsString(StandardCharsets.UTF_8);
@@ -64,6 +83,18 @@ public class HttpLlmProxyClient implements LlmProxyClient {
     @Override
     public ItemsDescriptionResponse describeItems(byte[] image, String mime) {
         return execute("multiple", () -> validator.validateItems(request(image, mime, true)));
+    }
+
+    @Override
+    public List<ObservedItem> verifyUnpacking(byte[] image, String mime, List<InventoryItem> inventory) {
+        return execute("unpacking", () -> unpackingValidator.validate(
+                request(unpackingPayload(image, mime, inventory)), inventory));
+    }
+
+    @Override
+    public RoomPackingPlanResponse planRoomPacking(String description, byte[] image, String mime) {
+        return execute("room_packing", () -> roomPackingValidator.validate(
+                request(roomPackingPayload(description, image, mime))));
     }
 
     private <T> T execute(String scenario, Callable<T> operation) {
@@ -101,7 +132,7 @@ public class HttpLlmProxyClient implements LlmProxyClient {
                 outcome = switch (error.getCode()) {
                     case "LLM_TIMEOUT" -> "timeout";
                     case "LLM_INVALID_RESPONSE" -> "invalid_response";
-                    case "IMAGE_NOT_RECOGNIZED" -> "not_recognized";
+                    case "IMAGE_NOT_RECOGNIZED", "ROOM_PLAN_NOT_GENERATED" -> "not_recognized";
                     default -> "upstream_error";
                 };
                 throw logged(error, started);
@@ -130,10 +161,14 @@ public class HttpLlmProxyClient implements LlmProxyClient {
     }
 
     private String request(byte[] image, String mime, boolean multiple) {
+        return request(payload(image, mime, multiple));
+    }
+
+    private String request(Map<String, Object> payload) {
         return restClient.post().uri(properties.url())
                 .contentType(MediaType.APPLICATION_JSON)
                 .headers(headers -> headers.setBearerAuth(properties.apiKey().strip()))
-                .body(payload(image, mime, multiple))
+                .body(payload)
                 .exchange((request, response) -> {
                     int status = response.getStatusCode().value();
                     if (status < 200 || status >= 300) {
@@ -169,6 +204,55 @@ public class HttpLlmProxyClient implements LlmProxyClient {
                                 "data:" + mime + ";base64," + Base64.getEncoder().encodeToString(image)))))),
                 "response_format", Map.of("type", "json_schema", "json_schema", Map.of(
                         "name", multiple ? "items_description" : "item_description", "strict", true, "schema", schema)));
+    }
+
+    private Map<String, Object> unpackingPayload(byte[] image, String mime, List<InventoryItem> inventory) {
+        var entrySchema = Map.of("type", "object", "properties", Map.of(
+                "itemId", Map.of("type", List.of("string", "null")),
+                "photoDescription", Map.of("type", "string", "minLength", 1, "maxLength", 255)),
+                "required", List.of("itemId", "photoDescription"), "additionalProperties", false);
+        var schema = Map.of("type", "object", "properties", Map.of("items", Map.of(
+                "type", "array", "maxItems", ItemDescriptionValidator.MAX_ITEMS, "items", entrySchema)),
+                "required", List.of("items"), "additionalProperties", false);
+        return Map.of("model", properties.model(), "messages", List.of(
+                Map.of("role", "system", "content", unpackingPrompt),
+                Map.of("role", "user", "content", List.of(
+                        Map.of("type", "text", "text", "Сверь видимые вещи с описью: "
+                                + mapper.writeValueAsString(inventory)),
+                        Map.of("type", "image_url", "image_url", Map.of("url",
+                                "data:" + mime + ";base64," + Base64.getEncoder().encodeToString(image)))))),
+                "response_format", Map.of("type", "json_schema", "json_schema", Map.of(
+                        "name", "unpacking_verification", "strict", true, "schema", schema)));
+    }
+
+    private Map<String, Object> roomPackingPayload(String description, byte[] image, String mime) {
+        var name = Map.of("type", "string", "minLength", 1, "maxLength", RoomPackingPlanValidator.MAX_NAME);
+        var explanation = Map.of("type", "string", "minLength", 1, "maxLength", RoomPackingPlanValidator.MAX_EXPLANATION);
+        var group = Map.of("type", "object", "properties", Map.of(
+                "label", name, "count", Map.of("type", "integer", "minimum", 1, "maximum", RoomPackingPlanValidator.MAX_ENTRIES),
+                "items", planArray(name), "packingAdvice", explanation),
+                "required", List.of("label", "count", "items", "packingAdvice"), "additionalProperties", false);
+        var suggestion = Map.of("type", "object", "properties", Map.of("item", name, "reason", explanation,
+                "action", Map.of("type", "string", "enum", Arrays.stream(RoomPackingPlanResponse.Action.values())
+                        .map(RoomPackingPlanResponse.Action::value).toList())),
+                "required", List.of("item", "action", "reason"), "additionalProperties", false);
+        var schema = Map.of("type", "object", "properties", Map.of(
+                "boxGroups", planArray(group), "packingOrder", planArray(explanation),
+                "declutteringSuggestions", planArray(suggestion), "assumptions", planArray(explanation)),
+                "required", List.of("boxGroups", "packingOrder", "declutteringSuggestions", "assumptions"), "additionalProperties", false);
+        var content = new ArrayList<Map<String, Object>>();
+        content.add(Map.of("type", "text", "text", "Спланируй упаковку комнаты. Описание пользователя: "
+                + mapper.writeValueAsString(description)));
+        if (image != null) content.add(Map.of("type", "image_url", "image_url", Map.of("url",
+                "data:" + mime + ";base64," + Base64.getEncoder().encodeToString(image))));
+        return Map.of("model", properties.model(), "messages", List.of(
+                Map.of("role", "system", "content", roomPackingPrompt), Map.of("role", "user", "content", content)),
+                "response_format", Map.of("type", "json_schema", "json_schema", Map.of(
+                        "name", "room_packing_plan", "strict", true, "schema", schema)));
+    }
+
+    private Map<String, Object> planArray(Object entries) {
+        return Map.of("type", "array", "maxItems", RoomPackingPlanValidator.MAX_ENTRIES, "items", entries);
     }
 
     private static boolean hasTimeout(Throwable cause) {

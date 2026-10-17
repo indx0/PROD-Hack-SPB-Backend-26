@@ -26,6 +26,7 @@ flowchart LR
 - PostgreSQL / JPA / Liquibase
 - Spring Security / JWT access + refresh
 - Springdoc / Swagger
+- Spring Boot Actuator / Micrometer / Prometheus registry; сбор метрик Sage
 
 Схема БД обновляется SQL-миграциями Liquibase. Hibernate проверяет её соответствие сущностям через `ddl-auto=validate`.
 
@@ -131,7 +132,9 @@ API и совместимость описаны в [контракте срок
 | [ml](../src/main/java/ru/example/prodbackend/ml) | Опись одного или нескольких предметов по фотографии через LLM Proxy, без хранения фото |
 | [event](../src/main/java/ru/example/prodbackend/event), [progress](../src/main/java/ru/example/prodbackend/progress) | История действий и сводки |
 | [auth](../src/main/java/ru/example/prodbackend/auth), [user](../src/main/java/ru/example/prodbackend/user) | Вход, токены и профиль |
+| [observability](../src/main/java/ru/example/prodbackend/observability) | Отдельная авторизация endpoint метрик, HTTP-логи и идентификатор запроса |
 | [common](../src/main/java/ru/example/prodbackend/common), [exception](../src/main/java/ru/example/prodbackend/exception) | Пагинация и единый формат ошибок |
+
 
 ## Что прочитать дальше
 
@@ -144,7 +147,7 @@ API и совместимость описаны в [контракте срок
 
 ## ML-опись вещей по фото
 
-Оба POST-маршрута находятся под `/api/move-projects/{projectId}/ml`:
+Оба POST-маршрута находятся под `/api/ml` и требуют JWT без привязки к проекту:
 
 | Маршрут | Ответ |
 | --- | --- |
@@ -152,9 +155,8 @@ API и совместимость описаны в [контракте срок
 | `/items-description` | Объект `items` со списком из 1–100 описаний `name` и `flags` |
 
 `ItemDescriptionController` принимает один multipart-файл `photo`.
-`ItemDescriptionService` сначала проверяет владельца через `ProjectAccessService`, затем
-размер и сигнатуру файла через `PhotoValidator`. Проверка доступа завершается до вызова LLM;
-сетевое ожидание проходит вне транзакции БД.
+`ItemDescriptionService` проверяет размер и сигнатуру файла через `PhotoValidator`.
+Сетевое ожидание проходит вне транзакции БД.
 
 `LlmProxyClient` отделяет сценарии от HTTP-протокола. `HttpLlmProxyClient` на Spring RestClient
 использует отдельные промпты из ресурсов и строгие JSON Schema для одного предмета и списка.
@@ -174,7 +176,7 @@ API и совместимость описаны в [контракте срок
 а в PostgreSQL — колонками `fragile`, `first_day`, `carry_personally`.
 Пакетный ввод `names` сохраняет только названия и оставляет метки пустыми.
 
-Контракты, примеры запросов, ошибки и настройка: [Опись вещей по фотографии](photo-inventory.md).
+Контракты, примеры запросов, ошибки и настройка: [Реализация требований](requirements.md).
 
 ### Совместимость объединённых веток
 
@@ -183,7 +185,7 @@ POST принимает любой вариант; PATCH с flags заменяе
 только этот признак. Противоречивые явно заданные значения отклоняются с 422 до записи.
 Снятие признака любым способом отвязывает чек-лист, сохраняя его пункт и выполнение.
 Количество, упаковка, перенос, архив и общий доступ сохраняют прежние проверки.
-ML-предпросмотр использует общий доступ проекта и не держит транзакцию во время запроса LLM.
+ML-предпросмотр описи требует JWT без привязки к проекту и не держит транзакцию во время запроса LLM.
 
 Параллельные миграции `1.0/0011-add-item-flags` и `1.1/0011-add-item-quantity-first-day`
 объединены через `ADD COLUMN IF NOT EXISTS first_day`. Сохранены авторы, ID и пути;
