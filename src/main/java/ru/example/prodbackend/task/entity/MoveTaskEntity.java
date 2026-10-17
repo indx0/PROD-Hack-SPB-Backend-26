@@ -7,6 +7,7 @@ import ru.example.prodbackend.move.entity.MoveProjectEntity;
 import ru.example.prodbackend.user.entity.UserEntity;
 import ru.example.prodbackend.taskset.entity.TaskSetApplicationEntity;
 import ru.example.prodbackend.taskfolder.entity.TaskFolderEntity;
+import ru.example.prodbackend.item.entity.ItemEntity;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -41,6 +42,10 @@ public class MoveTaskEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "folder_id")
     private TaskFolderEntity folder;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "linked_item_id")
+    private ItemEntity linkedItem;
 
     @NotBlank
     @Size(max = 255)

@@ -122,7 +122,7 @@ class MoveProjectBootstrapIntegrationTest extends AuthIntegrationTestSupport {
     }
 
     private Map<UUID, LocalDate> dueDates(UUID projectId) {
-        return taskRepository.findAllByFilters(projectId, null, null, PageRequest.of(0, 100)).stream()
+        return taskRepository.findAllByFilters(projectId, null, null, null, PageRequest.of(0, 100)).stream()
                 .collect(Collectors.toMap(MoveTaskEntity::getId, MoveTaskEntity::getDueDate));
     }
 }

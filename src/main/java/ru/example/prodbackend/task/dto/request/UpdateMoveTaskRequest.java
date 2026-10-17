@@ -15,6 +15,32 @@ import ru.example.prodbackend.task.entity.TaskStage;
 @NoArgsConstructor(onConstructor_ = @JsonCreator)
 public class UpdateMoveTaskRequest {
 
+    @Schema(types = {"string", "null"}, format = "uuid", description = "Папка этого переезда: отсутствие сохраняет значение, null выносит задачу из папки. Чужая или отсутствующая папка — 404 TASK_FOLDER_NOT_FOUND; весь PATCH откатывается")
+    private UUID folderId;
+
+    @Schema(types = {"string", "null"}, format = "uuid", description = "Связанная вещь этого переезда: отсутствие сохраняет связь, null снимает. Чужая или отсутствующая вещь — 404; весь PATCH откатывается. Не меняет item.firstDay")
+    private UUID linkedItemId;
+
+    @JsonIgnore
+    @Schema(hidden = true)
+    private boolean folderIdPresent;
+
+    @JsonIgnore
+    @Schema(hidden = true)
+    private boolean linkedItemIdPresent;
+
+    @JsonSetter(value = "folderId", nulls = Nulls.SET)
+    public void setFolderId(UUID folderId) {
+        this.folderId = folderId;
+        this.folderIdPresent = true;
+    }
+
+    @JsonSetter(value = "linkedItemId", nulls = Nulls.SET)
+    public void setLinkedItemId(UUID linkedItemId) {
+        this.linkedItemId = linkedItemId;
+        this.linkedItemIdPresent = true;
+    }
+
     @Schema(example = "Упаковать кухню", description = "Новое название задачи; отсутствие сохраняет значение, null запрещён")
     @Size(max = 255)
     private String title;
@@ -99,7 +125,7 @@ public class UpdateMoveTaskRequest {
     @Schema(hidden = true)
     @AssertTrue(message = "Укажите хотя бы одно поле для изменения")
     public boolean isUpdatePresent() {
-        return title != null || stage != null || descriptionPresent || dueDatePresent || assigneeNamePresent || assigneeIdPresent || dueType != null || offsetDays != null;
+        return title != null || stage != null || descriptionPresent || dueDatePresent || assigneeNamePresent || assigneeIdPresent || dueType != null || offsetDays != null || folderIdPresent || linkedItemIdPresent;
     }
 
     @JsonAnySetter

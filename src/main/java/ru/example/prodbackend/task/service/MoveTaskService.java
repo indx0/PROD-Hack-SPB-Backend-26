@@ -15,6 +15,12 @@ import ru.example.prodbackend.exception.MoveTaskNotFoundException;
 import ru.example.prodbackend.exception.RequestValidationException;
 import ru.example.prodbackend.exception.ResourceConflictException;
 import ru.example.prodbackend.exception.TaskTemplateNotFoundException;
+import ru.example.prodbackend.exception.TaskFolderNotFoundException;
+import ru.example.prodbackend.exception.ItemNotFoundException;
+import ru.example.prodbackend.item.entity.ItemEntity;
+import ru.example.prodbackend.item.repository.ItemRepository;
+import ru.example.prodbackend.taskfolder.entity.TaskFolderEntity;
+import ru.example.prodbackend.taskfolder.repository.TaskFolderRepository;
 import ru.example.prodbackend.move.service.ProjectAccessService;
 import ru.example.prodbackend.task.dto.request.*;
 import ru.example.prodbackend.task.dto.response.MoveTaskResponse;
@@ -44,6 +50,8 @@ public class MoveTaskService {
     private final ProjectAccessService projectAccessService;
     private final ProjectEventService projectEventService;
     private final TaskAssignmentService taskAssignmentService;
+    private final TaskFolderRepository taskFolderRepository;
+    private final ItemRepository itemRepository;
 
     public TaskSummaryResponse summary(UUID projectId, UUID userId) {
         projectAccessService.getAccessibleProject(projectId, userId);
@@ -59,6 +67,8 @@ public class MoveTaskService {
 
         MoveTaskEntity task = MoveTaskEntity.builder()
                 .project(project)
+                .folder(resolveFolder(projectId, request.getFolderId()))
+                .linkedItem(resolveLinkedItem(projectId, request.getLinkedItemId(), userId))
                 .title(normalizeTitle(request.getTitle()))
                 .description(normalizeOptional(request.getDescription()))
                 .stage(request.getStage())
@@ -73,8 +83,9 @@ public class MoveTaskService {
 
     public PageResponse<MoveTaskResponse> findAll(UUID projectId, MoveTaskFilter filter, PaginationRequest pagination, UUID userId) {
         projectAccessService.getAccessibleProject(projectId, userId);
+        if (filter.getFolderId() != null) resolveFolder(projectId, filter.getFolderId());
         var pageable = PageRequest.of(pagination.getPage(), pagination.getSize(), Sort.by("createdAt", "id"));
-        var tasks = moveTaskRepository.findAllByFilters(projectId, filter.getStage(), filter.getCompleted(), pageable);
+        var tasks = moveTaskRepository.findAllByFilters(projectId, filter.getStage(), filter.getCompleted(), filter.getFolderId(), pageable);
         return PageResponse.from(tasks.map(this::toResponse));
     }
 
@@ -91,6 +102,12 @@ public class MoveTaskService {
         if (!request.isUpdatePresent()) {
             throw new RequestValidationException("request", "Укажите хотя бы одно поле для изменения");
         }
+        // All writes to folders/items/tasks serialize on the project lock held by requireTaskForUpdate.
+        // Resolve references before editing any managed task fields; linking never changes the item.
+        var folder = request.isFolderIdPresent() ? resolveFolder(projectId, request.getFolderId()) : task.getFolder();
+        var linkedItem = request.isLinkedItemIdPresent() ? resolveLinkedItem(projectId, request.getLinkedItemId(), userId) : task.getLinkedItem();
+        task.setFolder(folder);
+        task.setLinkedItem(linkedItem);
         if (request.getTitle() != null) {
             task.setTitle(normalizeTitle(request.getTitle()));
         }
@@ -199,6 +216,16 @@ public class MoveTaskService {
     private MoveTaskEntity requireTaskForUpdate(UUID projectId, UUID taskId, UUID userId) {
         projectAccessService.getAccessibleProjectForUpdate(projectId, userId);
         return moveTaskRepository.findForUpdate(taskId, projectId).orElseThrow(() -> new MoveTaskNotFoundException("move task not found"));
+    }
+
+    private TaskFolderEntity resolveFolder(UUID projectId, UUID folderId) {
+        return folderId == null ? null : taskFolderRepository.findByIdAndProject_Id(folderId, projectId)
+                .orElseThrow(TaskFolderNotFoundException::new);
+    }
+
+    private ItemEntity resolveLinkedItem(UUID projectId, UUID itemId, UUID userId) {
+        return itemId == null ? null : itemRepository.findAccessibleById(itemId, projectId, userId)
+                .orElseThrow(() -> new ItemNotFoundException("Вещь не найдена в этом переезде"));
     }
 
     private String normalizeTitle(String title) {
