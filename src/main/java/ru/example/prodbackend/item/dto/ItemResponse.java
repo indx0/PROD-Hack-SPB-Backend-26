@@ -16,6 +16,7 @@ import java.util.UUID;
 public class ItemResponse {
     private UUID id;
     private String name;
+    private java.util.List<ru.example.prodbackend.item.entity.ItemFlag> flags;
     private boolean lost;
     private UUID projectId;
     private UUID boxId;

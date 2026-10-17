@@ -6,6 +6,10 @@ import com.fasterxml.jackson.annotation.Nulls;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.NotNull;
+import ru.example.prodbackend.item.entity.ItemFlag;
+import java.util.List;
+import java.util.HashSet;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -17,6 +21,18 @@ public class UpdateItemRequest {
     private String name;
 
     private Boolean lost;
+
+    @Size(max = 3)
+    private List<@NotNull ItemFlag> flags;
+
+    @JsonSetter(value = "flags", nulls = Nulls.FAIL)
+    public void setFlags(List<ItemFlag> flags) { this.flags = flags; }
+
+    @JsonIgnore
+    @AssertTrue(message = "Flags must not contain duplicates")
+    public boolean isFlagsUnique() {
+        return flags == null || new HashSet<>(flags).size() == flags.size();
+    }
 
     @JsonSetter(value = "name", nulls = Nulls.FAIL)
     public void setName(String name) {
@@ -31,6 +47,6 @@ public class UpdateItemRequest {
     @JsonIgnore
     @AssertTrue(message = "Specify at least one field to update")
     public boolean isUpdatePresent() {
-        return name != null || lost != null;
+        return name != null || lost != null || flags != null;
     }
 }

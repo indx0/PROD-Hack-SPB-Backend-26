@@ -34,6 +34,7 @@ flowchart LR
 | [move](../src/main/java/ru/example/prodbackend/move), [room](../src/main/java/ru/example/prodbackend/room) | Проекты, проверка владельца, комнаты |
 | [box](../src/main/java/ru/example/prodbackend/box), [item](../src/main/java/ru/example/prodbackend/item) | Коробки, статусы, содержимое, поиск и подсказки |
 | [task](../src/main/java/ru/example/prodbackend/task), [checklist](../src/main/java/ru/example/prodbackend/checklist) | План, шаблоны, первый день |
+| [ml](../src/main/java/ru/example/prodbackend/ml) | Опись предмета по фотографии через LLM Proxy, без хранения фото |
 | [event](../src/main/java/ru/example/prodbackend/event), [progress](../src/main/java/ru/example/prodbackend/progress) | История действий и сводки |
 | [auth](../src/main/java/ru/example/prodbackend/auth), [user](../src/main/java/ru/example/prodbackend/user) | Вход, токены и профиль |
 | [common](../src/main/java/ru/example/prodbackend/common), [exception](../src/main/java/ru/example/prodbackend/exception) | Пагинация и единый формат ошибок |
@@ -45,3 +46,14 @@ flowchart LR
 | Где открыть API и пайплайны? | [README](../README.md) |
 | Как реализованы требования на backend и в мобильном приложении? | [Реализация требований](requirements.md) |
 | Где находятся отчёты и как запустить тесты? | [Тесты и отчёты](../TESTING.md) |
+
+## Опись предмета по фото
+
+`ItemDescriptionController` принимает multipart, `ItemDescriptionService` проверяет владельца
+через `ProjectAccessService` и файл через `PhotoValidator`. `LlmProxyClient` отделяет сценарий
+от HTTP-протокола. Реализация на Spring RestClient отправляет промпт из ресурса и изображение,
+а `ItemDescriptionValidator` строго проверяет ответ. Сетевое ожидание проходит вне транзакции БД.
+Общий дедлайн и ограниченный исполнитель защищают приложение от зависших обращений.
+Метки принадлежат домену item и сохраняются обычным ItemService после проверки пользователем.
+
+Контракты и настройки: [Опись предмета по фотографии](photo-inventory.md).

@@ -45,7 +45,16 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                 runLiquibase(schema, false);
                 assertTables(jdbc, schema);
                 assertHistory(jdbc);
+                // Populate an old-schema item, then verify migration backfills every flag.
+                runLiquibase(schema, 1);
                 assertConstraints(jdbc);
+                jdbc.update("""
+                        INSERT INTO items (id, box_id, name, lost, created_at, updated_at)
+                        SELECT ?, id, 'Legacy item', false, now(), now() FROM boxes LIMIT 1
+                        """, UUID.randomUUID());
+                runLiquibase(schema, false);
+                assertThat(jdbc.queryForObject("SELECT count(*) FROM items", Long.class)).isPositive();
+                assertThat(jdbc.queryForObject("SELECT count(*) FROM items WHERE fragile OR first_day OR carry_personally", Long.class)).isZero();
 
                 var users = jdbc.queryForList("SELECT id, email FROM users ORDER BY email");
                 assertThat(users).hasSize(2);
@@ -73,6 +82,10 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
     }
 
     private void runLiquibase(String schema, boolean rollback) throws Exception {
+        runLiquibase(schema, rollback ? 11 : 0);
+    }
+
+    private void runLiquibase(String schema, int rollbackSteps) throws Exception {
         // Each operation uses a fresh instance, just like separate application/CLI launches.
         // Liquibase also caches the up-to-date result globally within the JVM across instances.
         Scope.getCurrentScope().getSingleton(FastCheckService.class).clearCache();
@@ -85,8 +98,8 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
             database.setDefaultSchemaName(schema);
             database.setLiquibaseSchemaName(schema);
             try (Liquibase liquibase = new Liquibase(CHANGELOG, resources, database)) {
-                if (rollback) {
-                    liquibase.rollback(10, new Contexts(), new LabelExpression());
+                if (rollbackSteps > 0) {
+                    liquibase.rollback(rollbackSteps, new Contexts(), new LabelExpression());
                 } else {
                     liquibase.validate();
                     liquibase.update(new Contexts(), new LabelExpression());
@@ -107,7 +120,7 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
 
     private void assertHistory(JdbcTemplate jdbc) {
         assertThat(jdbc.queryForList("SELECT author FROM databasechangelog", String.class))
-                .hasSize(10).containsOnly("indx0");
+                .hasSize(11).containsOnly("indx0");
     }
 
     private void assertConstraints(JdbcTemplate jdbc) {

@@ -29,6 +29,11 @@ services:
     restart: unless-stopped
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      LLM_PROXY_API_KEY: ${LLM_PROXY_API_KEY:-}
+      LLM_PROXY_URL: ${LLM_PROXY_URL:-https://llm-proxy.spirit.t-education.com/chat/completions}
+      LLM_PROXY_MODEL: ${LLM_PROXY_MODEL:-openai/gpt-6-luna}
+      LLM_PROXY_CONNECT_TIMEOUT_MS: ${LLM_PROXY_CONNECT_TIMEOUT_MS:-10000}
+      LLM_PROXY_TIMEOUT_MS: ${LLM_PROXY_TIMEOUT_MS:-120000}
       DB_URL: jdbc:postgresql://postgres:5432/prod_backend
       DB_USERNAME: ${DB_USERNAME:?DB_USERNAME is required}
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}

@@ -44,6 +44,7 @@ public class ItemService {
     public ItemResponse create(UUID userId, UUID projectId, UUID boxId, CreateItemRequest request) {
         BoxEntity box = requireOwnedBox(userId, projectId, boxId, true);
         ItemEntity item = ItemEntity.builder().box(box).name(request.getName().strip()).build();
+        item.replaceFlags(request.getFlags());
         return toResponse(itemRepository.saveAndFlush(item));
     }
 
@@ -62,6 +63,9 @@ public class ItemService {
         ItemEntity item = requireItem(boxId, itemId);
         if (request.getName() != null) {
             item.setName(request.getName().strip());
+        }
+        if (request.getFlags() != null) {
+            item.replaceFlags(request.getFlags());
         }
         if (request.getLost() != null) {
             item.setLost(request.getLost());
@@ -122,7 +126,7 @@ public class ItemService {
 
     private ItemResponse toResponse(ItemEntity item) {
         BoxEntity box = item.getBox();
-        return ItemResponse.builder().id(item.getId()).name(item.getName()).lost(item.isLost())
+        return ItemResponse.builder().id(item.getId()).name(item.getName()).flags(item.flags()).lost(item.isLost())
                 .projectId(box.getProject().getId()).boxId(box.getId()).boxNumber(box.getNumber())
                 .roomId(box.getRoom().getId()).roomName(box.getRoom().getName()).boxStatus(box.getStatus())
                 .createdAt(item.getCreatedAt()).updatedAt(item.getUpdatedAt()).build();

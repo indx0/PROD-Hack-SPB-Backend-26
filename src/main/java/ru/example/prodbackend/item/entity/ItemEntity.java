@@ -36,6 +36,29 @@ public class ItemEntity {
     @Column(nullable = false)
     private boolean lost;
 
+    @Column(nullable = false)
+    private boolean fragile;
+
+    @Column(name = "first_day", nullable = false)
+    private boolean firstDay;
+
+    @Column(name = "carry_personally", nullable = false)
+    private boolean carryPersonally;
+
+    public java.util.List<ItemFlag> flags() {
+        java.util.List<ItemFlag> result = new java.util.ArrayList<>();
+        if (fragile) result.add(ItemFlag.FRAGILE);
+        if (firstDay) result.add(ItemFlag.FIRST_DAY);
+        if (carryPersonally) result.add(ItemFlag.CARRY_PERSONALLY);
+        return java.util.List.copyOf(result);
+    }
+
+    public void replaceFlags(java.util.List<ItemFlag> flags) {
+        fragile = flags.contains(ItemFlag.FRAGILE);
+        firstDay = flags.contains(ItemFlag.FIRST_DAY);
+        carryPersonally = flags.contains(ItemFlag.CARRY_PERSONALLY);
+    }
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

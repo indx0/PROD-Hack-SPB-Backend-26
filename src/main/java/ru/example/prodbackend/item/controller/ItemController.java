@@ -72,6 +72,8 @@ public class ItemController {
             description = """
                     Название обязательно, до 255 символов. Пробелы по краям удаляются.
                     Новая вещь не помечена потерянной. Одинаковые названия допустимы.
+                    Необязательный flags: fragile, first_day, carry_personally без повторов.
+                    Без flags сохраняется пустой набор; null недопустим.
                     Добавление не изменяет статус коробки и contentsDeferred.
                     """,
             responses = @ApiResponse(responseCode = "201", description = "Вещь добавлена",
@@ -106,9 +108,11 @@ public class ItemController {
                 .body(itemService.createBatch(user.getId(), projectId, boxId, request));
     }
 
-    @Operation(summary = "Изменение вещи и отметки потери",
+    @Operation(summary = "Изменение вещи, меток и отметки потери",
             description = """
-                    Изменяет name и/или lost. lost=true помечает вещь потерянной, false снимает отметку.
+                    flags заменяет весь набор меток; [] снимает все, отсутствие сохраняет текущие.
+                    Допустимы fragile, first_day, carry_personally без повторов; null запрещён.
+                    Изменяет name, flags и/или lost. lost=true помечает вещь потерянной, false снимает отметку.
                     Отсутствующие поля сохраняют значения. Неизвестные поля игнорируются.
                     Запрос без поддерживаемых полей и явный null запрещены.
                     Перенос вещи в другую коробку не поддерживается.

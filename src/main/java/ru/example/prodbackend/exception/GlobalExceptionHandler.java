@@ -20,6 +20,35 @@ import java.util.UUID;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(ru.example.prodbackend.ml.exception.MlException.class)
+    public ResponseEntity<ErrorResponse> handleMl(ru.example.prodbackend.ml.exception.MlException exception) {
+        return ResponseEntity.status(exception.getStatus()).body(ErrorResponse.builder()
+                .code(exception.getCode()).message(exception.getMessage())
+                .traceId(exception.getTraceId()).time(Instant.now()).build());
+    }
+
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> handleUploadSize(Exception exception) {
+        return uploadError(HttpStatus.CONTENT_TOO_LARGE, "IMAGE_TOO_LARGE", "Превышен размер загрузки");
+    }
+
+    @ExceptionHandler({org.springframework.web.multipart.MultipartException.class,
+            org.springframework.web.multipart.support.MissingServletRequestPartException.class})
+    public ResponseEntity<ErrorResponse> handleMultipart(Exception exception) {
+        return uploadError(HttpStatus.BAD_REQUEST, "INVALID_MULTIPART", "Некорректный multipart или отсутствует photo");
+    }
+
+    @ExceptionHandler(org.springframework.web.HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMediaType(Exception exception) {
+        return uploadError(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "UNSUPPORTED_MEDIA_TYPE", "Неподдерживаемый Content-Type");
+    }
+
+    private ResponseEntity<ErrorResponse> uploadError(HttpStatus status, String code, String message) {
+        return ResponseEntity.status(status).body(ErrorResponse.builder().code(code).message(message)
+                .traceId(UUID.randomUUID()).time(Instant.now()).build());
+    }
+
+
     @ExceptionHandler(ChecklistItemNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleChecklistItemNotFound(ChecklistItemNotFoundException exception) {
         ErrorResponse body = ErrorResponse.builder().code("CHECKLIST_ITEM_NOT_FOUND").message(exception.getMessage())

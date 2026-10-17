@@ -59,6 +59,9 @@ class ItemApiIntegrationTest {
     @Autowired
     private ItemRepository itemRepository;
 
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private ru.example.prodbackend.ml.client.LlmProxyClient llmClient;
+
     private UserEntity owner;
     private UserEntity stranger;
     private MoveProjectEntity project;
@@ -95,10 +98,104 @@ class ItemApiIntegrationTest {
     }
 
     @Test
+    void photoPreviewThenEditedSaveAndFlagUpdates() throws Exception {
+        org.mockito.Mockito.when(llmClient.describe(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("image/jpeg")))
+                .thenReturn(new ru.example.prodbackend.ml.dto.ItemDescriptionResponse("Кружка",
+                        List.of(ru.example.prodbackend.item.entity.ItemFlag.FRAGILE)));
+        long before = itemRepository.count();
+        String url = projectUrl + "/ml/item-description";
+        var photo = new org.springframework.mock.web.MockMultipartFile("photo", "image.txt", "text/plain",
+                new byte[]{(byte)255, (byte)216, (byte)255});
+        mockMvc.perform(multipart(url).file(photo).header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.name").value("Кружка"))
+                .andExpect(jsonPath("$.flags[0]").value("fragile"));
+        assertThat(itemRepository.count()).isEqualTo(before);
+
+        String saved = perform(post(collectionUrl), "{\"name\":\"Белая кружка\",\"flags\":[\"fragile\",\"first_day\"]}")
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.flags", hasSize(2)))
+                .andReturn().getResponse().getContentAsString();
+        String id = jsonMapper.readTree(saved).path("id").asText();
+        entityManager.clear();
+        var persisted = entityManager.find(ItemEntity.class, UUID.fromString(id));
+        assertThat(persisted.isFragile()).isTrue();
+        assertThat(persisted.isFirstDay()).isTrue();
+        assertThat(persisted.isCarryPersonally()).isFalse();
+        perform(patch(collectionUrl + "/" + id), "{\"name\":\"Моя кружка\"}")
+                .andExpect(status().isOk()).andExpect(jsonPath("$.flags", hasSize(2)));
+        perform(get(projectUrl + "/items").param("q", "Моя кружка"), null)
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].flags", hasSize(2)));
+        perform(patch(collectionUrl + "/" + id), "{\"flags\":[\"carry_personally\"]}")
+                .andExpect(status().isOk()).andExpect(jsonPath("$.flags[0]").value("carry_personally"));
+        perform(patch(collectionUrl + "/" + id), "{\"flags\":[]}")
+                .andExpect(status().isOk()).andExpect(jsonPath("$.flags", hasSize(0)));
+        perform(delete(collectionUrl + "/" + id), null).andExpect(status().isNoContent());
+        org.mockito.Mockito.verify(llmClient, org.mockito.Mockito.times(1))
+                .describe(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"{\"flags\":null}", "{\"flags\":[\"unknown\"]}",
+            "{\"flags\":[\"fragile\",\"fragile\"]}", "{\"flags\":[null]}", "{\"flags\":[0]}"})
+    void rejectsInvalidFlagsOnCreateAndPatch(String body) throws Exception {
+        perform(patch(itemUrl), body).andExpect(status().is4xxClientError());
+        perform(post(collectionUrl), "{\"name\":\"Кружка\"," + body.substring(1))
+                .andExpect(status().is4xxClientError());
+        assertThat(countSourceItems()).isEqualTo(1);
+    }
+
+    @Test
+    void photoEndpointRequiresJwtAndOwnershipAndPhoto() throws Exception {
+        String url = projectUrl + "/ml/item-description";
+        var photo = new org.springframework.mock.web.MockMultipartFile("photo", new byte[]{1});
+        mockMvc.perform(multipart(url).file(photo)).andExpect(status().isUnauthorized());
+        mockMvc.perform(multipart(url).file(photo)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtService.generateToken(stranger)))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(multipart(url).header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_MULTIPART"));
+        mockMvc.perform(multipart(url).file(photo).header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isUnsupportedMediaType());
+        mockMvc.perform(multipart(url).file(new org.springframework.mock.web.MockMultipartFile("photo", new byte[0]))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().is(422));
+        mockMvc.perform(multipart(url).file(photo).file(photo)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(multipart(url).file(new org.springframework.mock.web.MockMultipartFile(
+                        "photo", new byte[10 * 1024 * 1024 + 1]))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().is(413));
+        mockMvc.perform(multipart("/api/move-projects/not-a-uuid/ml/item-description").file(photo)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isBadRequest());
+        org.mockito.Mockito.verifyNoInteractions(llmClient);
+    }
+
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+            "422,IMAGE_NOT_RECOGNIZED", "502,LLM_INVALID_RESPONSE", "503,LLM_UNAVAILABLE", "504,LLM_TIMEOUT"})
+    void mapsLlmFailuresToPublicErrorWithoutCreatingItems(int status, String code) throws Exception {
+        var error = new ru.example.prodbackend.ml.exception.MlException(
+                org.springframework.http.HttpStatus.valueOf(status), code, "Safe message");
+        org.mockito.Mockito.when(llmClient.describe(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenThrow(error);
+        long before = itemRepository.count();
+        mockMvc.perform(multipart(projectUrl + "/ml/item-description")
+                        .file(new org.springframework.mock.web.MockMultipartFile("photo",
+                                new byte[]{(byte)255, (byte)216, (byte)255}))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().is(status)).andExpect(jsonPath("$.code").value(code))
+                .andExpect(jsonPath("$.traceId").value(error.getTraceId().toString()))
+                .andExpect(jsonPath("$.time").exists());
+        assertThat(itemRepository.count()).isEqualTo(before);
+    }
+
+    @Test
     void createsTrimmedItemWithoutChangingBox() throws Exception {
         String body = perform(post(collectionUrl), "{\"name\":\"  Стакан  \"}")
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.name").value("Стакан"))
+                .andExpect(jsonPath("$.flags", hasSize(0)))
                 .andExpect(jsonPath("$.lost").value(false))
                 .andExpect(jsonPath("$.boxNumber").value(3))
                 .andExpect(jsonPath("$.roomName").value("Кухня"))
@@ -122,7 +219,8 @@ class ItemApiIntegrationTest {
                 .andExpect(jsonPath("$[0].name").value("Кружка"))
                 .andExpect(jsonPath("$[1].name").value("Тарелка"))
                 .andExpect(jsonPath("$[2].name").value("Кружка"))
-                .andExpect(jsonPath("$[2].lost").value(false));
+                .andExpect(jsonPath("$[2].lost").value(false))
+                .andExpect(jsonPath("$[0].flags", hasSize(0)));
         assertThat(countSourceItems()).isEqualTo(4);
     }
 
