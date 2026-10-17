@@ -244,10 +244,10 @@ class UserEditingIntegrationTest extends AuthIntegrationTestSupport {
         readTokenPair(postJson(AUTHENTICATE_URL, new AuthenticationRequest(EMAIL, NEW_PASSWORD)));
     }
 
-    @Test
-    void passwordOfExactlyEightCharactersIsAccepted() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"a", "short", "Pass123!"})
+    void nonBlankPasswordIncludingOneCharacterIsAccepted(String newPassword) throws Exception {
         var tokens = registerUser();
-        String newPassword = "Pass123!";
 
         changePassword(tokens.getAccessToken(), passwordJson(PASSWORD, newPassword))
                 .andExpect(status().isNoContent());
@@ -370,8 +370,7 @@ class UserEditingIntegrationTest extends AuthIntegrationTestSupport {
                 Arguments.of("   ", NEW_PASSWORD, "currentPassword"),
                 Arguments.of(PASSWORD, null, "newPassword"),
                 Arguments.of(PASSWORD, "", "newPassword"),
-                Arguments.of(PASSWORD, "        ", "newPassword"),
-                Arguments.of(PASSWORD, "short", "newPassword")
+                Arguments.of(PASSWORD, "        ", "newPassword")
         );
     }
 }
