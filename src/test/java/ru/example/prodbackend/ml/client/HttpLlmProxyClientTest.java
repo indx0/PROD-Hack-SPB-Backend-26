@@ -21,6 +21,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.assertj.core.api.Assertions.*;
 
 class HttpLlmProxyClientTest {
+    private final io.micrometer.core.instrument.simple.SimpleMeterRegistry meters = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
     private HttpServer server;
     private ExecutorService worker;
     private ExecutorService serverWorker;
@@ -69,6 +70,8 @@ class HttpLlmProxyClientTest {
     void sendsSchemaAndPhotoAndMapsResult() throws Exception {
         var result = client("test-key", 2000).describe(new byte[]{1,2,3}, "image/png");
         assertThat(result.name()).isEqualTo("Кружка");
+        assertThat(meters.get("movermate.llm.operation").tags("scenario", "single", "outcome", "success").timer().count()).isEqualTo(1);
+        assertThat(meters.get("movermate.llm.active").gauge().value()).isZero();
         assertThat(result.flags()).extracting(flag -> flag.value()).containsExactly("fragile");
         assertThat(authorization.get()).isEqualTo("Bearer test-key");
         var body = mapper.readTree(request.get());
@@ -220,6 +223,9 @@ class HttpLlmProxyClientTest {
         worker.shutdownNow();
         expectCode("LLM_UNAVAILABLE");
         assertThat(calls.get()).isZero();
+        assertThat(meters.get("movermate.llm.overload").tag("scenario", "single").counter().count()).isEqualTo(1);
+        assertThat(meters.get("movermate.llm.operation").tags("scenario", "single", "outcome", "overload").timer().count()).isEqualTo(1);
+        assertThat(meters.get("movermate.llm.active").gauge().value()).isZero();
     }
 
     @Test
@@ -237,6 +243,54 @@ class HttpLlmProxyClientTest {
                 .isInstanceOfSatisfying(MlException.class, e -> assertThat(e.getCode()).isEqualTo("LLM_UNAVAILABLE"));
     }
 
+    @Test
+    void countsActiveWorkerUntilItActuallyFinishesAndPropagatesRequestContext() throws Exception {
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var capturedId = new AtomicReference<String>();
+        var validator = new ItemDescriptionValidator(mapper) {
+            @Override public ru.example.prodbackend.ml.dto.ItemDescriptionResponse validate(String body) {
+                capturedId.set(org.slf4j.MDC.get("requestId"));
+                entered.countDown();
+                boolean released = false;
+                while (!released) {
+                    try { released = release.await(5, TimeUnit.SECONDS); }
+                    catch (InterruptedException ignored) { /* Simulate an operation that ignores cancellation. */ }
+                }
+                return super.validate(body);
+            }
+        };
+        var properties = new LlmProxyProperties(URI.create("http://127.0.0.1:" + server.getAddress().getPort()
+                + "/chat/completions"), "test-model", "secret", 1000, 1000);
+        var client = new HttpLlmProxyClient(RestClient.create(), properties, worker, validator, meters);
+        org.slf4j.MDC.put("requestId", "request-test");
+        try {
+            assertThatThrownBy(() -> client.describe(new byte[]{1}, "image/png"))
+                    .isInstanceOfSatisfying(MlException.class, e -> assertThat(e.getCode()).isEqualTo("LLM_TIMEOUT"));
+            assertThat(entered.getCount()).isZero();
+            assertThat(capturedId.get()).isEqualTo("request-test");
+            assertThat(meters.get("movermate.llm.active").gauge().value()).isEqualTo(1);
+            assertThat(meters.get("movermate.llm.operation").tags("scenario", "single", "outcome", "timeout").timer().count()).isEqualTo(1);
+        } finally {
+            release.countDown();
+            org.slf4j.MDC.clear();
+        }
+        assertThat(worker.submit(() -> org.slf4j.MDC.get("requestId")).get(2, TimeUnit.SECONDS)).isNull();
+        assertThat(meters.get("movermate.llm.active").gauge().value()).isZero();
+        assertThat(meters.get("movermate.llm.operation").tags("scenario", "single", "outcome", "success").timer().count()).isZero();
+    }
+
+    @Test
+    void metricsDistinguishInvalidResponseAndUpstreamErrors() throws Exception {
+        response = "bad json";
+        expectCode("LLM_INVALID_RESPONSE");
+        upstreamStatus = 503;
+        expectCode("LLM_UNAVAILABLE");
+        assertThat(meters.get("movermate.llm.operation").tags("scenario", "single", "outcome", "invalid_response").timer().count()).isEqualTo(1);
+        assertThat(meters.get("movermate.llm.operation").tags("scenario", "single", "outcome", "upstream_error").timer().count()).isEqualTo(1);
+        assertThat(meters.get("movermate.llm.active").gauge().value()).isZero();
+    }
+
     private void expectCode(String code) throws Exception {
         var client = client("key", 2000);
         assertThatThrownBy(() -> client.describe(new byte[]{1}, "image/png"))
@@ -250,7 +304,7 @@ class HttpLlmProxyClientTest {
                 .connectTimeout(Duration.ofSeconds(1)).build());
         factory.setReadTimeout(Duration.ofMillis(timeout));
         return new HttpLlmProxyClient(RestClient.builder().requestFactory(factory).build(), properties,
-                worker, new ItemDescriptionValidator(mapper));
+                worker, new ItemDescriptionValidator(mapper), meters);
     }
 
     private String envelope(String content) {

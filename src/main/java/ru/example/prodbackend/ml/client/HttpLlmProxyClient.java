@@ -1,6 +1,9 @@
 package ru.example.prodbackend.ml.client;
 
 import lombok.extern.slf4j.Slf4j;
+import io.micrometer.core.instrument.MeterRegistry;
+import org.slf4j.MDC;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.HttpStatus;
@@ -22,6 +25,8 @@ import java.util.concurrent.*;
 @Slf4j
 public class HttpLlmProxyClient implements LlmProxyClient {
     private static final int MAX_RESPONSE_BYTES = 64 * 1024;
+    private final MeterRegistry meters;
+    private final AtomicInteger active = new AtomicInteger();
     private final RestClient restClient;
     private final LlmProxyProperties properties;
     private final ExecutorService executor;
@@ -31,7 +36,16 @@ public class HttpLlmProxyClient implements LlmProxyClient {
 
     public HttpLlmProxyClient(@Qualifier("llmRestClient") RestClient restClient,
             LlmProxyProperties properties, @Qualifier("llmExecutor") ExecutorService executor,
-            ItemDescriptionValidator validator) throws IOException {
+            ItemDescriptionValidator validator, MeterRegistry meters) throws IOException {
+        this.meters = meters;
+        meters.gauge("movermate.llm.active", active);
+        for (String scenario : List.of("single", "multiple")) {
+            meters.counter("movermate.llm.overload", "scenario", scenario);
+            for (String outcome : List.of("success", "timeout", "overload", "upstream_error",
+                    "invalid_response", "not_recognized", "unavailable", "interrupted")) {
+                meters.timer("movermate.llm.operation", "scenario", scenario, "outcome", outcome);
+            }
+        }
         this.restClient = restClient;
         this.properties = properties;
         this.executor = executor;
@@ -44,41 +58,74 @@ public class HttpLlmProxyClient implements LlmProxyClient {
 
     @Override
     public ItemDescriptionResponse describe(byte[] image, String mime) {
-        return execute(() -> validator.validate(request(image, mime, false)));
+        return execute("single", () -> validator.validate(request(image, mime, false)));
     }
 
     @Override
     public ItemsDescriptionResponse describeItems(byte[] image, String mime) {
-        return execute(() -> validator.validateItems(request(image, mime, true)));
+        return execute("multiple", () -> validator.validateItems(request(image, mime, true)));
     }
 
-    private <T> T execute(Callable<T> operation) {
+    private <T> T execute(String scenario, Callable<T> operation) {
         long started = System.nanoTime();
         Future<T> pending = null;
+        String outcome = "unavailable";
+        Map<String, String> context = MDC.getCopyOfContextMap();
         try {
             if (properties.apiKey() == null || properties.apiKey().isBlank()) throw unavailable();
-            pending = executor.submit(operation);
+            pending = executor.submit(() -> {
+                Map<String, String> previous = MDC.getCopyOfContextMap();
+                active.incrementAndGet();
+                try {
+                    if (context == null) MDC.clear(); else MDC.setContextMap(context);
+                    return operation.call();
+                } finally {
+                    active.decrementAndGet();
+                    if (previous == null) MDC.clear(); else MDC.setContextMap(previous);
+                }
+            });
             T result = pending.get(properties.timeoutMs(), TimeUnit.MILLISECONDS);
-            log.info("LLM description model={} durationMs={} outcome=success", properties.model(), elapsed(started));
+            outcome = "success";
             return result;
         } catch (TimeoutException e) {
+            outcome = "timeout";
             throw logged(new MlException(HttpStatus.GATEWAY_TIMEOUT, "LLM_TIMEOUT",
                     "Превышено время ожидания LLM Proxy"), started);
         } catch (InterruptedException e) {
+            outcome = "interrupted";
             Thread.currentThread().interrupt();
             throw logged(unavailable(), started);
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
-            if (cause instanceof MlException error) throw logged(error, started);
-            if (hasTimeout(cause)) throw logged(new MlException(HttpStatus.GATEWAY_TIMEOUT,
-                    "LLM_TIMEOUT", "Превышено время ожидания LLM Proxy"), started);
+            if (cause instanceof MlException error) {
+                outcome = switch (error.getCode()) {
+                    case "LLM_TIMEOUT" -> "timeout";
+                    case "LLM_INVALID_RESPONSE" -> "invalid_response";
+                    case "IMAGE_NOT_RECOGNIZED" -> "not_recognized";
+                    default -> "upstream_error";
+                };
+                throw logged(error, started);
+            }
+            if (hasTimeout(cause)) {
+                outcome = "timeout";
+                throw logged(new MlException(HttpStatus.GATEWAY_TIMEOUT,
+                        "LLM_TIMEOUT", "Превышено время ожидания LLM Proxy"), started);
+            }
+            outcome = "upstream_error";
             throw logged(unavailable(), started);
         } catch (RejectedExecutionException e) {
+            outcome = "overload";
+            meters.counter("movermate.llm.overload", "scenario", scenario).increment();
             throw logged(unavailable(), started);
         } catch (MlException e) {
             throw logged(e, started);
         } finally {
             if (pending != null && !pending.isDone()) pending.cancel(true);
+            meters.timer("movermate.llm.operation", "scenario", scenario, "outcome", outcome)
+                    .record(System.nanoTime() - started, TimeUnit.NANOSECONDS);
+            log.atInfo().addKeyValue("event", "llm_operation_completed")
+                    .addKeyValue("scenario", scenario).addKeyValue("outcome", outcome)
+                    .addKeyValue("durationMs", elapsed(started)).log("LLM operation completed");
         }
     }
 
@@ -133,8 +180,9 @@ public class HttpLlmProxyClient implements LlmProxyClient {
     }
     private static long elapsed(long started) { return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started); }
     private MlException logged(MlException error, long started) {
-        log.warn("LLM description model={} durationMs={} outcome={} traceId={}",
-                properties.model(), elapsed(started), error.getCode(), error.getTraceId());
+        log.atWarn().addKeyValue("event", "llm_operation_error")
+                .addKeyValue("durationMs", elapsed(started)).addKeyValue("code", error.getCode())
+                .addKeyValue("traceId", error.getTraceId().toString()).log("LLM operation failed");
         return error;
     }
     private MlException unavailable() {
