@@ -10,4 +10,8 @@ public enum BoxStatus {
     public boolean canTransitionTo(BoxStatus next) {
         return next != null && (next == this || next.ordinal() == ordinal() + 1);
     }
+
+    public boolean canCorrectTo(BoxStatus target) {
+        return target != null && target.ordinal() < ordinal();
+    }
 }

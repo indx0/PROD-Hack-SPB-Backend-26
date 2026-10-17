@@ -29,7 +29,7 @@ public class ItemDescriptionService {
 
     private PhotoValidator.Photo validatePhoto(UUID userId, UUID projectId, MultipartFile photo) {
         // The access service's read transaction ends before waiting for the external API.
-        access.getOwnedProject(projectId, userId);
+        access.getAccessibleProject(projectId, userId);
         return photos.validate(photo);
     }
 }

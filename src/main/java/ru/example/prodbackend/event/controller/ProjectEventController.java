@@ -33,7 +33,7 @@ public class ProjectEventController {
     private final ProjectEventService eventService;
 
     @GetMapping
-    @Operation(summary = "Получить журнал своего проекта", description = "Новые события первыми: occurredAt DESC, id DESC. page от 0, size от 1 до 100; по умолчанию 0 и 20. Удаление объекта не удаляет его историю. Email, пароли и адреса в ответ не включаются.", responses = {
+    @Operation(summary = "Получить журнал своего проекта", description = "Новые события первыми: occurredAt DESC, id DESC. page от 0, size от 1 до 100; по умолчанию 0 и 20. BOX_STATUS_CORRECTED содержит previousStatus и newStatus; у остальных событий они null. Удаление объекта не удаляет его историю. Email, пароли и адреса в ответ не включаются.", responses = {
             @ApiResponse(responseCode = "200", description = "Страница событий"),
             @ApiResponse(responseCode = "400", description = "INVALID_REQUEST_PARAMETER: некорректный UUID", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "401", description = "UNAUTHORIZED: access токен отсутствует или недействителен", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),

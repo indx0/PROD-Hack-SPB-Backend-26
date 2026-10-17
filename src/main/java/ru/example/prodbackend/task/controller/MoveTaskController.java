@@ -47,10 +47,11 @@ public class MoveTaskController {
 
     @PostMapping
     @Operation(summary = "Создать задачу",
-            description = "Создаёт невыполненную задачу в своём проекте. Описание, срок и ответственный необязательны.",
+            description = "Создаёт невыполненную задачу доступного проекта. Без dueType используется FIXED, без dueDate — без срока. RELATIVE требует offsetDays и запрещает dueDate; срок считает сервер от даты переезда в UTC. FIXED запрещает offsetDays. Противоречия — 422.",
             responses = {
                     @ApiResponse(responseCode = "201", description = "Задача создана",
                             content = @Content(schema = @Schema(implementation = MoveTaskResponse.class))),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: переезд в архиве; сначала восстановите его", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: название пустое или длиннее 255 символов, этап отсутствует, описание длиннее 10000 или ответственный длиннее 255 символов",
                             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             })
@@ -92,10 +93,11 @@ public class MoveTaskController {
 
     @PatchMapping("/{taskId}")
     @Operation(summary = "Изменить задачу",
-            description = "Отсутствующие поля сохраняются. null очищает description, dueDate и assigneeName. null для title и stage, неизвестные поля и completed запрещены. Пустой объект запрещён; выполнение меняется отдельным запросом.",
+            description = "Отсутствующие поля сохраняются. Старый запрос с dueDate устанавливает FIXED и очищает offsetDays; dueDate:null снимает срок. RELATIVE запрещает dueDate, требует offsetDays при первом включении, иначе сохраняет текущее смещение. Изменение только offsetDays допустимо для RELATIVE. FIXED без dueDate сохраняет текущую дату. null для dueType и offsetDays запрещён. null очищает description и assigneeName. Пустой объект, неизвестные поля и completed запрещены; выполнение меняется отдельным запросом. Противоречивый срок — 422.",
             responses = {
                     @ApiResponse(responseCode = "200", description = "Задача обновлена",
                             content = @Content(schema = @Schema(implementation = MoveTaskResponse.class))),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: переезд в архиве; сначала восстановите его", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: пустой запрос, пустое название или превышение допустимой длины",
                             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             })
@@ -113,6 +115,7 @@ public class MoveTaskController {
             responses = {
                     @ApiResponse(responseCode = "200", description = "Задача с актуальным состоянием",
                             content = @Content(schema = @Schema(implementation = MoveTaskResponse.class))),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: переезд в архиве; сначала восстановите его", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: completed обязателен",
                             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             })
@@ -128,7 +131,8 @@ public class MoveTaskController {
     @Operation(summary = "Удалить задачу",
             description = "Удаляет задачу своего проекта. Подтверждение выполняется интерфейсом. Повторное удаление возвращает 404; история событий сохраняется.",
             responses = {
-                    @ApiResponse(responseCode = "204", description = "Задача удалена", content = @Content)
+                    @ApiResponse(responseCode = "204", description = "Задача удалена", content = @Content),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: переезд в архиве; сначала восстановите его", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             })
     public ResponseEntity<Void> delete(
             @PathVariable UUID projectId,
@@ -140,7 +144,7 @@ public class MoveTaskController {
 
     @GetMapping("/templates")
     @Operation(summary = "Получить готовые шаблоны задач",
-            description = "Общий локальный каталог, доступный владельцу проекта. Можно отфильтровать по stage. Сортировка title ASC, id ASC; общая пагинация.",
+            description = "Общий локальный каталог, доступный участнику проекта. Можно отфильтровать по stage. Сортировка title ASC, id ASC; общая пагинация.",
             responses = {
                     @ApiResponse(responseCode = "200", description = "Страница шаблонов"),
                     @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: некорректная пагинация; page >= 0, size от 1 до 100",
@@ -156,13 +160,13 @@ public class MoveTaskController {
 
     @PostMapping("/from-template")
     @Operation(summary = "Создать задачу из шаблона",
-            description = "Копирует название, описание и этап шаблона в новую невыполненную задачу. Срок и ответственного задаёт клиент. Один шаблон применяется один раз, пока соответствующая задача существует.",
+            description = "Копирует название, описание, этап и смещение шаблона в новую RELATIVE-задачу. Срок = дата переезда UTC + offsetDays; смещение сохраняется у задачи независимо от шаблона. Можно переопределить offsetDays или явно выбрать FIXED и dueDate; старый запрос только с dueDate также означает FIXED. dueDate:null задаёт FIXED без срока. Противоречивый срок — 422. Один шаблон применяется один раз, пока соответствующая задача существует.",
             responses = {
                     @ApiResponse(responseCode = "201", description = "Задача создана из шаблона",
                             content = @Content(schema = @Schema(implementation = MoveTaskResponse.class))),
                     @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект недоступен; TASK_TEMPLATE_NOT_FOUND: шаблон не найден",
                             content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: задача из этого шаблона уже существует в проекте",
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: задача из этого шаблона уже существует в проекте; для изменений — переезд в архиве, сначала восстановите его",
                             content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: templateId отсутствует или ответственный длиннее 255 символов",
                             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))

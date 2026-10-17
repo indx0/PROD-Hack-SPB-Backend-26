@@ -194,6 +194,7 @@ class BoxApiIntegrationTest {
 
     @Test
     void advancesThroughLifecycleAndRepeatsStatusesWithoutChangingTimestamp() throws Exception {
+        readyItem();
         for (String next : new String[]{"PACKING", "PACKED", "LOADED", "DELIVERED", "UNPACKED"}) {
             patchJson(boxUrl + "/status", "{\"status\":\"" + next + "\"}")
                     .andExpect(status().isOk())
@@ -212,6 +213,7 @@ class BoxApiIntegrationTest {
     @CsvSource({"PACKING, LOADED", "PACKING, DELIVERED", "PACKING, UNPACKED", "PACKED, PACKING"})
     void rejectsInvalidStatusTransitionWithoutPersistingIt(BoxStatus current, BoxStatus next) throws Exception {
         if (current == BoxStatus.PACKED) {
+            readyItem();
             patchJson(boxUrl + "/status", "{\"status\":\"PACKED\"}")
                     .andExpect(status().isOk());
         }
@@ -369,6 +371,12 @@ class BoxApiIntegrationTest {
     private BoxEntity reloadBox() {
         entityManager.clear();
         return entityManager.find(BoxEntity.class, box.getId());
+    }
+
+    private void readyItem() {
+        entityManager.persist(ItemEntity.builder().box(entityManager.getReference(BoxEntity.class, box.getId()))
+                .name("Чайник").packedAt(Instant.now()).unpackedAt(Instant.now()).build());
+        entityManager.flush();
     }
 
     private UserEntity user() {

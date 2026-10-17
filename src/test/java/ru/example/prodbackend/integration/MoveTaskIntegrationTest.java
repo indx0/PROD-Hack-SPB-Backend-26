@@ -267,7 +267,7 @@ class MoveTaskIntegrationTest extends AuthIntegrationTestSupport {
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsByteArray();
         UUID id = jsonMapper.readValue(body, MoveProjectResponse.class).getId();
         // Эти тесты проверяют собственные задачи и ручное применение шаблонов на пустом плане.
-        // Автозаполнение нового проекта отдельно проверяет MoveProjectBootstrapIntegrationTest.
+        // Добровольный выбор при создании отдельно проверяют MoveProjectBootstrapIntegrationTest и TaskSetIntegrationTest.
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> moveProjectRepository.deleteProjectTasks(id));
         return id;
     }

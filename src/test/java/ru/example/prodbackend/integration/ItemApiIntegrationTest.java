@@ -248,6 +248,155 @@ class ItemApiIntegrationTest {
     }
 
     @Test
+    void createsAndPersistsQuantityAndFirstDay() throws Exception {
+        String body = perform(post(collectionUrl), """
+                {"name":"Тарелки","quantity":6,"firstDay":true}
+                """)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.quantity").value(6))
+                .andExpect(jsonPath("$.firstDay").value(true))
+                .andReturn().getResponse().getContentAsString();
+
+        UUID id = UUID.fromString(jsonMapper.readTree(body).get("id").asText());
+        entityManager.clear();
+        ItemEntity saved = entityManager.find(ItemEntity.class, id);
+        assertThat(saved.getQuantity()).isEqualTo(6);
+        assertThat(saved.isFirstDay()).isTrue();
+
+        perform(get(collectionUrl), null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.id == '" + id + "')].quantity")
+                        .value(org.hamcrest.Matchers.contains(6)))
+                .andExpect(jsonPath("$.content[?(@.id == '" + id + "')].firstDay")
+                        .value(org.hamcrest.Matchers.contains(true)));
+        perform(get(projectUrl + "/items").param("q", "Тарелки"), null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].quantity").value(6))
+                .andExpect(jsonPath("$.content[0].firstDay").value(true));
+    }
+
+    @Test
+    void appliesDefaultsToSingleAndLegacyBatchRequests() throws Exception {
+        perform(post(collectionUrl), """
+                {"name":"Кабель"}
+                """)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.quantity").value(1))
+                .andExpect(jsonPath("$.firstDay").value(false));
+        perform(post(collectionUrl + "/batch"), """
+                {"names":["Кружка","Книга"]}
+                """)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$[0].quantity").value(1))
+                .andExpect(jsonPath("$[0].firstDay").value(false))
+                .andExpect(jsonPath("$[1].quantity").value(1))
+                .andExpect(jsonPath("$[1].firstDay").value(false));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "{\"name\":\"Вещь\",\"quantity\":0}",
+            "{\"name\":\"Вещь\",\"quantity\":-1}",
+            "{\"name\":\"Вещь\",\"quantity\":null}",
+            "{\"name\":\"Вещь\",\"firstDay\":null}"
+    })
+    void rejectsInvalidCreationFields(String body) throws Exception {
+        perform(post(collectionUrl), body).andExpect(status().is(422));
+        assertThat(countSourceItems()).isEqualTo(1);
+    }
+
+    @Test
+    void createsObjectBatchWithIndividualFieldsAndDefaults() throws Exception {
+        perform(post(collectionUrl + "/batch"), """
+                {"items":[
+                    {"name":"Тарелки","quantity":6,"firstDay":false},
+                    {"name":"Зарядка","quantity":2,"firstDay":true},
+                    {"name":"Книга"}
+                ]}
+                """)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$", hasSize(3)))
+                .andExpect(jsonPath("$[0].quantity").value(6))
+                .andExpect(jsonPath("$[0].firstDay").value(false))
+                .andExpect(jsonPath("$[1].quantity").value(2))
+                .andExpect(jsonPath("$[1].firstDay").value(true))
+                .andExpect(jsonPath("$[2].quantity").value(1))
+                .andExpect(jsonPath("$[2].firstDay").value(false));
+        entityManager.clear();
+        assertThat(countSourceItems()).isEqualTo(4);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "{\"items\":[]}",
+            "{\"items\":null}",
+            "{\"names\":[\"Вещь\"],\"items\":[{\"name\":\"Вещь\"}]}",
+            "{\"items\":[{\"name\":\"Хорошая\"},{\"name\":\"Плохая\",\"quantity\":0}]}",
+            "{\"items\":[{\"name\":\"Хорошая\"},{\"name\":\"Плохая\",\"quantity\":null}]}",
+            "{\"items\":[{\"name\":\"Хорошая\"},{\"name\":\"Плохая\",\"firstDay\":null}]}",
+            "{\"items\":[{\"name\":\"Хорошая\"},{\"name\":\" \"}]}",
+            "{\"items\":[{\"name\":\"Хорошая\"},null]}"
+    })
+    void rejectsEntireInvalidObjectBatch(String body) throws Exception {
+        perform(post(collectionUrl + "/batch"), body).andExpect(status().is(422));
+        assertThat(countSourceItems()).isEqualTo(1);
+    }
+
+    @Test
+    void rejectsObjectBatchOverOneHundredEntries() throws Exception {
+        String body = jsonMapper.writeValueAsString(
+                Map.of("items", Collections.nCopies(101, Map.of("name", "Вещь"))));
+        perform(post(collectionUrl + "/batch"), body).andExpect(status().is(422));
+        assertThat(countSourceItems()).isEqualTo(1);
+    }
+
+    @Test
+    void updatesNewFieldsIndependentlyAndPreservesThemOnOtherUpdates() throws Exception {
+        perform(patch(itemUrl), """
+                {"quantity":3}
+                """)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.quantity").value(3));
+        perform(patch(itemUrl), """
+                {"firstDay":true}
+                """)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.quantity").value(3))
+                .andExpect(jsonPath("$.firstDay").value(true));
+        perform(patch(itemUrl), """
+                {"name":"Кабель","lost":false}
+                """)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.quantity").value(3))
+                .andExpect(jsonPath("$.firstDay").value(true));
+        ItemEntity saved = reloadSource();
+        assertThat(saved.getQuantity()).isEqualTo(3);
+        assertThat(saved.isFirstDay()).isTrue();
+        perform(patch(itemUrl), """
+                {"firstDay":false}
+                """)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.quantity").value(3))
+                .andExpect(jsonPath("$.firstDay").value(false));
+        assertThat(reloadSource().isFirstDay()).isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"{\"quantity\":0}", "{\"quantity\":-1}"})
+    void rejectsInvalidQuantityPatch(String body) throws Exception {
+        perform(patch(itemUrl), body).andExpect(status().is(422));
+        assertThat(reloadSource().getQuantity()).isEqualTo(1);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"{\"quantity\":null}", "{\"firstDay\":null}"})
+    void rejectsExplicitNullsInNewPatchFields(String body) throws Exception {
+        perform(patch(itemUrl), body).andExpect(status().isBadRequest());
+        assertThat(reloadSource().getQuantity()).isEqualTo(1);
+        assertThat(reloadSource().isFirstDay()).isFalse();
+    }
+
+    @Test
     void createsBatchInInputOrderAndKeepsDuplicateNames() throws Exception {
         perform(post(collectionUrl + "/batch"), "{\"names\":[\" Кружка \",\"Тарелка\",\"Кружка\"]}")
                 .andExpect(status().isCreated())
@@ -447,7 +596,7 @@ class ItemApiIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"GET, list", "POST, create", "POST, batch", "PATCH, update", "DELETE, delete", "GET, suggestions"})
+    @CsvSource({"GET, list", "GET, detail", "POST, create", "POST, batch", "PATCH, update", "DELETE, delete", "GET, suggestions"})
     void deniesForeignUserForAllResourceOperations(String method, String operation) throws Exception {
         mockMvc.perform(operationRequest(method, operation)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtService.generateToken(stranger)))
@@ -466,7 +615,7 @@ class ItemApiIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"GET, list", "POST, create", "POST, batch", "PATCH, update", "DELETE, delete",
+    @CsvSource({"GET, list", "GET, detail", "POST, create", "POST, batch", "PATCH, update", "DELETE, delete",
             "GET, search", "GET, suggestions"})
     void requiresJwtOnEveryEndpoint(String method, String operation) throws Exception {
         mockMvc.perform(operationRequest(method, operation))
@@ -516,7 +665,7 @@ class ItemApiIntegrationTest {
         String url = switch (operation) {
             case "list", "create" -> collectionUrl;
             case "batch" -> collectionUrl + "/batch";
-            case "update", "delete" -> itemUrl;
+            case "detail", "update", "delete" -> itemUrl;
             case "search" -> projectUrl + "/items?q=зарядка";
             case "suggestions" -> projectUrl + "/items/" + source.getId() + "/suggestions";
             default -> throw new IllegalArgumentException(operation);

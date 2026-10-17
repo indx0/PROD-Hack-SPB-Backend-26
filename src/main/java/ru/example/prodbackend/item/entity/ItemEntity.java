@@ -6,6 +6,7 @@ import lombok.*;
 import ru.example.prodbackend.box.entity.BoxEntity;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 @Entity
@@ -36,11 +37,22 @@ public class ItemEntity {
     @Column(nullable = false)
     private boolean lost;
 
+    @Builder.Default
+    @Positive(message = "quantity not positive")
+    @Column(name = "quantity", nullable = false)
+    private int quantity = 1;
+
     @Column(nullable = false)
     private boolean fragile;
 
     @Column(name = "first_day", nullable = false)
     private boolean firstDay;
+
+    @Column(name = "packed_at")
+    private Instant packedAt;
+
+    @Column(name = "unpacked_at")
+    private Instant unpackedAt;
 
     @Column(name = "carry_personally", nullable = false)
     private boolean carryPersonally;
@@ -67,12 +79,12 @@ public class ItemEntity {
 
     @PrePersist
     protected void onCreate() {
-        createdAt = Instant.now();
+        createdAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
         updatedAt = createdAt;
     }
 
     @PreUpdate
     protected void onUpdate() {
-        updatedAt = Instant.now();
+        updatedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
     }
 }

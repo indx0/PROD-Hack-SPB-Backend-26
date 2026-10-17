@@ -10,6 +10,7 @@ import ru.example.prodbackend.box.dto.BoxFilter;
 import ru.example.prodbackend.box.dto.BoxResponse;
 import ru.example.prodbackend.box.dto.BoxSummaryResponse;
 import ru.example.prodbackend.box.dto.CreateBoxRequest;
+import ru.example.prodbackend.box.dto.CorrectBoxStatusRequest;
 import ru.example.prodbackend.box.dto.RoomBoxSummaryResponse;
 import ru.example.prodbackend.box.dto.UpdateBoxRequest;
 import ru.example.prodbackend.box.entity.BoxEntity;
@@ -25,11 +26,14 @@ import ru.example.prodbackend.exception.RequestValidationException;
 import ru.example.prodbackend.exception.ResourceConflictException;
 import ru.example.prodbackend.exception.RoomNotFoundException;
 import ru.example.prodbackend.item.repository.ItemRepository;
+import ru.example.prodbackend.item.repository.BoxItemCounts;
 import ru.example.prodbackend.move.service.ProjectAccessService;
 import ru.example.prodbackend.room.entity.RoomEntity;
 import ru.example.prodbackend.room.repository.RoomRepository;
 
 import java.util.EnumMap;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,7 +53,7 @@ public class BoxService {
 
     @Transactional
     public BoxResponse create(UUID userId, UUID projectId, CreateBoxRequest request) {
-        var project = projectAccessService.getOwnedProject(projectId, userId);
+        var project = projectAccessService.getAccessibleProjectForUpdate(projectId, userId);
         RoomEntity room = requireProjectRoom(request.getRoomId(), projectId);
 
         if (request.getNumber() == null || request.getNumber() <= 0) {
@@ -60,28 +64,33 @@ public class BoxService {
         }
 
         BoxEntity box = BoxEntity.builder().project(project).room(room).number(request.getNumber())
-                .contentsDeferred(request.isContentsDeferred()).build();
+                .contentsDeferred(request.isContentsDeferred()).title(request.getTitle().strip())
+                .fragile(request.isFragile()).firstDay(request.isFirstDay()).carryWithMe(request.isCarryWithMe()).build();
         boxRepository.saveAndFlush(box);
-        recordEvent(box, ProjectEventType.BOX_CREATED, "Создана коробка №" + box.getNumber() + ", комната: " + room.getName());
+        recordEvent(box, userId, ProjectEventType.BOX_CREATED, "Создана коробка №" + box.getNumber() + ", комната: " + room.getName());
         return toResponse(box);
     }
 
     public PageResponse<BoxResponse> findAll(UUID userId, UUID projectId, BoxFilter filter, PaginationRequest pagination) {
-        projectAccessService.getOwnedProject(projectId, userId);
+        projectAccessService.getAccessibleProject(projectId, userId);
 
         PageRequest pageable = PageRequest.of(pagination.getPage(), pagination.getSize(), Sort.by("number", "id"));
 
-        Page<BoxEntity> boxes = boxRepository.findAllByFilters(projectId, filter.getNumber(), filter.getRoomId(), filter.getStatus(), filter.getContentsDeferred(), pageable);
-        return PageResponse.from(boxes.map(this::toResponse));
+        Page<BoxEntity> boxes = boxRepository.findAllByFilters(projectId, filter.getNumber(), filter.getRoomId(), filter.getStatus(),
+                filter.getContentsDeferred(), filter.getFragile(), filter.getFirstDay(), filter.getCarryWithMe(), pageable);
+        Map<UUID, BoxItemCounts> counts = boxes.isEmpty() ? Map.of() : itemRepository.countByBoxIds(
+                boxes.getContent().stream().map(BoxEntity::getId).toList()).stream()
+                .collect(Collectors.toMap(BoxItemCounts::boxId, value -> value));
+        return PageResponse.from(boxes.map(box -> toResponse(box, counts.getOrDefault(box.getId(), emptyCounts(box.getId())))));
     }
 
     public BoxResponse findById(UUID userId, UUID projectId, UUID boxId) {
-        return toResponse(requireOwnedBox(userId, projectId, boxId, false));
+        return toResponse(requireAccessibleBox(userId, projectId, boxId, false));
     }
 
     @Transactional
     public BoxResponse update(UUID userId, UUID projectId, UUID boxId, UpdateBoxRequest request) {
-        BoxEntity box = requireOwnedBox(userId, projectId, boxId, true);
+        BoxEntity box = requireAccessibleBox(userId, projectId, boxId, true);
 
         if (!request.isUpdatePresent()) {
             throw new RequestValidationException("request", "Укажите хотя бы одно поле для изменения");
@@ -108,6 +117,10 @@ public class BoxService {
         if (request.getContentsDeferred() != null) {
             box.setContentsDeferred(request.getContentsDeferred());
         }
+        if (request.getTitle() != null) box.setTitle(request.getTitle().strip());
+        if (request.getFragile() != null) box.setFragile(request.getFragile());
+        if (request.getFirstDay() != null) box.setFirstDay(request.getFirstDay());
+        if (request.getCarryWithMe() != null) box.setCarryWithMe(request.getCarryWithMe());
 
         boxRepository.saveAndFlush(box);
         return toResponse(box);
@@ -115,7 +128,7 @@ public class BoxService {
 
     @Transactional
     public BoxResponse changeStatus(UUID userId, UUID projectId, UUID boxId, BoxStatus status) {
-        BoxEntity box = requireOwnedBox(userId, projectId, boxId, true);
+        BoxEntity box = requireAccessibleBox(userId, projectId, boxId, true);
         BoxStatus previousStatus = box.getStatus();
 
         if (status == null) {
@@ -130,16 +143,67 @@ public class BoxService {
             return toResponse(box);
         }
 
+        BoxItemCounts counts = itemCounts(box.getId());
+        if (status == BoxStatus.PACKED || status == BoxStatus.UNPACKED) {
+            boolean packing = status == BoxStatus.PACKED;
+            String action = packing ? "собрать" : "распаковать";
+            if (counts.totalItems() == 0) {
+                throw new ResourceConflictException("Нельзя " + action + " пустую коробку: добавьте хотя бы одну вещь");
+            }
+            long marked = packing ? counts.packedItems() : counts.unpackedItems();
+            if (marked != counts.totalItems()) {
+                throw new ResourceConflictException("Нельзя " + action + " коробку: " + (packing ? "упаковано " : "распаковано ")
+                        + marked + " из " + counts.totalItems() + " вещей");
+            }
+        }
         box.changeStatus(status);
         boxRepository.saveAndFlush(box);
 
-        recordEvent(box, ProjectEventType.BOX_STATUS_CHANGED, "Коробка №" + box.getNumber() + ": " + previousStatus + " → " + status);
-        return toResponse(box);
+        recordEvent(box, userId, ProjectEventType.BOX_STATUS_CHANGED, "Коробка №" + box.getNumber() + ": " + previousStatus + " → " + status);
+        return toResponse(box, counts);
+    }
+
+    @Transactional
+    public BoxResponse correctStatus(UUID userId, UUID projectId, UUID boxId, CorrectBoxStatusRequest request) {
+        BoxEntity box = requireAccessibleBox(userId, projectId, boxId, true);
+        if (request.getExpectedStatus() == null) throw new RequestValidationException("expectedStatus", "Укажите ожидаемый статус");
+        if (request.getTargetStatus() == null) throw new RequestValidationException("targetStatus", "Укажите целевой статус");
+        if (!Boolean.TRUE.equals(request.getConfirmed())) throw new RequestValidationException("confirmed", "Подтвердите исправление статуса");
+
+        BoxStatus previous = box.getStatus();
+        BoxStatus target = request.getTargetStatus();
+        if (previous == target) return toResponse(box);
+        if (previous != request.getExpectedStatus()) {
+            throw new ResourceConflictException("Статус коробки уже изменился: обновите данные и подтвердите исправление заново");
+        }
+        if (!previous.canCorrectTo(target)) {
+            throw new ResourceConflictException("Коррекция разрешена только назад; для следующего этапа используйте обычное изменение статуса");
+        }
+
+        BoxItemCounts counts = itemCounts(boxId);
+        if (target == BoxStatus.PACKED || target == BoxStatus.LOADED) {
+            if (counts.totalItems() == 0) throw new ResourceConflictException("Нельзя вернуть пустую коробку в " + target + "; выберите PACKING");
+            if (counts.packedItems() != counts.totalItems()) {
+                throw new ResourceConflictException("Нельзя вернуть коробку в " + target + ": упаковано " + counts.packedItems()
+                        + " из " + counts.totalItems() + " вещей; выберите PACKING");
+            }
+        }
+        boolean resetUnpacked = target == BoxStatus.PACKING || target == BoxStatus.PACKED || target == BoxStatus.LOADED;
+        if (resetUnpacked) {
+            itemRepository.clearUnpackedMarks(boxId, Instant.now().truncatedTo(ChronoUnit.MICROS));
+            counts = new BoxItemCounts(boxId, counts.totalItems(), counts.packedItems(), 0);
+        }
+        box.correctStatus(target);
+        boxRepository.saveAndFlush(box);
+        String description = "Исправлен статус коробки №" + box.getNumber() + ": " + previous + " → " + target
+                + (resetUnpacked ? ". Отметки распаковки сброшены." : ". Отметки распаковки сохранены.");
+        projectEventService.recordStatusCorrection(box, userId, previous, target, description);
+        return toResponse(box, counts);
     }
 
     @Transactional
     public void delete(UUID userId, UUID projectId, UUID boxId) {
-        BoxEntity box = requireOwnedBox(userId, projectId, boxId, true);
+        BoxEntity box = requireAccessibleBox(userId, projectId, boxId, true);
 
         itemRepository.deleteByBox_Id(boxId);
         boxRepository.delete(box);
@@ -147,7 +211,7 @@ public class BoxService {
     }
 
     public BoxSummaryResponse summary(UUID userId, UUID projectId) {
-        projectAccessService.getOwnedProject(projectId, userId);
+        projectAccessService.getAccessibleProject(projectId, userId);
 
         List<BoxEntity> boxes =
                 boxRepository.findAllByProject_IdOrderByNumberAscIdAsc(projectId);
@@ -173,8 +237,9 @@ public class BoxService {
                 .build();
     }
 
-    private BoxEntity requireOwnedBox(UUID userId, UUID projectId, UUID boxId, boolean forUpdate) {
-        projectAccessService.getOwnedProject(projectId, userId);
+    private BoxEntity requireAccessibleBox(UUID userId, UUID projectId, UUID boxId, boolean forUpdate) {
+        if (forUpdate) projectAccessService.getAccessibleProjectForUpdate(projectId, userId);
+        else projectAccessService.getAccessibleProject(projectId, userId);
         var box = forUpdate ? boxRepository.findForUpdate(boxId, projectId) : boxRepository.findByIdAndProject_Id(boxId, projectId);
         return box.orElseThrow(BoxNotFoundException::new);
     }
@@ -187,20 +252,36 @@ public class BoxService {
         return roomRepository.findForUpdate(roomId, projectId).orElseThrow(() -> new RoomNotFoundException("Комната не найдена в этом проекте"));
     }
 
-    private void recordEvent(BoxEntity box, ProjectEventType type, String description) {
-        // Доступ к коробке разрешён только владельцу проекта; событие сохраняется в транзакции изменения коробки.
-        projectEventService.record(box.getProject(), box.getProject().getOwner(), type, EventObjectType.BOX, box.getId(), description);
+    private void recordEvent(BoxEntity box, UUID actorId, ProjectEventType type, String description) {
+        projectEventService.recordByActorId(box.getProject(), actorId, type, EventObjectType.BOX, box.getId(), description);
     }
 
     private BoxResponse toResponse(BoxEntity box) {
+        return toResponse(box, itemCounts(box.getId()));
+    }
+
+    private BoxItemCounts itemCounts(UUID boxId) {
+        return itemRepository.countByBoxIds(List.of(boxId)).stream().findFirst().orElseGet(() -> emptyCounts(boxId));
+    }
+
+    private BoxItemCounts emptyCounts(UUID boxId) {
+        return new BoxItemCounts(boxId, 0, 0, 0);
+    }
+
+    private BoxResponse toResponse(BoxEntity box, BoxItemCounts counts) {
         return BoxResponse.builder()
                 .id(box.getId())
                 .projectId(box.getProject().getId())
                 .number(box.getNumber())
                 .roomId(box.getRoom().getId())
                 .roomName(box.getRoom().getName())
+                .roomIconKey(box.getRoom().getIconKey())
                 .status(box.getStatus())
                 .contentsDeferred(box.isContentsDeferred())
+                .title(box.getTitle()).fragile(box.isFragile()).firstDay(box.isFirstDay()).carryWithMe(box.isCarryWithMe())
+                .totalItems(counts.totalItems()).packedItems(counts.packedItems()).unpackedItems(counts.unpackedItems())
+                .readyToPack(box.getStatus() == BoxStatus.PACKING && counts.totalItems() > 0 && counts.packedItems() == counts.totalItems())
+                .readyToUnpack(box.getStatus() == BoxStatus.DELIVERED && counts.totalItems() > 0 && counts.unpackedItems() == counts.totalItems())
                 .createdAt(box.getCreatedAt())
                 .updatedAt(box.getUpdatedAt())
                 .build();
@@ -214,6 +295,7 @@ public class BoxService {
         return RoomBoxSummaryResponse.builder()
                 .roomId(room.getId())
                 .roomName(room.getName())
+                .roomIconKey(room.getIconKey())
                 .totalBoxes(boxes.size())
                 .countsByStatus(counts)
                 .unpackedBoxes(unpackedBoxes)

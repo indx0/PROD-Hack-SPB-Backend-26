@@ -21,6 +21,9 @@ public class RoomResponse {
     @Schema(description = "Название комнаты", example = "Кухня")
     private String name;
 
+    @Schema(types = {"string", "null"}, description = "Ключ значка; null — нет явного выбора. Для отсутствующего или неизвестного ключа клиент использует home", example = "kitchen")
+    private String iconKey;
+
     @Schema(description = "Дата создания")
     private Instant createdAt;
 

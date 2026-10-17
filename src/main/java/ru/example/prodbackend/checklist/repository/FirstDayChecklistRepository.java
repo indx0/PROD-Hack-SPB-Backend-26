@@ -12,7 +12,16 @@ import java.util.UUID;
 
 public interface FirstDayChecklistRepository extends JpaRepository<FirstDayChecklistItemEntity, UUID> {
 
+    @EntityGraph(attributePaths = {"item", "item.box", "item.box.room"})
     Page<FirstDayChecklistItemEntity> findAllByProject_Id(UUID projectId, Pageable pageable);
+
+    boolean existsByItem_IdAndIdNot(UUID itemId, UUID checklistItemId);
+
+    boolean existsByItem_Id(UUID itemId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select c from FirstDayChecklistItemEntity c where c.item.id = :itemId")
+    Optional<FirstDayChecklistItemEntity> findForUpdateByItemId(@Param("itemId") UUID itemId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select i from FirstDayChecklistItemEntity i where i.id = :itemId and i.project.id = :projectId")

@@ -27,6 +27,7 @@ import ru.example.prodbackend.item.dto.CreateItemsRequest;
 import ru.example.prodbackend.item.dto.ItemBoxSuggestionResponse;
 import ru.example.prodbackend.item.dto.ItemResponse;
 import ru.example.prodbackend.item.dto.UpdateItemRequest;
+import ru.example.prodbackend.item.dto.MoveItemRequest;
 import ru.example.prodbackend.item.service.ItemService;
 import ru.example.prodbackend.user.entity.UserEntity;
 
@@ -44,6 +45,8 @@ import java.util.UUID;
                 content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
         @ApiResponse(responseCode = "404", description = "Коробка или вещь не найдена либо недоступна пользователю",
                 content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+        @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: недопустимый статус коробки или изменившееся расположение вещи; для изменений — переезд в архиве, сначала восстановите его",
+                content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
         @ApiResponse(responseCode = "422", description = "Ошибка валидации запроса",
                 content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
 })
@@ -51,9 +54,19 @@ public class ItemController {
 
     private final ItemService itemService;
 
+    @Operation(summary = "Получение карточки вещи",
+            description = "Возвращает вещь доступного участнику проекта, включая отметки упаковки и распаковки.",
+            responses = @ApiResponse(responseCode = "200", description = "Карточка вещи",
+                    content = @Content(schema = @Schema(implementation = ItemResponse.class))))
+    @GetMapping("/boxes/{boxId}/items/{itemId}")
+    public ResponseEntity<ItemResponse> findById(@Parameter(hidden = true) @AuthenticationPrincipal UserEntity user,
+            @PathVariable UUID projectId, @PathVariable UUID boxId, @PathVariable UUID itemId) {
+        return ResponseEntity.ok(itemService.findById(user.getId(), projectId, boxId, itemId));
+    }
+
     @Operation(summary = "Получение содержимого коробки",
             description = """
-                    Возвращает страницу вещей коробки владельца проекта.
+                    Возвращает страницу вещей коробки доступного участнику проекта.
                     page начинается с 0, size — от 1 до 100, по умолчанию 20.
                     Сортировка фиксирована: createdAt ASC, id ASC; параметр sort игнорируется.
                     """,
@@ -71,10 +84,16 @@ public class ItemController {
     @Operation(summary = "Добавление вещи в коробку",
             description = """
                     Название обязательно, до 255 символов. Пробелы по краям удаляются.
+                    quantity — положительное целое, по умолчанию 1; firstDay — по умолчанию false.
+                    Явный null для quantity или firstDay запрещён (422).
+                    firstDay не создаёт и не удаляет пункты чек-листа.
                     Новая вещь не помечена потерянной. Одинаковые названия допустимы.
-                    Необязательный flags: fragile, first_day, carry_personally без повторов.
-                    Без flags сохраняется пустой набор; null недопустим.
+                    flags принимает fragile, first_day, carry_personally без повторов; null запрещён.
+                    first_day и firstDay обозначают один признак; противоречие в запросе — 422.
+                    Без flags и firstDay метки отсутствуют.
+                    Отметки упаковки и распаковки отсутствуют; время задаётся сервером через PATCH.
                     Добавление не изменяет статус коробки и contentsDeferred.
+                    Добавление разрешено только в PACKING; после сборки возвращается 409.
                     """,
             responses = @ApiResponse(responseCode = "201", description = "Вещь добавлена",
                     content = @Content(schema = @Schema(implementation = ItemResponse.class))))
@@ -91,7 +110,12 @@ public class ItemController {
 
     @Operation(summary = "Быстрый ввод нескольких вещей",
             description = """
-                    Принимает names: от 1 до 100 непустых названий, каждое до 255 символов.
+                    Принимает ровно один список: names (названия) или items (объекты вещей).
+                    В каждом списке от 1 до 100 записей. Название обязательно, до 255 символов.
+                    В items доступны quantity (по умолчанию 1) и firstDay (по умолчанию false).
+                    Для names используются quantity=1 и firstDay=false.
+                    Все новые вещи создаются без отметок упаковки и распаковки.
+                    Добавление разрешено только в PACKING; после сборки возвращается 409.
                     Весь список сохраняется в одной транзакции; при ошибке ничего не добавляется.
                     Пробелы по краям удаляются, повторяющиеся названия сохраняются отдельными вещами.
                     Результат соответствует порядку входного списка.
@@ -108,17 +132,32 @@ public class ItemController {
                 .body(itemService.createBatch(user.getId(), projectId, boxId, request));
     }
 
-    @Operation(summary = "Изменение вещи, меток и отметки потери",
+    @Operation(summary = "Изменение вещи и отметок потери, упаковки и распаковки",
             description = """
-                    flags заменяет весь набор меток; [] снимает все, отсутствие сохраняет текущие.
-                    Допустимы fragile, first_day, carry_personally без повторов; null запрещён.
-                    Изменяет name, flags и/или lost. lost=true помечает вещь потерянной, false снимает отметку.
+                    Изменяет name, lost, quantity, firstDay, flags, packed и unpacked в любом сочетании.
+                    flags заменяет все метки; [] снимает все, отсутствие сохраняет их.
+                    firstDay меняет только признак первого дня. При противоречии с flags.first_day — 422.
+                    Снятие first_day через flags также отвязывает вещь от чек-листа, сохраняя пункт.
+                    packed изменяется только в коробке PACKING, unpacked — только в DELIVERED; иначе 409.
+                    true устанавливает серверное время, false очищает. Отметка относится ко всему quantity.
+                    Повтор уже установленного состояния успешен в любом статусе и сохраняет время.
+                    При конфликте ни одно поле запроса не изменяется. Статус коробки автоматически не меняется.
+                    quantity — положительное целое. lost=true помечает вещь потерянной.
+                    Изменение quantity разрешено только в PACKING и сбрасывает packedAt, даже при packed=true в том же запросе.
+                    Повтор того же quantity не сбрасывает отметку и допустим в любом статусе.
+                    name, lost и firstDay доступны в любом статусе и не сбрасывают отметки.
+                    firstDay=false снимает связь с пунктом первого дня, сохраняя сам пункт, его название и выполнение.
+                    firstDay не создаёт и не удаляет пункты чек-листа.
                     Отсутствующие поля сохраняют значения. Неизвестные поля игнорируются.
-                    Запрос без поддерживаемых полей и явный null запрещены.
-                    Перенос вещи в другую коробку не поддерживается.
+                    Запрос без поддерживаемых полей запрещён (422), явный null запрещён (400).
+                    Для переноса вещи используется отдельный PUT /boxes/{sourceBoxId}/items/{itemId}/box.
                     """,
-            responses = @ApiResponse(responseCode = "200", description = "Вещь обновлена",
-                    content = @Content(schema = @Schema(implementation = ItemResponse.class))))
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Вещь обновлена",
+                            content = @Content(schema = @Schema(implementation = ItemResponse.class))),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: недопустимый статус коробки для изменения отметки; для изменений — переезд в архиве, сначала восстановите его",
+                            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+            })
     @PatchMapping("/boxes/{boxId}/items/{itemId}")
     public ResponseEntity<ItemResponse> update(
             @Parameter(hidden = true) @AuthenticationPrincipal UserEntity user,
@@ -130,8 +169,25 @@ public class ItemController {
         return ResponseEntity.ok(itemService.update(user.getId(), projectId, boxId, itemId, request));
     }
 
+    @Operation(summary = "Перенести вещь в другую коробку",
+            description = """
+                    Обе коробки должны принадлежать этому проекту и находиться в PACKING.
+                    Переносится вся запись: UUID, название, quantity, lost, firstDay, отметки и связь с чек-листом сохраняются.
+                    Статусы коробок автоматически не меняются. Ответ содержит новое расположение.
+                    Если вещь уже в целевой коробке, возвращает успех без изменения времени в любом статусе.
+                    Если вещь находится в третьей коробке, возвращает 409. При отказе данные сохраняются.
+                    """,
+            responses = @ApiResponse(responseCode = "200", description = "Вещь с актуальным расположением",
+                    content = @Content(schema = @Schema(implementation = ItemResponse.class))))
+    @PutMapping("/boxes/{sourceBoxId}/items/{itemId}/box")
+    public ResponseEntity<ItemResponse> move(@Parameter(hidden = true) @AuthenticationPrincipal UserEntity user,
+            @PathVariable UUID projectId, @PathVariable UUID sourceBoxId, @PathVariable UUID itemId,
+            @Valid @RequestBody MoveItemRequest request) {
+        return ResponseEntity.ok(itemService.move(user.getId(), projectId, sourceBoxId, itemId, request));
+    }
+
     @Operation(summary = "Удаление вещи",
-            description = "Удаляет отдельную вещь после проверки владельца. Подтверждение показывает клиент.",
+            description = "Удаляет вещь только в коробке PACKING, после проверки участия в проекте. Иначе 409. Подтверждение показывает клиент.",
             responses = @ApiResponse(responseCode = "204", description = "Вещь удалена", content = @Content))
     @DeleteMapping("/boxes/{boxId}/items/{itemId}")
     public ResponseEntity<Void> delete(

@@ -145,7 +145,7 @@ class BoxLifecycleIntegrationTest extends AuthIntegrationTestSupport {
         BoxResponse box = create(project.getId(), room.getId(), 1, true);
         Instant createdAt = boxRepository.findById(box.getId()).orElseThrow().getCreatedAt();
         RoomEntity bedroom = room(project, "Спальня");
-        var item = itemRepository.saveAndFlush(ItemEntity.builder().box(boxRepository.findById(box.getId()).orElseThrow()).name("Чайник").build());
+        var item = readyItem(box);
         changeStatus(box.getId(), BoxStatus.PACKED).andExpect(status().isOk());
 
         update(box.getId(), jsonMapper.writeValueAsString(Map.of("roomId", bedroom.getId())))
@@ -180,6 +180,7 @@ class BoxLifecycleIntegrationTest extends AuthIntegrationTestSupport {
     @Test
     void recordsOnlyActualStatusTransitions() throws Exception {
         BoxResponse box = create(project.getId(), room.getId(), 1, false);
+        readyItem(box);
         long expectedEvents = 1;
         for (BoxStatus next : BoxStatus.values()) {
             changeStatus(box.getId(), next).andExpect(status().isOk());
@@ -211,6 +212,7 @@ class BoxLifecycleIntegrationTest extends AuthIntegrationTestSupport {
         assertEquals(0L, eventRepository.count());
 
         BoxResponse box = create(project.getId(), room.getId(), 1, false);
+        readyItem(box);
         transaction.executeWithoutResult(status -> {
             boxService.changeStatus(project.getOwner().getId(), project.getId(), box.getId(), BoxStatus.PACKED);
             eventRepository.flush();
@@ -244,6 +246,11 @@ class BoxLifecycleIntegrationTest extends AuthIntegrationTestSupport {
         });
         assertTrue(boxRepository.existsById(box.getId()));
         assertTrue(itemRepository.existsById(preserved.getId()));
+    }
+
+    private ItemEntity readyItem(BoxResponse box) {
+        return itemRepository.saveAndFlush(ItemEntity.builder().box(boxRepository.findById(box.getId()).orElseThrow())
+                .name("Чайник").packedAt(Instant.now()).unpackedAt(Instant.now()).build());
     }
 
     private MoveProjectEntity project() {

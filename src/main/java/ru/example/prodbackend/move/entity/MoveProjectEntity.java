@@ -6,6 +6,7 @@ import lombok.*;
 import ru.example.prodbackend.user.entity.UserEntity;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 @Entity
@@ -42,6 +43,9 @@ public class MoveProjectEntity {
     @Column(name = "destination_address", nullable = true, length = 1000)
     private String destinationAddress;
 
+    @Column(name = "archived_at")
+    private Instant archivedAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -50,12 +54,12 @@ public class MoveProjectEntity {
 
     @PrePersist
     protected void onCreate() {
-        createdAt = Instant.now();
+        createdAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
         updatedAt = createdAt;
     }
 
     @PreUpdate
     protected void onUpdate() {
-        updatedAt = Instant.now();
+        updatedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
     }
 }

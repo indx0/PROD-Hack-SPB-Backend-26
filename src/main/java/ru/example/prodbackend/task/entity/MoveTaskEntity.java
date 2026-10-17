@@ -4,9 +4,11 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.*;
 import ru.example.prodbackend.move.entity.MoveProjectEntity;
+import ru.example.prodbackend.taskset.entity.TaskSetApplicationEntity;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 @Entity
@@ -50,6 +52,15 @@ public class MoveTaskEntity {
     @Column(name = "due_date")
     private LocalDate dueDate;
 
+    @Builder.Default
+    @NotNull
+    @Enumerated(EnumType.STRING)
+    @Column(name = "due_type", nullable = false, length = 16)
+    private TaskDueType dueType = TaskDueType.FIXED;
+
+    @Column(name = "offset_days")
+    private Integer offsetDays;
+
     @Size(max = 255)
     @Column(name = "assignee_name", nullable = true, length = 255)
     private String assigneeName;
@@ -61,6 +72,13 @@ public class MoveTaskEntity {
     @JoinColumn(name = "template_id", nullable = true)
     private TaskTemplateEntity template;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "task_set_application_id")
+    private TaskSetApplicationEntity taskSetApplication;
+
+    @Column(name = "task_set_position")
+    private Integer taskSetPosition;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -69,12 +87,12 @@ public class MoveTaskEntity {
 
     @PrePersist
     protected void onCreate() {
-        createdAt = Instant.now();
+        createdAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
         updatedAt = createdAt;
     }
 
     @PreUpdate
     protected void onUpdate() {
-        updatedAt = Instant.now();
+        updatedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
     }
 }

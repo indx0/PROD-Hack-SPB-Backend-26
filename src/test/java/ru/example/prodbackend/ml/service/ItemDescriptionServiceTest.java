@@ -19,7 +19,7 @@ class ItemDescriptionServiceTest {
         var photos = mock(PhotoValidator.class);
         var client = mock(LlmProxyClient.class);
         var user = UUID.randomUUID(); var project = UUID.randomUUID();
-        when(access.getOwnedProject(project, user)).thenThrow(new MoveProjectNotFoundException("missing"));
+        when(access.getAccessibleProject(project, user)).thenThrow(new MoveProjectNotFoundException("missing"));
         assertThatThrownBy(() -> new ItemDescriptionService(access, photos, client).describe(user, project, null))
                 .isInstanceOf(MoveProjectNotFoundException.class);
         assertThatThrownBy(() -> new ItemDescriptionService(access, photos, client).describeItems(user, project, null))
@@ -38,7 +38,7 @@ class ItemDescriptionServiceTest {
         assertThat(new ItemDescriptionService(access, new PhotoValidator(), client)
                 .describe(user, project, new MockMultipartFile("photo", bytes))).isEqualTo(response);
         var ordered = inOrder(access, client);
-        ordered.verify(access).getOwnedProject(project, user);
+        ordered.verify(access).getAccessibleProject(project, user);
         ordered.verify(client).describe(bytes, "image/jpeg");
     }
     @Test
@@ -53,7 +53,7 @@ class ItemDescriptionServiceTest {
         var service = new ItemDescriptionService(access, new PhotoValidator(), client);
         assertThat(service.describeItems(user, project, new MockMultipartFile("photo", bytes))).isEqualTo(response);
         var ordered = inOrder(access, client);
-        ordered.verify(access).getOwnedProject(project, user);
+        ordered.verify(access).getAccessibleProject(project, user);
         ordered.verify(client).describeItems(bytes, "image/jpeg");
         clearInvocations(client);
         assertThatThrownBy(() -> service.describeItems(user, project, new MockMultipartFile("photo", new byte[0])))

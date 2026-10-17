@@ -15,16 +15,19 @@ import ru.example.prodbackend.event.service.ProjectEventService;
 import ru.example.prodbackend.exception.UserNotFoundException;
 import ru.example.prodbackend.move.dto.request.CreateMoveProjectRequest;
 import ru.example.prodbackend.move.dto.request.UpdateMoveProjectRequest;
+import ru.example.prodbackend.move.dto.request.RescheduleMoveProjectRequest;
+import ru.example.prodbackend.move.dto.response.RescheduleMoveProjectResponse;
 import ru.example.prodbackend.move.dto.response.MoveProjectResponse;
 import ru.example.prodbackend.move.entity.MoveProjectEntity;
 import ru.example.prodbackend.move.repository.MoveProjectRepository;
 import ru.example.prodbackend.user.entity.UserEntity;
 import ru.example.prodbackend.user.repository.UserRepository;
-import ru.example.prodbackend.task.entity.MoveTaskEntity;
 import ru.example.prodbackend.task.repository.MoveTaskRepository;
-import ru.example.prodbackend.task.service.TaskTemplateService;
+import ru.example.prodbackend.task.service.MoveTaskService;
+import ru.example.prodbackend.taskset.service.TaskSetService;
 
-import java.time.ZoneOffset;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 @Service
@@ -36,13 +39,16 @@ public class MoveProjectService {
     private final UserRepository userRepository;
     private final ProjectAccessService projectAccessService;
     private final ProjectEventService projectEventService;
-    private final TaskTemplateService taskTemplateService;
     private final MoveTaskRepository moveTaskRepository;
     private final FirstDayChecklistService checklistService;
+    private final ProjectParticipantService participantService;
+    private final MoveTaskService moveTaskService;
+    private final TaskSetService taskSetService;
 
     @Transactional
     public MoveProjectResponse createMoveProject(CreateMoveProjectRequest request, UserEntity user) {
         UserEntity owner = userRepository.findById(user.getId()).orElseThrow(() -> new UserNotFoundException("Current user not found"));
+        var participants = participantService.resolveUsers(request.getParticipants());
 
         MoveProjectEntity project = MoveProjectEntity.builder()
                 .owner(owner)
@@ -53,10 +59,8 @@ public class MoveProjectService {
                 .build();
 
         MoveProjectEntity savedProject = moveProjectRepository.save(project);
-        var moveDate = savedProject.getMoveDate().atOffset(ZoneOffset.UTC).toLocalDate();
-        moveTaskRepository.saveAll(taskTemplateService.getDefaultTemplates().stream().map(template -> MoveTaskEntity.builder()
-                .project(savedProject).template(template).title(template.getTitle()).description(template.getDescription()).stage(template.getStage())
-                .dueDate(moveDate.plusDays(template.getDueDateOffsetDays())).build()).toList());
+        participantService.addInitialParticipants(savedProject, participants);
+        taskSetService.applyInitialSets(savedProject, request.getTaskSetIds(), owner.getId());
         checklistService.createDefaults(savedProject);
         projectEventService.record(savedProject, owner, ProjectEventType.PROJECT_CREATED, EventObjectType.PROJECT,
                 savedProject.getId(), "Создан проект переезда «" + savedProject.getName() + "»");
@@ -64,21 +68,21 @@ public class MoveProjectService {
         return toResponse(savedProject);
     }
 
-    public PageResponse<MoveProjectResponse> getMoveProjects(PaginationRequest request, UserEntity user) {
+    public PageResponse<MoveProjectResponse> getMoveProjects(PaginationRequest request, Boolean archived, UserEntity user) {
         Sort sort = Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"));
         PageRequest pageable = PageRequest.of(request.getPage(), request.getSize(), sort);
-        Page<MoveProjectEntity> projects = moveProjectRepository.findAllByOwner_Id(user.getId(), pageable);
+        Page<MoveProjectEntity> projects = moveProjectRepository.findAllByArchiveFilter(user.getId(), archived, pageable);
 
         return PageResponse.from(projects.map(this::toResponse));
     }
 
     public MoveProjectResponse getMoveProject(UUID projectId, UserEntity user) {
-        return toResponse(projectAccessService.getOwnedProject(projectId, user.getId()));
+        return toResponse(projectAccessService.getAccessibleProject(projectId, user.getId()));
     }
 
     @Transactional
     public MoveProjectResponse updateMoveProject(UUID projectId, UpdateMoveProjectRequest request, UserEntity user) {
-        MoveProjectEntity project = projectAccessService.getOwnedProject(projectId, user.getId());
+        MoveProjectEntity project = projectAccessService.getAccessibleProjectForUpdate(projectId, user.getId());
 
         if (request.getName() != null) {
             project.setName(request.getName().strip());
@@ -101,8 +105,19 @@ public class MoveProjectService {
     }
 
     @Transactional
+    public RescheduleMoveProjectResponse rescheduleMoveProject(UUID projectId, RescheduleMoveProjectRequest request, UserEntity user) {
+        var project = projectAccessService.getAccessibleProjectForUpdate(projectId, user.getId());
+        var moveDate = request.getMoveDate().truncatedTo(ChronoUnit.MICROS);
+        var tasks = moveTaskService.rescheduleTasks(projectId, request.getTaskIds(), moveDate);
+        // Проверяем задачи и при совпадении даты проекта; выбранные сроки могли ещё не пересчитываться.
+        project.setMoveDate(moveDate);
+        moveProjectRepository.flush();
+        return new RescheduleMoveProjectResponse(toResponse(project), tasks);
+    }
+
+    @Transactional
     public void deleteMoveProject(UUID projectId, UserEntity user) {
-        MoveProjectEntity project = projectAccessService.getOwnedProject(projectId, user.getId());
+        MoveProjectEntity project = projectAccessService.getAccessibleProjectForUpdate(projectId, user.getId());
 
         // Порядок важен из-за внешних ключей.
         moveProjectRepository.deleteProjectItems(projectId);
@@ -116,13 +131,35 @@ public class MoveProjectService {
         moveProjectRepository.flush();
     }
 
+    @Transactional
+    public MoveProjectResponse archiveMoveProject(UUID projectId, UserEntity user) {
+        return changeArchiveState(projectId, user, true);
+    }
+
+    @Transactional
+    public MoveProjectResponse restoreMoveProject(UUID projectId, UserEntity user) {
+        return changeArchiveState(projectId, user, false);
+    }
+
+    private MoveProjectResponse changeArchiveState(UUID projectId, UserEntity user, boolean archived) {
+        var project = projectAccessService.lockAccessibleProject(projectId, user.getId());
+        if ((project.getArchivedAt() != null) == archived) return toResponse(project);
+        project.setArchivedAt(archived ? Instant.now().truncatedTo(ChronoUnit.MICROS) : null);
+        moveProjectRepository.saveAndFlush(project);
+        projectEventService.record(project, user, archived ? ProjectEventType.PROJECT_ARCHIVED : ProjectEventType.PROJECT_RESTORED,
+                EventObjectType.PROJECT, projectId, (archived ? "Архивирован" : "Восстановлен") + " проект переезда «" + project.getName() + "»");
+        return toResponse(project);
+    }
+
     private MoveProjectResponse toResponse(MoveProjectEntity project) {
         return MoveProjectResponse.builder()
                 .id(project.getId())
+                .ownerId(project.getOwner().getId())
                 .name(project.getName())
                 .moveDate(project.getMoveDate())
                 .originAddress(project.getOriginAddress())
                 .destinationAddress(project.getDestinationAddress())
+                .archived(project.getArchivedAt() != null).archivedAt(project.getArchivedAt())
                 .createdAt(project.getCreatedAt())
                 .updatedAt(project.getUpdatedAt())
                 .build();

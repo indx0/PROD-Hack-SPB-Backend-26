@@ -105,7 +105,7 @@ class ProgressIntegrationTest extends AuthIntegrationTestSupport {
     }
 
     @Test
-    void countsInitialTasksWithoutAddingTemplatesOrChecklistItems() throws Exception {
+    void countsNoTasksWithoutExplicitSelectionAndKeepsChecklistSeparate() throws Exception {
         templateInitializer.run(new DefaultApplicationArguments(new String[0]));
         byte[] body = mockMvc.perform(post("/api/move-projects")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
@@ -115,7 +115,7 @@ class ProgressIntegrationTest extends AuthIntegrationTestSupport {
         assertEquals(4, checklistRepository.count());
 
         summary(createdProjectId.toString(), "tasks", token).andExpect(status().isOk())
-                .andExpect(content().json("{\"totalTasks\":11,\"completedTasks\":0}"));
+                .andExpect(content().json("{\"totalTasks\":0,\"completedTasks\":0}"));
     }
 
     @Test
