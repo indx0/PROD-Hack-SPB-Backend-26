@@ -49,6 +49,9 @@ public interface BoxRepository extends JpaRepository<BoxEntity, UUID> {
                       and (:roomId is null or b.room.id = :roomId)
                       and (:status is null or b.status = :status)
                       and (:contentsDeferred is null or b.contentsDeferred = :contentsDeferred)
+                      and (:fragile is null or b.fragile = :fragile)
+                      and (:firstDay is null or b.firstDay = :firstDay)
+                      and (:carryWithMe is null or b.carryWithMe = :carryWithMe)
                     """,
             countQuery = """
                     select count(b)
@@ -58,6 +61,9 @@ public interface BoxRepository extends JpaRepository<BoxEntity, UUID> {
                       and (:roomId is null or b.room.id = :roomId)
                       and (:status is null or b.status = :status)
                       and (:contentsDeferred is null or b.contentsDeferred = :contentsDeferred)
+                      and (:fragile is null or b.fragile = :fragile)
+                      and (:firstDay is null or b.firstDay = :firstDay)
+                      and (:carryWithMe is null or b.carryWithMe = :carryWithMe)
                     """
     )
     Page<BoxEntity> findAllByFilters(
@@ -66,6 +72,9 @@ public interface BoxRepository extends JpaRepository<BoxEntity, UUID> {
             @Param("roomId") UUID roomId,
             @Param("status") BoxStatus status,
             @Param("contentsDeferred") Boolean contentsDeferred,
+            @Param("fragile") Boolean fragile,
+            @Param("firstDay") Boolean firstDay,
+            @Param("carryWithMe") Boolean carryWithMe,
             Pageable pageable
     );
 

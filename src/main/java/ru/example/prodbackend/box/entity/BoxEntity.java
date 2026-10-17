@@ -52,6 +52,21 @@ public class BoxEntity {
     @Column(name = "contents_deferred", nullable = false)
     private boolean contentsDeferred;
 
+    @Builder.Default
+    @NotNull
+    @Size(max = 255)
+    @Column(name = "title", nullable = false, length = 255)
+    private String title = "";
+
+    @Column(name = "fragile", nullable = false)
+    private boolean fragile;
+
+    @Column(name = "first_day", nullable = false)
+    private boolean firstDay;
+
+    @Column(name = "carry_with_me", nullable = false)
+    private boolean carryWithMe;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

@@ -61,7 +61,8 @@ public class BoxService {
         }
 
         BoxEntity box = BoxEntity.builder().project(project).room(room).number(request.getNumber())
-                .contentsDeferred(request.isContentsDeferred()).build();
+                .contentsDeferred(request.isContentsDeferred()).title(request.getTitle().strip())
+                .fragile(request.isFragile()).firstDay(request.isFirstDay()).carryWithMe(request.isCarryWithMe()).build();
         boxRepository.saveAndFlush(box);
         recordEvent(box, ProjectEventType.BOX_CREATED, "Создана коробка №" + box.getNumber() + ", комната: " + room.getName());
         return toResponse(box);
@@ -72,7 +73,8 @@ public class BoxService {
 
         PageRequest pageable = PageRequest.of(pagination.getPage(), pagination.getSize(), Sort.by("number", "id"));
 
-        Page<BoxEntity> boxes = boxRepository.findAllByFilters(projectId, filter.getNumber(), filter.getRoomId(), filter.getStatus(), filter.getContentsDeferred(), pageable);
+        Page<BoxEntity> boxes = boxRepository.findAllByFilters(projectId, filter.getNumber(), filter.getRoomId(), filter.getStatus(),
+                filter.getContentsDeferred(), filter.getFragile(), filter.getFirstDay(), filter.getCarryWithMe(), pageable);
         Map<UUID, BoxItemCounts> counts = boxes.isEmpty() ? Map.of() : itemRepository.countByBoxIds(
                 boxes.getContent().stream().map(BoxEntity::getId).toList()).stream()
                 .collect(Collectors.toMap(BoxItemCounts::boxId, value -> value));
@@ -112,6 +114,10 @@ public class BoxService {
         if (request.getContentsDeferred() != null) {
             box.setContentsDeferred(request.getContentsDeferred());
         }
+        if (request.getTitle() != null) box.setTitle(request.getTitle().strip());
+        if (request.getFragile() != null) box.setFragile(request.getFragile());
+        if (request.getFirstDay() != null) box.setFirstDay(request.getFirstDay());
+        if (request.getCarryWithMe() != null) box.setCarryWithMe(request.getCarryWithMe());
 
         boxRepository.saveAndFlush(box);
         return toResponse(box);
@@ -230,6 +236,7 @@ public class BoxService {
                 .roomName(box.getRoom().getName())
                 .status(box.getStatus())
                 .contentsDeferred(box.isContentsDeferred())
+                .title(box.getTitle()).fragile(box.isFragile()).firstDay(box.isFirstDay()).carryWithMe(box.isCarryWithMe())
                 .totalItems(counts.totalItems()).packedItems(counts.packedItems()).unpackedItems(counts.unpackedItems())
                 .readyToPack(box.getStatus() == BoxStatus.PACKING && counts.totalItems() > 0 && counts.packedItems() == counts.totalItems())
                 .readyToUnpack(box.getStatus() == BoxStatus.DELIVERED && counts.totalItems() > 0 && counts.unpackedItems() == counts.totalItems())

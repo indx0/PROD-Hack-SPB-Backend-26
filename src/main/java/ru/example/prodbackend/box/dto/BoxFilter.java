@@ -28,4 +28,11 @@ public class BoxFilter {
 
     @Schema(description = "Признак отложенного заполнения содержимого")
     private Boolean contentsDeferred;
+
+    @Schema(description = "Точное соответствие признаку хрупкости; без параметра не фильтруется")
+    private Boolean fragile;
+    @Schema(description = "Точное соответствие признаку первого дня; без параметра не фильтруется")
+    private Boolean firstDay;
+    @Schema(description = "Точное соответствие признаку «везу с собой»; без параметра не фильтруется")
+    private Boolean carryWithMe;
 }

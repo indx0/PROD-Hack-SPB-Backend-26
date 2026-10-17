@@ -111,7 +111,7 @@ class BoxRepositoryIntegrationTest {
         }
 
         Page<BoxEntity> result = boxRepository.findAllByFilters(
-                project.getId(), number, roomId, status, deferred,
+                project.getId(), number, roomId, status, deferred, null, null, null,
                 PageRequest.of(0, 20, Sort.by("number", "id"))
         );
 
@@ -127,7 +127,7 @@ class BoxRepositoryIntegrationTest {
     @Test
     void paginatesWithAccurateTotalAndStableOrder() {
         Page<BoxEntity> page = boxRepository.findAllByFilters(
-                project.getId(), null, null, null, null,
+                project.getId(), null, null, null, null, null, null, null,
                 PageRequest.of(1, 1, Sort.by("number", "id"))
         );
 
@@ -137,7 +137,7 @@ class BoxRepositoryIntegrationTest {
         assertThat(page.getTotalPages()).isEqualTo(3);
 
         Page<BoxEntity> beyondLast = boxRepository.findAllByFilters(
-                project.getId(), null, null, null, null, PageRequest.of(3, 1)
+                project.getId(), null, null, null, null, null, null, null, PageRequest.of(3, 1)
         );
         assertThat(beyondLast.getContent()).isEmpty();
         assertThat(beyondLast.getTotalElements()).isEqualTo(3);

@@ -113,6 +113,16 @@ class DataLoaderIntegrationTest extends BaseIntegrationTest {
                 .allSatisfy(box -> {
                     assertThat(box.getProject().getId()).isEqualTo(project.getId());
                     assertThat(box.getRoom().getProject().getId()).isEqualTo(project.getId());
+                    assertThat(box.isFragile()).isEqualTo(box.getNumber() == 2);
+                    assertThat(box.isFirstDay()).isEqualTo(box.getNumber() == 3);
+                    assertThat(box.isCarryWithMe()).isEqualTo(box.getNumber() == 5);
+                    String title = switch (box.getNumber()) {
+                        case 2 -> "Посуда для кухни";
+                        case 3 -> "Коробка первого дня";
+                        case 5 -> "Везу с собой";
+                        default -> "";
+                    };
+                    assertThat(box.getTitle()).isEqualTo(title);
                 })
                 .extracting(BoxEntity::getStatus).containsExactlyInAnyOrder(BoxStatus.values());
         assertThat(entityManager.createQuery("from BoxEntity", BoxEntity.class).getResultList())
@@ -138,12 +148,23 @@ class DataLoaderIntegrationTest extends BaseIntegrationTest {
             before.put(entity, entityManager.createQuery("select e.id from " + entity + " e order by e.id", UUID.class).getResultList());
         }
         String password = userRepository.findByEmail("user1").orElseThrow().getPassword();
+        var existingBox = entityManager.createQuery("from BoxEntity b where b.number = 2", BoxEntity.class).getSingleResult();
+        existingBox.setTitle("Моя подпись");
+        existingBox.setFragile(false);
+        existingBox.setFirstDay(true);
+        existingBox.setCarryWithMe(true);
+        UUID existingBoxId = existingBox.getId();
         ReflectionTestUtils.setField(loader, "user1Password", "new-password-must-not-overwrite-user");
         loader.run(args);
         entityManager.flush();
         entityManager.clear();
         before.forEach((entity, ids) -> assertThat(entityManager.createQuery("select e.id from " + entity + " e order by e.id", UUID.class).getResultList()).isEqualTo(ids));
         assertThat(userRepository.findByEmail("user1").orElseThrow().getPassword()).isEqualTo(password);
+        var preserved = entityManager.find(BoxEntity.class, existingBoxId);
+        assertThat(preserved.getTitle()).isEqualTo("Моя подпись");
+        assertThat(preserved.isFragile()).isFalse();
+        assertThat(preserved.isFirstDay()).isTrue();
+        assertThat(preserved.isCarryWithMe()).isTrue();
     }
 
     private DataLoader loader() {

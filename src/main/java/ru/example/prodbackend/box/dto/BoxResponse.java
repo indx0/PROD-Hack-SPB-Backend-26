@@ -29,6 +29,13 @@ public class BoxResponse {
 
     private boolean contentsDeferred;
 
+    @Schema(description = "Пользовательская подпись; без подписи — пустая строка")
+    private String title;
+    private boolean fragile;
+    @Schema(description = "Независимый от вещей и чек-листа признак коробки первого дня")
+    private boolean firstDay;
+    private boolean carryWithMe;
+
     @Schema(description = "Количество записей вещей, без суммирования quantity")
     private long totalItems;
     private long packedItems;

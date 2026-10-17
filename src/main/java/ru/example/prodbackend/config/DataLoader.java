@@ -125,7 +125,14 @@ public class DataLoader implements ApplicationRunner {
     }
 
     private List<UUID> createBox(UUID userId, UUID projectId, UUID roomId, int number, BoxStatus status, boolean deferred, String... items) {
-        var box = boxService.create(userId, projectId, CreateBoxRequest.builder().roomId(roomId).number(number).contentsDeferred(deferred).build());
+        String title = switch (number) {
+            case 2 -> "Посуда для кухни";
+            case 3 -> "Коробка первого дня";
+            case 5 -> "Везу с собой";
+            default -> "";
+        };
+        var box = boxService.create(userId, projectId, CreateBoxRequest.builder().roomId(roomId).number(number)
+                .contentsDeferred(deferred).title(title).fragile(number == 2).firstDay(number == 3).carryWithMe(number == 5).build());
         List<UUID> itemIds = new ArrayList<>();
         for (String name : items) {
             int quantity = switch (name) {

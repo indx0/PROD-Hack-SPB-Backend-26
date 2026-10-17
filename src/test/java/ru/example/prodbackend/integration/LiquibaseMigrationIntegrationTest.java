@@ -51,15 +51,20 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                 var items = jdbc.queryForList("SELECT id, name, quantity, first_day FROM items ORDER BY id");
                 var boxes = jdbc.queryForList("SELECT id, status FROM boxes ORDER BY id");
                 var checklist = jdbc.queryForList("SELECT id, name, completed_at FROM first_day_checklist_items ORDER BY id");
-                runLiquibase(schema, 2);
+                runLiquibase(schema, 3);
                 assertThat(jdbc.queryForList("""
                         SELECT column_name FROM information_schema.columns
                         WHERE table_schema = ? AND table_name = 'items'
                         """, String.class, schema)).doesNotContain("packed_at", "unpacked_at");
+                assertThat(jdbc.queryForList("""
+                        SELECT column_name FROM information_schema.columns
+                        WHERE table_schema = ? AND table_name = 'boxes'
+                        """, String.class, schema)).doesNotContain("title", "fragile", "first_day", "carry_with_me");
                 runLiquibase(schema, 0);
                 assertHistory(jdbc);
                 assertThat(jdbc.queryForList("SELECT id, name, quantity, first_day FROM items ORDER BY id")).isEqualTo(items);
                 assertThat(jdbc.queryForList("SELECT id, status FROM boxes ORDER BY id")).isEqualTo(boxes);
+                assertThat(jdbc.queryForObject("SELECT count(*) FROM boxes WHERE title <> '' OR fragile OR first_day OR carry_with_me", Long.class)).isZero();
                 assertThat(jdbc.queryForList("SELECT id, name, completed_at FROM first_day_checklist_items ORDER BY id")).isEqualTo(checklist);
                 assertThat(jdbc.queryForObject("SELECT count(*) FROM first_day_checklist_items WHERE item_id IS NOT NULL", Long.class)).isZero();
                 assertThat(jdbc.queryForObject("SELECT count(*) FROM items WHERE packed_at IS NOT NULL OR unpacked_at IS NOT NULL", Long.class)).isZero();
@@ -70,7 +75,7 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                 assertHistory(jdbc);
                 assertThat(jdbc.queryForList("SELECT id, email FROM users ORDER BY email")).isEqualTo(users);
 
-                runLiquibase(schema, 13);
+                runLiquibase(schema, 14);
                 assertThat(jdbc.queryForList("""
                         SELECT tablename FROM pg_tables
                         WHERE schemaname = ? AND tablename NOT IN ('databasechangelog', 'databasechangeloglock')
@@ -124,7 +129,7 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
 
     private void assertHistory(JdbcTemplate jdbc) {
         assertThat(jdbc.queryForList("SELECT author FROM databasechangelog", String.class))
-                .hasSize(13).containsOnly("indx0", "timn2020");
+                .hasSize(14).containsOnly("indx0", "timn2020");
     }
 
     private void assertConstraints(JdbcTemplate jdbc) {
@@ -172,6 +177,17 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
         rejects(jdbc, insertBox, "23514", UUID.randomUUID(), -1, project, room);
         rejects(jdbc, insertBox, "23503", UUID.randomUUID(), 2, project, otherRoom);
         rejects(jdbc, "UPDATE boxes SET status = 'UNKNOWN' WHERE id = ?", "23514", box);
+
+        assertThat(jdbc.queryForObject("SELECT title FROM boxes WHERE id = ?", String.class, box)).isEmpty();
+        for (String column : new String[]{"fragile", "first_day", "carry_with_me"}) {
+            assertThat(jdbc.queryForObject("SELECT " + column + " FROM boxes WHERE id = ?", Boolean.class, box)).isFalse();
+            rejects(jdbc, "UPDATE boxes SET " + column + " = NULL WHERE id = ?", "23502", box);
+        }
+        rejects(jdbc, "UPDATE boxes SET title = NULL WHERE id = ?", "23502", box);
+        rejects(jdbc, "UPDATE boxes SET title = ? WHERE id = ?", "22001", "x".repeat(256), box);
+        jdbc.update("UPDATE boxes SET title = 'Посуда', fragile = true, first_day = true, carry_with_me = true WHERE id = ?", box);
+        assertThat(jdbc.queryForObject("SELECT title FROM boxes WHERE id = ?", String.class, box)).isEqualTo("Посуда");
+        assertThat(jdbc.queryForObject("SELECT fragile AND first_day AND carry_with_me FROM boxes WHERE id = ?", Boolean.class, box)).isTrue();
 
         UUID item = UUID.randomUUID();
         jdbc.update("""
