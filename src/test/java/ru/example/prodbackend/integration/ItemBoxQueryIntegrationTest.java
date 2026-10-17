@@ -12,6 +12,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 import ru.example.prodbackend.box.entity.BoxEntity;
+import ru.example.prodbackend.box.dto.BoxFilter;
 import ru.example.prodbackend.box.entity.BoxStatus;
 import ru.example.prodbackend.box.repository.BoxRepository;
 import ru.example.prodbackend.box.service.BoxService;
@@ -206,6 +207,42 @@ class ItemBoxQueryIntegrationTest {
         assertThat(summary.getRooms().get(0).getUnpackingProgressPercent()).isZero();
         assertThat(summary.getRooms().get(1).getUnpackingProgressPercent()).isEqualTo(33);
         assertThat(summary.getRooms().get(1).getCountsByStatus().get(BoxStatus.LOADED)).isZero();
+    }
+
+    @Test
+    void boxPageCountsAllContentsWithOneGroupedQueryWithoutLoadingItems() {
+        for (int number = 1; number <= 6; number++) {
+            BoxEntity box = box(kitchen, number, BoxStatus.PACKING, false);
+            if (number == 4) continue;
+            item(box, "Тарелки").setQuantity(6);
+            item(box, "Кружки").setPackedAt(Instant.now());
+            item(box, "Книги");
+        }
+        flushAndClear();
+        var statistics = entityManager.getEntityManagerFactory().unwrap(SessionFactory.class).getStatistics();
+        statistics.clear();
+        PaginationRequest pagination = new PaginationRequest();
+        pagination.setSize(4);
+        jdbcCapture.start();
+        var page = boxService.findAll(owner.getId(), project.getId(), new BoxFilter(), pagination);
+        var executions = jdbcCapture.stop();
+        assertThat(page.getTotalElements()).isEqualTo(6);
+        assertThat(page.getContent()).hasSize(4);
+        assertThat(page.getContent().subList(0, 3)).allSatisfy(box -> {
+            assertThat(box.getTotalItems()).isEqualTo(3);
+            assertThat(box.getPackedItems()).isEqualTo(1);
+            assertThat(box.getUnpackedItems()).isZero();
+            assertThat(box.isReadyToPack()).isFalse();
+        });
+        assertThat(page.getContent().get(3).getTotalItems()).isZero();
+        assertThat(page.getContent().get(3).isReadyToPack()).isFalse();
+        assertThat(executions.stream().filter(e -> e.sql().contains("from items"))).singleElement()
+                .satisfies(query -> assertThat(query.sql()).contains("group by", " in ("));
+        assertThat(statistics.getEntityStatistics(ItemEntity.class.getName()).getLoadCount()).isZero();
+        pagination.setPage(10);
+        jdbcCapture.start();
+        assertThat(boxService.findAll(owner.getId(), project.getId(), new BoxFilter(), pagination).getContent()).isEmpty();
+        assertThat(jdbcCapture.stop()).noneMatch(e -> e.sql().contains("from items"));
     }
 
     @Test

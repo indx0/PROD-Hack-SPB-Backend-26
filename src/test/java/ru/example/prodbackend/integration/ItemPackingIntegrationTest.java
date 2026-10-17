@@ -144,7 +144,7 @@ class ItemPackingIntegrationTest extends BaseIntegrationTest {
                 Timestamp.from(ORIGINAL_MARK), Timestamp.from(ORIGINAL_MARK), itemId);
         setStatus(BoxStatus.UNPACKED);
         perform(patch(itemUrl), """
-                {"name":"Кружки","lost":true,"quantity":7,"firstDay":true}
+                {"name":"Кружки","lost":true,"firstDay":true}
                 """).andExpect(status().isOk()).andExpect(jsonPath("$.packedAt").value(ORIGINAL_MARK.toString()))
                 .andExpect(jsonPath("$.unpackedAt").value(ORIGINAL_MARK.toString()));
         perform(get(collectionUrl), null).andExpect(status().isOk())

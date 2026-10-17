@@ -10,12 +10,22 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import ru.example.prodbackend.item.entity.ItemEntity;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 @Repository
 public interface ItemRepository extends JpaRepository<ItemEntity, UUID> {
+
+    @Query("""
+            select new ru.example.prodbackend.item.repository.BoxItemCounts(
+                i.box.id, count(i),
+                sum(case when i.packedAt is not null then 1 else 0 end),
+                sum(case when i.unpackedAt is not null then 1 else 0 end))
+            from ItemEntity i where i.box.id in :boxIds group by i.box.id
+            """)
+    List<BoxItemCounts> countByBoxIds(@Param("boxIds") Collection<UUID> boxIds);
 
     @Modifying(flushAutomatically = true)
     @Query("delete from ItemEntity i where i.box.id = :boxId")

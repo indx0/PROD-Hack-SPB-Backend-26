@@ -155,6 +155,9 @@ public class BoxController {
             summary = "Изменение статуса коробки",
             description = """
                     Разрешён следующий шаг: PACKING → PACKED → LOADED → DELIVERED → UNPACKED.
+                    Для PACKED нужна непустая коробка и packedAt у каждой вещи; для UNPACKED — unpackedAt у каждой вещи.
+                    Проверяются все записи в БД, независимо от пагинации. lost не исключает вещь из проверки.
+                    Ответ содержит totalItems, packedItems, unpackedItems и готовность с учётом текущего статуса.
                     Повтор текущего статуса успешен и не изменяет updatedAt.
                     Пропуск этапа и возврат назад запрещены.
                     Событие BOX_STATUS_CHANGED сохраняется в той же транзакции. Повтор статуса не создаёт событие.
@@ -163,7 +166,7 @@ public class BoxController {
                     @ApiResponse(responseCode = "200", description = "Коробка с актуальным статусом",
                             content = @Content(schema = @Schema(implementation = BoxResponse.class))),
                     @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не найден или недоступен; BOX_NOT_FOUND: коробки нет в этом проекте", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: недопустимый переход статуса", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: недопустимый переход, пустая коробка или не все вещи отмечены", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "422", description = "Статус обязателен",
                             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             }

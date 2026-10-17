@@ -25,6 +25,7 @@ import ru.example.prodbackend.exception.RequestValidationException;
 import ru.example.prodbackend.exception.ResourceConflictException;
 import ru.example.prodbackend.exception.RoomNotFoundException;
 import ru.example.prodbackend.item.repository.ItemRepository;
+import ru.example.prodbackend.item.repository.BoxItemCounts;
 import ru.example.prodbackend.move.service.ProjectAccessService;
 import ru.example.prodbackend.room.entity.RoomEntity;
 import ru.example.prodbackend.room.repository.RoomRepository;
@@ -72,7 +73,10 @@ public class BoxService {
         PageRequest pageable = PageRequest.of(pagination.getPage(), pagination.getSize(), Sort.by("number", "id"));
 
         Page<BoxEntity> boxes = boxRepository.findAllByFilters(projectId, filter.getNumber(), filter.getRoomId(), filter.getStatus(), filter.getContentsDeferred(), pageable);
-        return PageResponse.from(boxes.map(this::toResponse));
+        Map<UUID, BoxItemCounts> counts = boxes.isEmpty() ? Map.of() : itemRepository.countByBoxIds(
+                boxes.getContent().stream().map(BoxEntity::getId).toList()).stream()
+                .collect(Collectors.toMap(BoxItemCounts::boxId, value -> value));
+        return PageResponse.from(boxes.map(box -> toResponse(box, counts.getOrDefault(box.getId(), emptyCounts(box.getId())))));
     }
 
     public BoxResponse findById(UUID userId, UUID projectId, UUID boxId) {
@@ -130,11 +134,24 @@ public class BoxService {
             return toResponse(box);
         }
 
+        BoxItemCounts counts = itemCounts(box.getId());
+        if (status == BoxStatus.PACKED || status == BoxStatus.UNPACKED) {
+            boolean packing = status == BoxStatus.PACKED;
+            String action = packing ? "собрать" : "распаковать";
+            if (counts.totalItems() == 0) {
+                throw new ResourceConflictException("Нельзя " + action + " пустую коробку: добавьте хотя бы одну вещь");
+            }
+            long marked = packing ? counts.packedItems() : counts.unpackedItems();
+            if (marked != counts.totalItems()) {
+                throw new ResourceConflictException("Нельзя " + action + " коробку: " + (packing ? "упаковано " : "распаковано ")
+                        + marked + " из " + counts.totalItems() + " вещей");
+            }
+        }
         box.changeStatus(status);
         boxRepository.saveAndFlush(box);
 
         recordEvent(box, ProjectEventType.BOX_STATUS_CHANGED, "Коробка №" + box.getNumber() + ": " + previousStatus + " → " + status);
-        return toResponse(box);
+        return toResponse(box, counts);
     }
 
     @Transactional
@@ -193,6 +210,18 @@ public class BoxService {
     }
 
     private BoxResponse toResponse(BoxEntity box) {
+        return toResponse(box, itemCounts(box.getId()));
+    }
+
+    private BoxItemCounts itemCounts(UUID boxId) {
+        return itemRepository.countByBoxIds(List.of(boxId)).stream().findFirst().orElseGet(() -> emptyCounts(boxId));
+    }
+
+    private BoxItemCounts emptyCounts(UUID boxId) {
+        return new BoxItemCounts(boxId, 0, 0, 0);
+    }
+
+    private BoxResponse toResponse(BoxEntity box, BoxItemCounts counts) {
         return BoxResponse.builder()
                 .id(box.getId())
                 .projectId(box.getProject().getId())
@@ -201,6 +230,9 @@ public class BoxService {
                 .roomName(box.getRoom().getName())
                 .status(box.getStatus())
                 .contentsDeferred(box.isContentsDeferred())
+                .totalItems(counts.totalItems()).packedItems(counts.packedItems()).unpackedItems(counts.unpackedItems())
+                .readyToPack(box.getStatus() == BoxStatus.PACKING && counts.totalItems() > 0 && counts.packedItems() == counts.totalItems())
+                .readyToUnpack(box.getStatus() == BoxStatus.DELIVERED && counts.totalItems() > 0 && counts.unpackedItems() == counts.totalItems())
                 .createdAt(box.getCreatedAt())
                 .updatedAt(box.getUpdatedAt())
                 .build();

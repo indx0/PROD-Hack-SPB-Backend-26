@@ -70,7 +70,10 @@ class MoveWorkflowIntegrationTest extends AuthIntegrationTestSupport {
         for (int repeat = 0; repeat < 2; repeat++) call("GET", card, null, token).andExpect(status().isOk());
         assertEquals(1L, boxRepository.count());
         call("PATCH", card, Map.of("roomId", bedroom, "contentsDeferred", false), token).andExpect(status().isOk());
+        String itemCard = "/api/move-projects/" + projectId + "/boxes/" + box.getId() + "/items/" + item.getId();
+        call("PATCH", itemCard, Map.of("packed", true), token).andExpect(status().isOk());
         for (String status : new String[]{"PACKED", "LOADED", "DELIVERED", "UNPACKED"}) {
+            if (status.equals("UNPACKED")) call("PATCH", itemCard, Map.of("unpacked", true), token).andExpect(status().isOk());
             call("PATCH", card + "/status", Map.of("status", status), token).andExpect(status().isOk());
             call("PATCH", card + "/status", Map.of("status", status), token).andExpect(status().isOk());
         }

@@ -22,6 +22,7 @@ public class UpdateItemRequest {
     private Boolean lost;
 
     @Positive
+    @Schema(description = "Изменение только в PACKING; новое количество сбрасывает packedAt. Повтор текущего значения сохраняет отметку")
     private Integer quantity;
 
     private Boolean firstDay;

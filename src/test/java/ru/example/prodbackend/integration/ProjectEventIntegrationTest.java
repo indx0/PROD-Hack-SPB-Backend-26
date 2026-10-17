@@ -19,6 +19,8 @@ import ru.example.prodbackend.event.entity.ProjectEventEntity;
 import ru.example.prodbackend.event.entity.ProjectEventType;
 import ru.example.prodbackend.event.repository.ProjectEventRepository;
 import ru.example.prodbackend.event.service.ProjectEventService;
+import ru.example.prodbackend.item.entity.ItemEntity;
+import ru.example.prodbackend.item.repository.ItemRepository;
 import ru.example.prodbackend.move.dto.request.CreateMoveProjectRequest;
 import ru.example.prodbackend.move.entity.MoveProjectEntity;
 import ru.example.prodbackend.move.service.MoveProjectService;
@@ -57,6 +59,8 @@ class ProjectEventIntegrationTest extends AuthIntegrationTestSupport {
     private MoveTaskRepository taskRepository;
     @Autowired
     private PlatformTransactionManager transactionManager;
+    @Autowired
+    private ItemRepository itemRepository;
     @MockitoSpyBean
     private ProjectEventRepository eventRepository;
     @MockitoSpyBean
@@ -128,6 +132,8 @@ class ProjectEventIntegrationTest extends AuthIntegrationTestSupport {
         var room = roomRepository.saveAndFlush(RoomEntity.builder().project(moveProjectRepository.findById(project.getId()).orElseThrow()).name("Кухня").build());
         var boxRequest = CreateBoxRequest.builder().roomId(room.getId()).number(1).build();
         var box = action.equals("status") ? boxService.create(owner.getId(), project.getId(), boxRequest) : null;
+        if (box != null) itemRepository.saveAndFlush(ItemEntity.builder()
+                .box(boxRepository.findById(box.getId()).orElseThrow()).name("Чайник").packedAt(Instant.now()).build());
         long initialBoxes = boxRepository.count();
         long initialEvents = eventRepository.count();
         failEventWrite();

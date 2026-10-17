@@ -44,6 +44,8 @@ import java.util.UUID;
                 content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
         @ApiResponse(responseCode = "404", description = "Коробка или вещь не найдена либо недоступна пользователю",
                 content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+        @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: статус коробки запрещает изменение содержимого или отметки",
+                content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
         @ApiResponse(responseCode = "422", description = "Ошибка валидации запроса",
                 content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
 })
@@ -87,6 +89,7 @@ public class ItemController {
                     Новая вещь не помечена потерянной. Одинаковые названия допустимы.
                     Отметки упаковки и распаковки отсутствуют; время задаётся сервером через PATCH.
                     Добавление не изменяет статус коробки и contentsDeferred.
+                    Добавление разрешено только в PACKING; после сборки возвращается 409.
                     """,
             responses = @ApiResponse(responseCode = "201", description = "Вещь добавлена",
                     content = @Content(schema = @Schema(implementation = ItemResponse.class))))
@@ -108,6 +111,7 @@ public class ItemController {
                     В items доступны quantity (по умолчанию 1) и firstDay (по умолчанию false).
                     Для names используются quantity=1 и firstDay=false.
                     Все новые вещи создаются без отметок упаковки и распаковки.
+                    Добавление разрешено только в PACKING; после сборки возвращается 409.
                     Весь список сохраняется в одной транзакции; при ошибке ничего не добавляется.
                     Пробелы по краям удаляются, повторяющиеся названия сохраняются отдельными вещами.
                     Результат соответствует порядку входного списка.
@@ -132,6 +136,9 @@ public class ItemController {
                     Повтор уже установленного состояния успешен в любом статусе и сохраняет время.
                     При конфликте ни одно поле запроса не изменяется. Статус коробки автоматически не меняется.
                     quantity — положительное целое. lost=true помечает вещь потерянной.
+                    Изменение quantity разрешено только в PACKING и сбрасывает packedAt, даже при packed=true в том же запросе.
+                    Повтор того же quantity не сбрасывает отметку и допустим в любом статусе.
+                    name, lost и firstDay доступны в любом статусе и не сбрасывают отметки.
                     firstDay не создаёт и не удаляет пункты чек-листа.
                     Отсутствующие поля сохраняют значения. Неизвестные поля игнорируются.
                     Запрос без поддерживаемых полей запрещён (422), явный null запрещён (400).
@@ -155,7 +162,7 @@ public class ItemController {
     }
 
     @Operation(summary = "Удаление вещи",
-            description = "Удаляет отдельную вещь после проверки владельца. Подтверждение показывает клиент.",
+            description = "Удаляет вещь только в коробке PACKING, после проверки владельца. Иначе 409. Подтверждение показывает клиент.",
             responses = @ApiResponse(responseCode = "204", description = "Вещь удалена", content = @Content))
     @DeleteMapping("/boxes/{boxId}/items/{itemId}")
     public ResponseEntity<Void> delete(

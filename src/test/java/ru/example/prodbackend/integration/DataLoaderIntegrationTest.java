@@ -16,6 +16,8 @@ import ru.example.prodbackend.box.entity.BoxStatus;
 import ru.example.prodbackend.config.DataLoader;
 import ru.example.prodbackend.config.TestcontainersConfig;
 import ru.example.prodbackend.move.entity.MoveProjectEntity;
+import ru.example.prodbackend.item.entity.ItemEntity;
+import ru.example.prodbackend.item.service.ItemService;
 import ru.example.prodbackend.task.entity.MoveTaskEntity;
 import ru.example.prodbackend.user.repository.UserRepository;
 import ru.example.prodbackend.box.service.BoxService;
@@ -60,6 +62,8 @@ class DataLoaderIntegrationTest extends BaseIntegrationTest {
     private MoveTaskService moveTaskService;
     @Autowired
     private FirstDayChecklistService checklistService;
+    @Autowired
+    private ItemService itemService;
 
     @Test
     void loadsDemoMoveForUser1() {
@@ -83,6 +87,10 @@ class DataLoaderIntegrationTest extends BaseIntegrationTest {
                 .containsExactlyInAnyOrder(1L, 1L);
         assertThat(count("RoomEntity")).isEqualTo(4);
         assertThat(count("ItemEntity")).isEqualTo(12);
+        assertThat(entityManager.createQuery("from ItemEntity", ItemEntity.class).getResultList()).allSatisfy(item -> {
+            if (item.getBox().getStatus() != BoxStatus.PACKING) assertThat(item.getPackedAt()).isNotNull();
+            if (item.getBox().getStatus() == BoxStatus.UNPACKED) assertThat(item.getUnpackedAt()).isNotNull();
+        });
         assertThat(entityManager.createQuery(
                 "select i.quantity from ItemEntity i where i.name = 'Тарелки'", Integer.class)
                 .getSingleResult()).isEqualTo(6);
@@ -131,7 +139,7 @@ class DataLoaderIntegrationTest extends BaseIntegrationTest {
     }
 
     private DataLoader loader() {
-        var loader = new DataLoader(entityManager, userRepository, passwordEncoder, refreshTokenService, moveProjectRepository,
+        var loader = new DataLoader(itemService, userRepository, passwordEncoder, refreshTokenService, moveProjectRepository,
                 moveProjectService, roomService, boxService, moveTaskService, checklistService);
         ReflectionTestUtils.setField(loader, "adminPassword", "test-admin-password");
         ReflectionTestUtils.setField(loader, "user1Password", "test-user-password");

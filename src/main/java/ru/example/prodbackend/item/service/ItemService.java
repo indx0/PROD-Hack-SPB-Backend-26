@@ -52,6 +52,7 @@ public class ItemService {
     @Transactional
     public ItemResponse create(UUID userId, UUID projectId, UUID boxId, CreateItemRequest request) {
         BoxEntity box = requireOwnedBox(userId, projectId, boxId, true);
+        requirePacking(box, "добавлять вещи");
 
         ItemEntity item = ItemEntity.builder().box(box).name(request.getName().strip())
                 .quantity(request.getQuantity()).firstDay(request.getFirstDay()).build();
@@ -62,6 +63,7 @@ public class ItemService {
     @Transactional
     public List<ItemResponse> createBatch(UUID userId, UUID projectId, UUID boxId, CreateItemsRequest request) {
         BoxEntity box = requireOwnedBox(userId, projectId, boxId, true);
+        requirePacking(box, "добавлять вещи");
 
         List<CreateItemRequest> entries = request.getItems() != null ? request.getItems()
                 : request.getNames().stream().map(name -> CreateItemRequest.builder().name(name).build()).toList();
@@ -77,8 +79,11 @@ public class ItemService {
     public ItemResponse update(UUID userId, UUID projectId, UUID boxId, UUID itemId, UpdateItemRequest request) {
         BoxEntity box = requireOwnedBox(userId, projectId, boxId, true);
         ItemEntity item = requireItem(boxId, itemId);
+        boolean quantityChanged = request.getQuantity() != null && request.getQuantity() != item.getQuantity();
+        if (quantityChanged) requirePacking(box, "изменять количество");
         Instant packedAt = updateMark(request.getPacked(), item.getPackedAt(), box.getStatus(), BoxStatus.PACKING, "упаковки");
         Instant unpackedAt = updateMark(request.getUnpacked(), item.getUnpackedAt(), box.getStatus(), BoxStatus.DELIVERED, "распаковки");
+        if (quantityChanged) packedAt = null;
         if (request.getName() != null) item.setName(request.getName().strip());
         if (request.getLost() != null) item.setLost(request.getLost());
         if (request.getQuantity() != null) item.setQuantity(request.getQuantity());
@@ -91,8 +96,10 @@ public class ItemService {
 
     @Transactional
     public void delete(UUID userId, UUID projectId, UUID boxId, UUID itemId) {
-        requireOwnedBox(userId, projectId, boxId, true);
-        itemRepository.delete(requireItem(boxId, itemId));
+        BoxEntity box = requireOwnedBox(userId, projectId, boxId, true);
+        ItemEntity item = requireItem(boxId, itemId);
+        requirePacking(box, "удалять вещи");
+        itemRepository.delete(item);
         itemRepository.flush();
     }
 
@@ -117,6 +124,12 @@ public class ItemService {
                         .status(box.getStatus()).contentsMatch(matchingBoxes.contains(box.getId()))
                         .sameRoom(box.getRoom().getId().equals(roomId)).build())
                 .toList();
+    }
+
+    private void requirePacking(BoxEntity box, String action) {
+        if (box.getStatus() != BoxStatus.PACKING) {
+            throw new ResourceConflictException("Можно " + action + " только в коробке со статусом PACKING");
+        }
     }
 
     private Instant updateMark(Boolean requested, Instant current, BoxStatus status, BoxStatus allowed, String mark) {
