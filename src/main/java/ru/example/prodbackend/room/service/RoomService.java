@@ -33,7 +33,7 @@ public class RoomService {
 
     @Transactional
     public RoomResponse createRoom(UUID projectId, CreateRoomRequest request, UUID userId) {
-        MoveProjectEntity project = projectAccessService.getOwnedProject(projectId, userId);
+        MoveProjectEntity project = projectAccessService.getOwnedProjectForUpdate(projectId, userId);
         String name = normalizeName(request.getName());
 
         if (roomRepository.existsByProject_IdAndName(projectId, name)) {
@@ -89,7 +89,7 @@ public class RoomService {
     }
 
     private RoomEntity getRoomForUpdate(UUID projectId, UUID roomId, UUID userId) {
-        projectAccessService.getOwnedProject(projectId, userId);
+        projectAccessService.getOwnedProjectForUpdate(projectId, userId);
         return roomRepository.findForUpdate(roomId, projectId)
                 .orElseThrow(() -> new RoomNotFoundException("room not gound"));
     }

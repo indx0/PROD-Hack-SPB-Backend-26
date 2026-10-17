@@ -20,4 +20,5 @@
     <include file="1.1/2026-10-17-0014-add-box-details.sql" relativeToChangelogFile="true"/>
     <include file="1.1/2026-10-17-0015-add-room-icon-key.sql" relativeToChangelogFile="true"/>
     <include file="1.1/2026-10-17-0016-add-box-status-corrections.sql" relativeToChangelogFile="true"/>
+    <include file="1.1/2026-10-17-0017-add-project-archive.sql" relativeToChangelogFile="true"/>
 </databaseChangeLog>

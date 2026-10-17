@@ -67,14 +67,14 @@ class MoveProjectControllerTest {
 
     @Test
     void listReturnsPageWithDefaultPagination() throws Exception {
-        when(service.getMoveProjects(any(), eq(user))).thenReturn(PageResponse.<MoveProjectResponse>builder()
+        when(service.getMoveProjects(any(), isNull(), eq(user))).thenReturn(PageResponse.<MoveProjectResponse>builder()
                 .content(List.of(projectResponse())).page(0).size(20).totalElements(1).totalPages(1).build());
 
         mockMvc.perform(get(URL))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].id").value(PROJECT_ID.toString()));
 
-        verify(service).getMoveProjects(argThat(request -> request.getPage() == 0 && request.getSize() == 20), eq(user));
+        verify(service).getMoveProjects(argThat(request -> request.getPage() == 0 && request.getSize() == 20), isNull(), eq(user));
     }
 
     @Test

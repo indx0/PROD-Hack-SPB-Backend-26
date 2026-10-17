@@ -62,7 +62,7 @@ public class BoxController {
                     @ApiResponse(responseCode = "201", description = "Коробка создана; Location содержит её адрес",
                             content = @Content(schema = @Schema(implementation = BoxResponse.class))),
                     @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не найден или недоступен; ROOM_NOT_FOUND: комнаты нет в этом проекте", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: номер уже занят другой коробкой проекта", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: номер уже занят другой коробкой проекта; для изменений — переезд в архиве, сначала восстановите его", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "422", description = "Ошибка валидации тела запроса",
                             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             }
@@ -144,7 +144,7 @@ public class BoxController {
                     @ApiResponse(responseCode = "200", description = "Коробка обновлена",
                             content = @Content(schema = @Schema(implementation = BoxResponse.class))),
                     @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не найден или недоступен; BOX_NOT_FOUND: коробки нет в этом проекте; ROOM_NOT_FOUND: комнаты нет в этом проекте", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: номер уже занят другой коробкой проекта", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: номер уже занят другой коробкой проекта; для изменений — переезд в архиве, сначала восстановите его", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: ошибка валидации; подробности в fieldErrors", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             }
     )
@@ -174,7 +174,7 @@ public class BoxController {
                     @ApiResponse(responseCode = "200", description = "Коробка с актуальным статусом",
                             content = @Content(schema = @Schema(implementation = BoxResponse.class))),
                     @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не найден или недоступен; BOX_NOT_FOUND: коробки нет в этом проекте", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: недопустимый переход, пустая коробка или не все вещи отмечены", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: недопустимый переход, пустая коробка или не все вещи отмечены; для изменений — переезд в архиве, сначала восстановите его", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "422", description = "Статус обязателен",
                             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             }
@@ -206,7 +206,7 @@ public class BoxController {
             responses = {
                     @ApiResponse(responseCode = "200", description = "Актуальная коробка или успешный повтор", content = @Content(schema = @Schema(implementation = BoxResponse.class))),
                     @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект недоступен; BOX_NOT_FOUND: коробки нет в этом проекте", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: статус изменился, направление вперёд или содержимое не готово", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: статус изменился, направление вперёд или содержимое не готово; для изменений — переезд в архиве, сначала восстановите его", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: обязательные поля отсутствуют или confirmed не true", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             })
     public ResponseEntity<BoxResponse> correctStatus(
@@ -224,6 +224,7 @@ public class BoxController {
                     """,
             responses = {
                     @ApiResponse(responseCode = "204", description = "Коробка удалена", content = @Content),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: переезд в архиве; сначала восстановите его", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не найден или недоступен; BOX_NOT_FOUND: коробки нет в этом проекте", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             }
     )

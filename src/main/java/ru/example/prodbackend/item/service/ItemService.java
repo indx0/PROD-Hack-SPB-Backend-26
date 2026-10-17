@@ -14,6 +14,8 @@ import ru.example.prodbackend.common.dto.PageResponse;
 import ru.example.prodbackend.common.dto.PaginationRequest;
 import ru.example.prodbackend.exception.ItemNotFoundException;
 import ru.example.prodbackend.exception.ResourceConflictException;
+import ru.example.prodbackend.exception.MoveProjectNotFoundException;
+import ru.example.prodbackend.move.service.ProjectAccessService;
 import ru.example.prodbackend.item.dto.CreateItemRequest;
 import ru.example.prodbackend.item.dto.CreateItemsRequest;
 import ru.example.prodbackend.item.dto.ItemBoxSuggestionResponse;
@@ -39,6 +41,7 @@ public class ItemService {
     private final ItemRepository itemRepository;
     private final BoxRepository boxRepository;
     private final FirstDayChecklistRepository checklistRepository;
+    private final ProjectAccessService projectAccessService;
 
     public ItemResponse findById(UUID userId, UUID projectId, UUID boxId, UUID itemId) {
         requireOwnedBox(userId, projectId, boxId, false);
@@ -54,6 +57,7 @@ public class ItemService {
 
     @Transactional
     public ItemResponse create(UUID userId, UUID projectId, UUID boxId, CreateItemRequest request) {
+        requireWritableProject(userId, projectId);
         BoxEntity box = requireOwnedBox(userId, projectId, boxId, true);
         requirePacking(box, "добавлять вещи");
 
@@ -65,6 +69,7 @@ public class ItemService {
 
     @Transactional
     public List<ItemResponse> createBatch(UUID userId, UUID projectId, UUID boxId, CreateItemsRequest request) {
+        requireWritableProject(userId, projectId);
         BoxEntity box = requireOwnedBox(userId, projectId, boxId, true);
         requirePacking(box, "добавлять вещи");
 
@@ -80,6 +85,7 @@ public class ItemService {
 
     @Transactional
     public ItemResponse update(UUID userId, UUID projectId, UUID boxId, UUID itemId, UpdateItemRequest request) {
+        requireWritableProject(userId, projectId);
         BoxEntity box = requireOwnedBox(userId, projectId, boxId, true);
         ItemEntity item = requireItem(boxId, itemId);
         boolean quantityChanged = request.getQuantity() != null && request.getQuantity() != item.getQuantity();
@@ -102,6 +108,7 @@ public class ItemService {
 
     @Transactional
     public ItemResponse move(UUID userId, UUID projectId, UUID sourceBoxId, UUID itemId, MoveItemRequest request) {
+        requireWritableProject(userId, projectId);
         UUID targetBoxId = request.getTargetBoxId();
         boolean sourceFirst = sourceBoxId.compareTo(targetBoxId) <= 0;
         // Every transfer locks the pair in the same UUID order, including opposite transfers.
@@ -125,6 +132,7 @@ public class ItemService {
 
     @Transactional
     public void delete(UUID userId, UUID projectId, UUID boxId, UUID itemId) {
+        requireWritableProject(userId, projectId);
         BoxEntity box = requireOwnedBox(userId, projectId, boxId, true);
         ItemEntity item = requireItem(boxId, itemId);
         requirePacking(box, "удалять вещи");
@@ -169,6 +177,15 @@ public class ItemService {
         }
         // PostgreSQL stores microseconds: return the same timestamp before and after reloading.
         return requested ? Instant.now().truncatedTo(ChronoUnit.MICROS) : null;
+    }
+
+    private void requireWritableProject(UUID userId, UUID projectId) {
+        try {
+            projectAccessService.getOwnedProjectForUpdate(projectId, userId);
+        } catch (MoveProjectNotFoundException exception) {
+            // Preserve the existing item API's generic 404 for unavailable resources.
+            throw new ItemNotFoundException("Box not found");
+        }
     }
 
     private BoxEntity requireOwnedBox(UUID userId, UUID projectId, UUID boxId, boolean forUpdate) {

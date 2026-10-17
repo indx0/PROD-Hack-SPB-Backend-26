@@ -37,7 +37,7 @@ import java.util.UUID;
         @ApiResponse(responseCode = "400", description = "Некорректный UUID или JSON", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
         @ApiResponse(responseCode = "401", description = "UNAUTHORIZED: access токен отсутствует или недействителен", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
         @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект недоступен; CHECKLIST_ITEM_NOT_FOUND: пункта нет в этом проекте; NOT_FOUND: вещь отсутствует или принадлежит другому проекту", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-        @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: вещь уже связана с другим пунктом или перемещена во время привязки; повторите запрос", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+        @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: вещь уже связана с другим пунктом или перемещена во время привязки; повторите запрос; для изменений — переезд в архиве, сначала восстановите его", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
 })
 public class FirstDayChecklistController {
 

@@ -1,6 +1,7 @@
 package ru.example.prodbackend.move.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -29,7 +30,7 @@ import java.util.UUID;
 @RequestMapping(value = "/api/move-projects", produces = MediaType.APPLICATION_JSON_VALUE)
 @RequiredArgsConstructor
 @SecurityRequirement(name = "jwtAuth")
-@Tag(name = "Проекты переезда")
+@Tag(name = "Проекты переезда", description = "Архивные проекты доступны для чтения; изменения и удаление требуют восстановления")
 public class MoveProjectController {
 
     private final MoveProjectService moveProjectService;
@@ -52,16 +53,18 @@ public class MoveProjectController {
 
     @GetMapping
     @Operation(summary = "Получить список своих переездов",
-            description = "Возвращает только проекты текущего пользователя, новые первыми (createdAt DESC, id DESC). Страницы начинаются с 0; по умолчанию page=0, size=20. Пустая или выходящая за пределы списка страница возвращает пустой content.",
+            description = "Возвращает только проекты текущего пользователя, новые первыми (createdAt DESC, id DESC). archived=true — архивные, false — активные; без параметра возвращаются все. Фильтрация выполняется до пагинации. Страницы начинаются с 0; по умолчанию page=0, size=20. Пустая или выходящая за пределы списка страница возвращает пустой content.",
             responses = {
                     @ApiResponse(responseCode = "200", description = "Страница проектов получена"),
+                    @ApiResponse(responseCode = "400", description = "INVALID_REQUEST_PARAMETER: archived должен быть true или false", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "401", description = "UNAUTHORIZED: access токен отсутствует, некорректный или истек", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: page должен быть целым числом не меньше 0, size — целым числом от 1 до 100; подробности в fieldErrors", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             })
     public ResponseEntity<PageResponse<MoveProjectResponse>> getMoveProjects(
             @Valid @ModelAttribute @ParameterObject PaginationRequest request,
+            @Parameter(description = "Архивные/активные проекты; без параметра — все") @RequestParam(required = false) Boolean archived,
             @AuthenticationPrincipal UserEntity user) {
-        return ResponseEntity.ok(moveProjectService.getMoveProjects(request, user));
+        return ResponseEntity.ok(moveProjectService.getMoveProjects(request, archived, user));
     }
 
     @GetMapping("/{projectId}")
@@ -84,6 +87,7 @@ public class MoveProjectController {
             description = "Отсутствующие и null-поля не изменяются. Пустой адрес удаляется. Пустой объект допустим. Изменение даты проекта не переносит сроки задач.",
             responses = {
                     @ApiResponse(responseCode = "200", description = "Проект обновлен", content = @Content(mediaType = "application/json", schema = @Schema(implementation = MoveProjectResponse.class))),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: переезд в архиве; сначала восстановите его", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "400", description = "INVALID_REQUEST_BODY: тело отсутствует, некорректный JSON или дата; INVALID_REQUEST_PARAMETER: projectId не является UUID", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "401", description = "UNAUTHORIZED: access токен отсутствует, некорректный или истек", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не существует или принадлежит другому пользователю", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
@@ -98,9 +102,10 @@ public class MoveProjectController {
 
     @DeleteMapping("/{projectId}")
     @Operation(summary = "Удалить свой проект переезда",
-            description = "Безвозвратно удаляет проект, комнаты, коробки, вещи, задачи, чек-лист и события одной транзакцией. Перед вызовом интерфейс должен запросить подтверждение. Повторное удаление возвращает 404.",
+            description = "Безвозвратно удаляет активный проект, комнаты, коробки, вещи, задачи, чек-лист и события одной транзакцией. Архивный проект сначала нужно восстановить. Перед вызовом интерфейс должен запросить подтверждение. Повторное удаление возвращает 404.",
             responses = {
                     @ApiResponse(responseCode = "204", description = "Проект и его содержимое удалены; тело ответа отсутствует", content = @Content),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: переезд в архиве; сначала восстановите его", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "400", description = "INVALID_REQUEST_PARAMETER: projectId не является UUID", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "401", description = "UNAUTHORIZED: access токен отсутствует, некорректный или истек", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не существует или принадлежит другому пользователю", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
@@ -110,5 +115,31 @@ public class MoveProjectController {
             @AuthenticationPrincipal UserEntity user) {
         moveProjectService.deleteMoveProject(projectId, user);
         return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/{projectId}/archive")
+    @Operation(summary = "Архивировать переезд",
+            description = "Сохраняет archivedAt и запрещает изменения проекта и всего содержимого, включая удаление. Чтение, поиск, статистика и журнал доступны. Можно архивировать на любом этапе. Повтор не меняет время и не создаёт событие. PROJECT_ARCHIVED записывается одной транзакцией.",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Архивный проект или успешный повтор", content = @Content(schema = @Schema(implementation = MoveProjectResponse.class))),
+                    @ApiResponse(responseCode = "400", description = "Некорректный UUID", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "401", description = "Требуется авторизация", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не найден или недоступен", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+            })
+    public ResponseEntity<MoveProjectResponse> archiveMoveProject(@PathVariable UUID projectId, @AuthenticationPrincipal UserEntity user) {
+        return ResponseEntity.ok(moveProjectService.archiveMoveProject(projectId, user));
+    }
+
+    @DeleteMapping("/{projectId}/archive")
+    @Operation(summary = "Восстановить переезд из архива",
+            description = "Очищает archivedAt и снова разрешает изменения. Проект и его содержимое сохраняются. Для уже активного проекта успешный ответ без изменения времени и нового события. PROJECT_RESTORED записывается одной транзакцией.",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Активный проект или успешный повтор", content = @Content(schema = @Schema(implementation = MoveProjectResponse.class))),
+                    @ApiResponse(responseCode = "400", description = "Некорректный UUID", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "401", description = "Требуется авторизация", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не найден или недоступен", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+            })
+    public ResponseEntity<MoveProjectResponse> restoreMoveProject(@PathVariable UUID projectId, @AuthenticationPrincipal UserEntity user) {
+        return ResponseEntity.ok(moveProjectService.restoreMoveProject(projectId, user));
     }
 }

@@ -25,6 +25,8 @@ import ru.example.prodbackend.task.repository.MoveTaskRepository;
 import ru.example.prodbackend.task.service.TaskTemplateService;
 
 import java.time.ZoneOffset;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 @Service
@@ -64,10 +66,10 @@ public class MoveProjectService {
         return toResponse(savedProject);
     }
 
-    public PageResponse<MoveProjectResponse> getMoveProjects(PaginationRequest request, UserEntity user) {
+    public PageResponse<MoveProjectResponse> getMoveProjects(PaginationRequest request, Boolean archived, UserEntity user) {
         Sort sort = Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"));
         PageRequest pageable = PageRequest.of(request.getPage(), request.getSize(), sort);
-        Page<MoveProjectEntity> projects = moveProjectRepository.findAllByOwner_Id(user.getId(), pageable);
+        Page<MoveProjectEntity> projects = moveProjectRepository.findAllByArchiveFilter(user.getId(), archived, pageable);
 
         return PageResponse.from(projects.map(this::toResponse));
     }
@@ -78,7 +80,7 @@ public class MoveProjectService {
 
     @Transactional
     public MoveProjectResponse updateMoveProject(UUID projectId, UpdateMoveProjectRequest request, UserEntity user) {
-        MoveProjectEntity project = projectAccessService.getOwnedProject(projectId, user.getId());
+        MoveProjectEntity project = projectAccessService.getOwnedProjectForUpdate(projectId, user.getId());
 
         if (request.getName() != null) {
             project.setName(request.getName().strip());
@@ -102,7 +104,7 @@ public class MoveProjectService {
 
     @Transactional
     public void deleteMoveProject(UUID projectId, UserEntity user) {
-        MoveProjectEntity project = projectAccessService.getOwnedProject(projectId, user.getId());
+        MoveProjectEntity project = projectAccessService.getOwnedProjectForUpdate(projectId, user.getId());
 
         // Порядок важен из-за внешних ключей.
         moveProjectRepository.deleteProjectItems(projectId);
@@ -116,6 +118,26 @@ public class MoveProjectService {
         moveProjectRepository.flush();
     }
 
+    @Transactional
+    public MoveProjectResponse archiveMoveProject(UUID projectId, UserEntity user) {
+        return changeArchiveState(projectId, user, true);
+    }
+
+    @Transactional
+    public MoveProjectResponse restoreMoveProject(UUID projectId, UserEntity user) {
+        return changeArchiveState(projectId, user, false);
+    }
+
+    private MoveProjectResponse changeArchiveState(UUID projectId, UserEntity user, boolean archived) {
+        var project = projectAccessService.lockOwnedProject(projectId, user.getId());
+        if ((project.getArchivedAt() != null) == archived) return toResponse(project);
+        project.setArchivedAt(archived ? Instant.now().truncatedTo(ChronoUnit.MICROS) : null);
+        moveProjectRepository.saveAndFlush(project);
+        projectEventService.record(project, project.getOwner(), archived ? ProjectEventType.PROJECT_ARCHIVED : ProjectEventType.PROJECT_RESTORED,
+                EventObjectType.PROJECT, projectId, (archived ? "Архивирован" : "Восстановлен") + " проект переезда «" + project.getName() + "»");
+        return toResponse(project);
+    }
+
     private MoveProjectResponse toResponse(MoveProjectEntity project) {
         return MoveProjectResponse.builder()
                 .id(project.getId())
@@ -123,6 +145,7 @@ public class MoveProjectService {
                 .moveDate(project.getMoveDate())
                 .originAddress(project.getOriginAddress())
                 .destinationAddress(project.getDestinationAddress())
+                .archived(project.getArchivedAt() != null).archivedAt(project.getArchivedAt())
                 .createdAt(project.getCreatedAt())
                 .updatedAt(project.getUpdatedAt())
                 .build();

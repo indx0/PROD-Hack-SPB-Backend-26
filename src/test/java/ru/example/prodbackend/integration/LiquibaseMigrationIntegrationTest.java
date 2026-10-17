@@ -47,13 +47,30 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                 assertHistory(jdbc);
                 assertConstraints(jdbc);
 
+                // Downgrade must refuse to erase or relabel archive history.
+                UUID archivedProject = jdbc.queryForObject("SELECT id FROM move_projects ORDER BY id LIMIT 1", UUID.class);
+                UUID archiveEvent = UUID.randomUUID();
+                jdbc.update("UPDATE move_projects SET archived_at = now() WHERE id = ?", archivedProject);
+                jdbc.update("""
+                        INSERT INTO project_events (id, project_id, event_type, object_type, object_id, occurred_at, description)
+                        VALUES (?, ?, 'PROJECT_ARCHIVED', 'PROJECT', ?, now(), 'Архивирован проект')
+                        """, archiveEvent, archivedProject, archivedProject);
+                jdbc.update("UPDATE project_events SET event_type = 'PROJECT_RESTORED' WHERE id = ?", archiveEvent);
+                assertThatThrownBy(() -> runLiquibase(schema, 1)).hasRootCauseInstanceOf(SQLException.class)
+                        .rootCause().extracting(error -> ((SQLException) error).getSQLState()).isEqualTo("23514");
+                assertHistory(jdbc);
+                assertThat(jdbc.queryForObject("SELECT event_type FROM project_events WHERE id = ?", String.class, archiveEvent)).isEqualTo("PROJECT_RESTORED");
+                assertThat(jdbc.queryForObject("SELECT archived_at FROM move_projects WHERE id = ?", java.sql.Timestamp.class, archivedProject)).isNotNull();
+                jdbc.update("DELETE FROM project_events WHERE id = ?", archiveEvent); // Remove only this test fixture before lifecycle rollback.
+
                 // Roll back only the new columns, then upgrade a schema that already has items.
                 var items = jdbc.queryForList("SELECT id, name, quantity, first_day FROM items ORDER BY id");
                 var boxes = jdbc.queryForList("SELECT id, status FROM boxes ORDER BY id");
                 var rooms = jdbc.queryForList("SELECT id, name FROM rooms ORDER BY id");
+                var projects = jdbc.queryForList("SELECT id, name, move_date FROM move_projects ORDER BY id");
                 var checklist = jdbc.queryForList("SELECT id, name, completed_at FROM first_day_checklist_items ORDER BY id");
                 var events = jdbc.queryForList("SELECT id, actor_id, object_id, description, occurred_at FROM project_events ORDER BY id");
-                runLiquibase(schema, 5);
+                runLiquibase(schema, 6);
                 assertThat(jdbc.queryForList("""
                         SELECT column_name FROM information_schema.columns
                         WHERE table_schema = ? AND table_name = 'items'
@@ -70,12 +87,18 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                         SELECT column_name FROM information_schema.columns
                         WHERE table_schema = ? AND table_name = 'project_events'
                         """, String.class, schema)).doesNotContain("previous_status", "new_status");
+                assertThat(jdbc.queryForList("""
+                        SELECT column_name FROM information_schema.columns
+                        WHERE table_schema = ? AND table_name = 'move_projects'
+                        """, String.class, schema)).doesNotContain("archived_at");
                 assertThat(jdbc.queryForList("SELECT event_type FROM project_events", String.class)).containsOnly("BOX_STATUS_CHANGED", "BOX_CREATED");
                 runLiquibase(schema, 0);
                 assertHistory(jdbc);
                 assertThat(jdbc.queryForList("SELECT id, name, quantity, first_day FROM items ORDER BY id")).isEqualTo(items);
                 assertThat(jdbc.queryForList("SELECT id, status FROM boxes ORDER BY id")).isEqualTo(boxes);
                 assertThat(jdbc.queryForList("SELECT id, name FROM rooms ORDER BY id")).isEqualTo(rooms);
+                assertThat(jdbc.queryForList("SELECT id, name, move_date FROM move_projects ORDER BY id")).isEqualTo(projects);
+                assertThat(jdbc.queryForObject("SELECT count(*) FROM move_projects WHERE archived_at IS NOT NULL", Long.class)).isZero();
                 assertThat(jdbc.queryForObject("SELECT count(*) FROM rooms WHERE icon_key IS NOT NULL", Long.class)).isZero();
                 assertThat(jdbc.queryForObject("SELECT count(*) FROM boxes WHERE title <> '' OR fragile OR first_day OR carry_with_me", Long.class)).isZero();
                 assertThat(jdbc.queryForList("SELECT id, name, completed_at FROM first_day_checklist_items ORDER BY id")).isEqualTo(checklist);
@@ -90,7 +113,7 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                 assertHistory(jdbc);
                 assertThat(jdbc.queryForList("SELECT id, email FROM users ORDER BY email")).isEqualTo(users);
 
-                runLiquibase(schema, 16);
+                runLiquibase(schema, 17);
                 assertThat(jdbc.queryForList("""
                         SELECT tablename FROM pg_tables
                         WHERE schemaname = ? AND tablename NOT IN ('databasechangelog', 'databasechangeloglock')
@@ -144,7 +167,7 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
 
     private void assertHistory(JdbcTemplate jdbc) {
         assertThat(jdbc.queryForList("SELECT author FROM databasechangelog", String.class))
-                .hasSize(16).containsOnly("indx0", "timn2020");
+                .hasSize(17).containsOnly("indx0", "timn2020");
     }
 
     private void assertConstraints(JdbcTemplate jdbc) {
@@ -174,6 +197,7 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                     """, id, owner);
         }
         UUID room = UUID.randomUUID();
+        assertThat(jdbc.queryForObject("SELECT archived_at FROM move_projects WHERE id = ?", java.sql.Timestamp.class, project)).isNull();
         UUID otherRoom = UUID.randomUUID();
         jdbc.update("INSERT INTO rooms (id, project_id, name, created_at, updated_at) VALUES (?, ?, 'Room', now(), now())",
                 room, project);

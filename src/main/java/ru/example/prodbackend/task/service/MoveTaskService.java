@@ -48,7 +48,7 @@ public class MoveTaskService {
 
     @Transactional
     public MoveTaskResponse create(UUID projectId, CreateMoveTaskRequest request, UUID userId) {
-        var project = projectAccessService.getOwnedProject(projectId, userId);
+        var project = projectAccessService.getOwnedProjectForUpdate(projectId, userId);
 
         MoveTaskEntity task = MoveTaskEntity.builder()
                 .project(project)
@@ -135,7 +135,7 @@ public class MoveTaskService {
 
     @Transactional
     public MoveTaskResponse applyTemplate(UUID projectId, ApplyTaskTemplateRequest request, UUID userId) {
-        var project = projectAccessService.getOwnedProject(projectId, userId);
+        var project = projectAccessService.getOwnedProjectForUpdate(projectId, userId);
         var template = taskTemplateRepository.findById(request.getTemplateId()).orElseThrow(() -> new TaskTemplateNotFoundException("task template not found exception"));
 
         if (moveTaskRepository.existsByProject_IdAndTemplate_Id(projectId, template.getId())) {
@@ -156,7 +156,7 @@ public class MoveTaskService {
     }
 
     private MoveTaskEntity requireTaskForUpdate(UUID projectId, UUID taskId, UUID userId) {
-        projectAccessService.getOwnedProject(projectId, userId);
+        projectAccessService.getOwnedProjectForUpdate(projectId, userId);
         return moveTaskRepository.findForUpdate(taskId, projectId).orElseThrow(() -> new MoveTaskNotFoundException("move task not found"));
     }
 

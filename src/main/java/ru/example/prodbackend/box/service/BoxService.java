@@ -53,7 +53,7 @@ public class BoxService {
 
     @Transactional
     public BoxResponse create(UUID userId, UUID projectId, CreateBoxRequest request) {
-        var project = projectAccessService.getOwnedProject(projectId, userId);
+        var project = projectAccessService.getOwnedProjectForUpdate(projectId, userId);
         RoomEntity room = requireProjectRoom(request.getRoomId(), projectId);
 
         if (request.getNumber() == null || request.getNumber() <= 0) {
@@ -238,7 +238,8 @@ public class BoxService {
     }
 
     private BoxEntity requireOwnedBox(UUID userId, UUID projectId, UUID boxId, boolean forUpdate) {
-        projectAccessService.getOwnedProject(projectId, userId);
+        if (forUpdate) projectAccessService.getOwnedProjectForUpdate(projectId, userId);
+        else projectAccessService.getOwnedProject(projectId, userId);
         var box = forUpdate ? boxRepository.findForUpdate(boxId, projectId) : boxRepository.findByIdAndProject_Id(boxId, projectId);
         return box.orElseThrow(BoxNotFoundException::new);
     }

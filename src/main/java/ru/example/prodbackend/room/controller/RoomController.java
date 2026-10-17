@@ -51,7 +51,7 @@ public class RoomController {
             responses = {
                     @ApiResponse(responseCode = "201", description = "Комната создана", content = @Content(schema = @Schema(implementation = RoomResponse.class))),
                     @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не существует или принадлежит другому пользователю", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: название уже занято в этом проекте", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: название уже занято в этом проекте; для изменений — переезд в архиве, сначала восстановите его", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: название пустое или длиннее 255 символов; iconKey пустой, пробельный или длиннее 64 символов", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             })
     public ResponseEntity<RoomResponse> createRoom(
@@ -88,7 +88,7 @@ public class RoomController {
             responses = {
                     @ApiResponse(responseCode = "200", description = "Комната обновлена", content = @Content(schema = @Schema(implementation = RoomResponse.class))),
                     @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект недоступен; ROOM_NOT_FOUND: комнаты нет в этом проекте", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: название уже занято другой комнатой проекта", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: название уже занято другой комнатой проекта; для изменений — переезд в архиве, сначала восстановите его", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: название пустое или длиннее 255 символов; iconKey пустой, пробельный или длиннее 64 символов", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             })
     public ResponseEntity<RoomResponse> updateRoom(
@@ -105,7 +105,7 @@ public class RoomController {
             responses = {
                     @ApiResponse(responseCode = "204", description = "Комната удалена, тело ответа отсутствует", content = @Content),
                     @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект недоступен; ROOM_NOT_FOUND: комнаты нет в этом проекте", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: в комнате есть коробки", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: в комнате есть коробки; для изменений — переезд в архиве, сначала восстановите его", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             })
     public ResponseEntity<Void> deleteRoom(
             @PathVariable("projectId") UUID projectId,

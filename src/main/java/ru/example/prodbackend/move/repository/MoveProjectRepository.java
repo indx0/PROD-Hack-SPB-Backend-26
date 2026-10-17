@@ -1,8 +1,10 @@
 package ru.example.prodbackend.move.repository;
 
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -16,6 +18,21 @@ public interface MoveProjectRepository extends JpaRepository<MoveProjectEntity, 
     Page<MoveProjectEntity> findAllByOwner_Id(UUID ownerId, Pageable pageable);
     Optional<MoveProjectEntity> findByIdAndOwner_Id(UUID projectId, UUID ownerId);
     boolean existsByOwner_IdAndName(UUID ownerId, String name);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from MoveProjectEntity p where p.id = :projectId and p.owner.id = :ownerId")
+    Optional<MoveProjectEntity> findForUpdate(@Param("projectId") UUID projectId, @Param("ownerId") UUID ownerId);
+
+    @Query(value = """
+            select p from MoveProjectEntity p where p.owner.id = :ownerId
+            and (:archived is null or (:archived = true and p.archivedAt is not null)
+                or (:archived = false and p.archivedAt is null))
+            """, countQuery = """
+            select count(p) from MoveProjectEntity p where p.owner.id = :ownerId
+            and (:archived is null or (:archived = true and p.archivedAt is not null)
+                or (:archived = false and p.archivedAt is null))
+            """)
+    Page<MoveProjectEntity> findAllByArchiveFilter(@Param("ownerId") UUID ownerId, @Param("archived") Boolean archived, Pageable pageable);
 
     @Modifying
     @Query(value = """

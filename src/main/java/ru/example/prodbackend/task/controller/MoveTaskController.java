@@ -51,6 +51,7 @@ public class MoveTaskController {
             responses = {
                     @ApiResponse(responseCode = "201", description = "Задача создана",
                             content = @Content(schema = @Schema(implementation = MoveTaskResponse.class))),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: переезд в архиве; сначала восстановите его", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: название пустое или длиннее 255 символов, этап отсутствует, описание длиннее 10000 или ответственный длиннее 255 символов",
                             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             })
@@ -96,6 +97,7 @@ public class MoveTaskController {
             responses = {
                     @ApiResponse(responseCode = "200", description = "Задача обновлена",
                             content = @Content(schema = @Schema(implementation = MoveTaskResponse.class))),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: переезд в архиве; сначала восстановите его", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: пустой запрос, пустое название или превышение допустимой длины",
                             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             })
@@ -113,6 +115,7 @@ public class MoveTaskController {
             responses = {
                     @ApiResponse(responseCode = "200", description = "Задача с актуальным состоянием",
                             content = @Content(schema = @Schema(implementation = MoveTaskResponse.class))),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: переезд в архиве; сначала восстановите его", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: completed обязателен",
                             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             })
@@ -128,7 +131,8 @@ public class MoveTaskController {
     @Operation(summary = "Удалить задачу",
             description = "Удаляет задачу своего проекта. Подтверждение выполняется интерфейсом. Повторное удаление возвращает 404; история событий сохраняется.",
             responses = {
-                    @ApiResponse(responseCode = "204", description = "Задача удалена", content = @Content)
+                    @ApiResponse(responseCode = "204", description = "Задача удалена", content = @Content),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: переезд в архиве; сначала восстановите его", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             })
     public ResponseEntity<Void> delete(
             @PathVariable UUID projectId,
@@ -162,7 +166,7 @@ public class MoveTaskController {
                             content = @Content(schema = @Schema(implementation = MoveTaskResponse.class))),
                     @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект недоступен; TASK_TEMPLATE_NOT_FOUND: шаблон не найден",
                             content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: задача из этого шаблона уже существует в проекте",
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: задача из этого шаблона уже существует в проекте; для изменений — переезд в архиве, сначала восстановите его",
                             content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: templateId отсутствует или ответственный длиннее 255 символов",
                             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))

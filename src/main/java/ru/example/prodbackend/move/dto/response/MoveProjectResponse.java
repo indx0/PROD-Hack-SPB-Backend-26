@@ -27,6 +27,12 @@ public class MoveProjectResponse {
     @Schema(description = "Адрес назначения; может быть null")
     private String destinationAddress;
 
+    @Schema(description = "Проект в архиве: доступен для чтения, изменения запрещены до восстановления")
+    private boolean archived;
+
+    @Schema(types = {"string", "null"}, format = "date-time", description = "Время архивации; null для активного проекта")
+    private Instant archivedAt;
+
     @Schema(description = "Дата создания проекта")
     private Instant createdAt;
 

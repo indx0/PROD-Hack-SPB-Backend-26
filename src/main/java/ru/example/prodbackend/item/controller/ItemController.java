@@ -45,7 +45,7 @@ import java.util.UUID;
                 content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
         @ApiResponse(responseCode = "404", description = "Коробка или вещь не найдена либо недоступна пользователю",
                 content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-        @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: недопустимый статус коробки или изменившееся расположение вещи",
+        @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: недопустимый статус коробки или изменившееся расположение вещи; для изменений — переезд в архиве, сначала восстановите его",
                 content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
         @ApiResponse(responseCode = "422", description = "Ошибка валидации запроса",
                 content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
@@ -149,7 +149,7 @@ public class ItemController {
             responses = {
                     @ApiResponse(responseCode = "200", description = "Вещь обновлена",
                             content = @Content(schema = @Schema(implementation = ItemResponse.class))),
-                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: недопустимый статус коробки для изменения отметки",
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: недопустимый статус коробки для изменения отметки; для изменений — переезд в архиве, сначала восстановите его",
                             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             })
     @PatchMapping("/boxes/{boxId}/items/{itemId}")

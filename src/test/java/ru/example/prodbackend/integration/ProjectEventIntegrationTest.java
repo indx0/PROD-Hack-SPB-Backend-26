@@ -175,6 +175,28 @@ class ProjectEventIntegrationTest extends AuthIntegrationTestSupport {
         doThrow(new DataAccessResourceFailureException("Тестовый сбой записи журнала")).when(eventRepository).save(any(ProjectEventEntity.class));
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void eventWriteFailureRollsBackArchiveOrRestore(boolean archive) {
+        var project = moveProjectService.createMoveProject(request(), owner);
+        if (!archive) moveProjectService.archiveMoveProject(project.getId(), owner);
+        var before = moveProjectRepository.findById(project.getId()).orElseThrow();
+        long events = eventRepository.count();
+        long tasks = taskRepository.count();
+        long checklist = checklistRepository.count();
+        failEventWrite();
+        assertThrows(DataAccessResourceFailureException.class, () -> {
+            if (archive) moveProjectService.archiveMoveProject(project.getId(), owner);
+            else moveProjectService.restoreMoveProject(project.getId(), owner);
+        });
+        var after = moveProjectRepository.findById(project.getId()).orElseThrow();
+        assertEquals(before.getArchivedAt(), after.getArchivedAt());
+        assertEquals(before.getUpdatedAt(), after.getUpdatedAt());
+        assertEquals(events, eventRepository.count());
+        assertEquals(tasks, taskRepository.count());
+        assertEquals(checklist, checklistRepository.count());
+    }
+
     @Test
     void eventWriteFailureRollsBackCorrectionAndUnpackingMarks() {
         var project = moveProjectService.createMoveProject(request(), owner);

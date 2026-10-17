@@ -213,6 +213,7 @@ class BoxReadinessIntegrationTest extends BaseIntegrationTest {
         var release = new CountDownLatch(1);
         try {
             var first = executor.submit(() -> new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                moveProjectRepository.findForUpdate(projectId, ownerId).orElseThrow();
                 boxRepository.findForUpdate(boxId, projectId).orElseThrow();
                 if (addFirst) itemService.create(ownerId, projectId, boxId, CreateItemRequest.builder().name("Новая вещь").build());
                 else boxService.changeStatus(ownerId, projectId, boxId, BoxStatus.PACKED);

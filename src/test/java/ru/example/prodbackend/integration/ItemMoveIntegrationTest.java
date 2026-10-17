@@ -211,7 +211,7 @@ class ItemMoveIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void checklistLinkDetectsTransferWhileWaitingForOldBoxAndCanBeRetried() throws Exception {
+    void checklistLinkWaitsForProjectAndUsesCommittedTransferLocation() throws Exception {
         var executor = Executors.newFixedThreadPool(2);
         var moved = new CountDownLatch(1);
         var release = new CountDownLatch(1);
@@ -223,14 +223,15 @@ class ItemMoveIntegrationTest extends BaseIntegrationTest {
             }));
             assertThat(moved.await(10, TimeUnit.SECONDS)).isTrue();
             String linkUrl = "/api/move-projects/" + projectId + "/first-day-checklist/" + pointId + "/item";
-            var second = executor.submit(() -> perform(put(linkUrl), Map.of("itemId", itemId)).andExpect(status().isConflict()));
-            // The first transfer is uncommitted: the link reads the old location and blocks on its box.
+            var second = executor.submit(() -> perform(put(linkUrl), Map.of("itemId", itemId)).andExpect(status().isOk())
+                    .andExpect(jsonPath("$.boxId").value(targetId.toString())));
+            // The link waits on the project before reading the item's location.
             long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
             boolean waiting = false;
             while (System.nanoTime() < deadline && !waiting) {
                 waiting = jdbc.queryForObject("""
                         SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname = current_database()
-                        AND wait_event_type = 'Lock' AND lower(query) LIKE '%from boxes%' AND lower(query) LIKE '%for%update%')
+                        AND wait_event_type = 'Lock' AND lower(query) LIKE '%from move_projects%' AND lower(query) LIKE '%for%update%')
                         """, Boolean.class);
                 if (!waiting) Thread.sleep(10);
             }

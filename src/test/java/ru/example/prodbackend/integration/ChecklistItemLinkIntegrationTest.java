@@ -302,6 +302,7 @@ class ChecklistItemLinkIntegrationTest extends BaseIntegrationTest {
         var release = new CountDownLatch(1);
         try {
             var first = executor.submit(() -> new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                moveProjectRepository.findForUpdate(projectId, ownerId).orElseThrow();
                 boxRepository.findForUpdate(boxId, projectId).orElseThrow();
                 switch (firstAction) {
                     case "link" -> checklistService.link(projectId, pointId, itemId, ownerId);
