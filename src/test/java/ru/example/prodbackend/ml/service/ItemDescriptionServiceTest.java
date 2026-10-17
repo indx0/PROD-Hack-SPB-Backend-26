@@ -22,6 +22,8 @@ class ItemDescriptionServiceTest {
         when(access.getOwnedProject(project, user)).thenThrow(new MoveProjectNotFoundException("missing"));
         assertThatThrownBy(() -> new ItemDescriptionService(access, photos, client).describe(user, project, null))
                 .isInstanceOf(MoveProjectNotFoundException.class);
+        assertThatThrownBy(() -> new ItemDescriptionService(access, photos, client).describeItems(user, project, null))
+                .isInstanceOf(MoveProjectNotFoundException.class);
         verifyNoInteractions(photos, client);
     }
 
@@ -39,4 +41,24 @@ class ItemDescriptionServiceTest {
         ordered.verify(access).getOwnedProject(project, user);
         ordered.verify(client).describe(bytes, "image/jpeg");
     }
+    @Test
+    void listScenarioValidatesAccessAndPhotoBeforeCallingClient() {
+        var access = mock(ProjectAccessService.class);
+        var client = mock(LlmProxyClient.class);
+        byte[] bytes = {(byte)255, (byte)216, (byte)255};
+        var response = new ru.example.prodbackend.ml.dto.ItemsDescriptionResponse(
+                List.of(new ItemDescriptionResponse("Кружка", List.of())));
+        when(client.describeItems(bytes, "image/jpeg")).thenReturn(response);
+        var user = UUID.randomUUID(); var project = UUID.randomUUID();
+        var service = new ItemDescriptionService(access, new PhotoValidator(), client);
+        assertThat(service.describeItems(user, project, new MockMultipartFile("photo", bytes))).isEqualTo(response);
+        var ordered = inOrder(access, client);
+        ordered.verify(access).getOwnedProject(project, user);
+        ordered.verify(client).describeItems(bytes, "image/jpeg");
+        clearInvocations(client);
+        assertThatThrownBy(() -> service.describeItems(user, project, new MockMultipartFile("photo", new byte[0])))
+                .isInstanceOf(ru.example.prodbackend.ml.exception.MlException.class);
+        verifyNoInteractions(client);
+    }
+
 }
