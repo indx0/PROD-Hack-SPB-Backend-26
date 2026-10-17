@@ -135,11 +135,10 @@ erDiagram
     move_projects ||--o{ boxes : has
     rooms ||--o{ boxes : destination
     boxes ||--o{ items : contains
-    move_projects ||--o{ first_day_checklist_items : checks
-    items o|--o| first_day_checklist_items : linked
+    items o|--o{ move_tasks : linked_item_id
 ```
 
-`first_day_checklist_items` — прежняя таблица, новые пункты в неё не записываются.
+Вещь принадлежит одной коробке. Задача может ссылаться на одну вещь через `linked_item_id`; на одну вещь могут ссылаться несколько задач. Название задачи независимо от вещи, а её коробка и комната в ответе задачи читаются из актуальных данных. Перенос вещи сохраняет связь; удаление вещи очищает связь, сохраняя задачу. Метка `items.first_day` не создаёт задачи и не меняет связи с ними.
 
 **Задачи и шаблоны**
 
@@ -155,17 +154,28 @@ erDiagram
     task_set_applications o|--o{ move_tasks : creates
 ```
 
-**Папки, назначения и архив первого дня**
+**Папки и ответственные**
 
 ```mermaid
 erDiagram
     move_projects ||--o{ task_folders : groups
-    task_folders o|--o{ move_tasks : contains
-    users o|--o{ move_tasks : assigned
-    items o|--o{ move_tasks : linked
+    task_folders o|--o{ move_tasks : folder_id
+    users o|--o{ move_tasks : assignee_id
+```
+
+Папка и ответственный необязательны. Папка принадлежит тому же проекту, ответственный — его создатель или участник. Удаление папки сохраняет задачи без папки.
+
+**Прежний чек-лист и архив**
+
+```mermaid
+erDiagram
+    move_projects ||--o{ first_day_checklist_items : legacy
+    items o|--o| first_day_checklist_items : item_id
     move_projects ||--o{ first_day_checklist_archive : archives
     move_projects ||--o| first_day_checklist_migrations : migrated
 ```
+
+`first_day_checklist_items` — прежняя таблица, новые пункты в неё не записываются. Её пункты перенесены в обычные задачи; старый API читает неизменяемый снимок из `first_day_checklist_archive`, запись возвращает `410 FIRST_DAY_CHECKLIST_RETIRED`. UUID вещей, коробок, комнат, задач и папок в снимке исторические, без внешних ключей к актуальным записям.
 
 Ниже перечислены **все таблицы приложения и их поля**. `timestamptz` означает `timestamp with time zone`; `?` — допускаемый `NULL`. Первичные ключи — `id`, у `first_day_checklist_migrations` — `project_id`.
 
