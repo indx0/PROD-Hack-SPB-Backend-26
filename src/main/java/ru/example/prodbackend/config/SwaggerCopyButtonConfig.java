@@ -42,9 +42,16 @@ public class SwaggerCopyButtonConfig {
                 script += """
                         
                         ;(() => {
-                            const customScript = document.createElement("script");
-                            customScript.src = "/js/openapi-to-markdown.js";
-                            document.body.appendChild(customScript);
+                            const assets = new URL("../", document.currentScript.src);
+                            const stylesheet = document.createElement("link");
+                            stylesheet.rel = "stylesheet";
+                            stylesheet.href = new URL("css/swagger-autumn.css", assets).href;
+                            document.head.appendChild(stylesheet);
+                            for (const path of ["js/openapi-to-markdown.js", "js/swagger-autumn.js"]) {
+                                const customScript = document.createElement("script");
+                                customScript.src = new URL(path, assets).href;
+                                document.body.appendChild(customScript);
+                            }
                         })();
                         """;
 

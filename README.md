@@ -8,6 +8,9 @@ Java 17 · Spring Boot · PostgreSQL · JWT.
 [Здоровье сервиса](https://hack-lead-01-ru3-vm1-3a8de1.vmaas-spirit.t-education.com/actuator/health/readiness) ·
 [Пайплайны](https://gitlab.t-education.com/hack-led-01/backend/-/pipelines)
 
+В Swagger кнопка «Осень» справа внизу включает тёплую тему и полупрозрачные падающие листья.
+Выбор сохраняется в браузере; при настройке уменьшения движения остаётся только тема без анимации.
+
 ## Что прочитать дальше
 
 | Вопрос | Документ |

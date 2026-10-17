@@ -80,7 +80,7 @@ class SecurityIntegrationTest extends AuthIntegrationTestSupport {
 
     @ParameterizedTest
     @ValueSource(strings = {"/v3/api-docs", "/v3/api-docs.yaml", "/swagger-ui/index.html",
-            "/js/openapi-to-markdown.js"})
+            "/js/openapi-to-markdown.js", "/js/swagger-autumn.js", "/css/swagger-autumn.css"})
     void documentationIsAccessibleWithoutAccessToken(String endpoint) throws Exception {
         mockMvc.perform(get(endpoint)).andExpect(status().isOk());
         assertDatabaseIsEmpty();
