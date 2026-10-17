@@ -11,6 +11,7 @@ import ru.example.prodbackend.event.entity.ProjectEventType;
 import ru.example.prodbackend.event.repository.ProjectEventRepository;
 import ru.example.prodbackend.move.dto.response.MoveProjectResponse;
 import ru.example.prodbackend.task.entity.MoveTaskEntity;
+import ru.example.prodbackend.task.entity.TaskDueType;
 import ru.example.prodbackend.task.repository.MoveTaskRepository;
 import ru.example.prodbackend.task.repository.TaskTemplateRepository;
 
@@ -53,6 +54,8 @@ class MoveProjectBootstrapIntegrationTest extends AuthIntegrationTestSupport {
         LocalDate moveDateUtc = LocalDate.parse("2026-10-31");
         for (var task : tasks) {
             assertNotNull(task.getTemplate());
+            assertEquals(TaskDueType.RELATIVE, task.getDueType());
+            assertEquals(task.getTemplate().getDueDateOffsetDays(), task.getOffsetDays());
             assertNull(task.getCompletedAt());
             assertNull(task.getAssigneeName());
             assertEquals(moveDateUtc.plusDays(task.getTemplate().getDueDateOffsetDays()), task.getDueDate());

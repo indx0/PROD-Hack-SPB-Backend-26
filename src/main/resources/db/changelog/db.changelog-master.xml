@@ -22,4 +22,5 @@
     <include file="1.1/2026-10-17-0016-add-box-status-corrections.sql" relativeToChangelogFile="true"/>
     <include file="1.1/2026-10-17-0017-add-project-archive.sql" relativeToChangelogFile="true"/>
     <include file="1.1/2026-10-17-0018-create-project-participants.sql" relativeToChangelogFile="true"/>
+    <include file="1.1/2026-10-17-0019-add-task-relative-due-dates.sql" relativeToChangelogFile="true"/>
 </databaseChangeLog>

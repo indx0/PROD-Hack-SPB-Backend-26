@@ -15,6 +15,8 @@ import ru.example.prodbackend.event.service.ProjectEventService;
 import ru.example.prodbackend.exception.UserNotFoundException;
 import ru.example.prodbackend.move.dto.request.CreateMoveProjectRequest;
 import ru.example.prodbackend.move.dto.request.UpdateMoveProjectRequest;
+import ru.example.prodbackend.move.dto.request.RescheduleMoveProjectRequest;
+import ru.example.prodbackend.move.dto.response.RescheduleMoveProjectResponse;
 import ru.example.prodbackend.move.dto.response.MoveProjectResponse;
 import ru.example.prodbackend.move.entity.MoveProjectEntity;
 import ru.example.prodbackend.move.repository.MoveProjectRepository;
@@ -23,8 +25,10 @@ import ru.example.prodbackend.user.repository.UserRepository;
 import ru.example.prodbackend.task.entity.MoveTaskEntity;
 import ru.example.prodbackend.task.repository.MoveTaskRepository;
 import ru.example.prodbackend.task.service.TaskTemplateService;
+import ru.example.prodbackend.task.service.MoveTaskService;
+import ru.example.prodbackend.task.service.TaskDeadline;
+import ru.example.prodbackend.task.entity.TaskDueType;
 
-import java.time.ZoneOffset;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
@@ -42,6 +46,7 @@ public class MoveProjectService {
     private final MoveTaskRepository moveTaskRepository;
     private final FirstDayChecklistService checklistService;
     private final ProjectParticipantService participantService;
+    private final MoveTaskService moveTaskService;
 
     @Transactional
     public MoveProjectResponse createMoveProject(CreateMoveProjectRequest request, UserEntity user) {
@@ -58,10 +63,10 @@ public class MoveProjectService {
 
         MoveProjectEntity savedProject = moveProjectRepository.save(project);
         participantService.addInitialParticipants(savedProject, participants);
-        var moveDate = savedProject.getMoveDate().atOffset(ZoneOffset.UTC).toLocalDate();
         moveTaskRepository.saveAll(taskTemplateService.getDefaultTemplates().stream().map(template -> MoveTaskEntity.builder()
                 .project(savedProject).template(template).title(template.getTitle()).description(template.getDescription()).stage(template.getStage())
-                .dueDate(moveDate.plusDays(template.getDueDateOffsetDays())).build()).toList());
+                .dueType(TaskDueType.RELATIVE).offsetDays(template.getDueDateOffsetDays())
+                .dueDate(TaskDeadline.relative(savedProject.getMoveDate(), template.getDueDateOffsetDays()).date()).build()).toList());
         checklistService.createDefaults(savedProject);
         projectEventService.record(savedProject, owner, ProjectEventType.PROJECT_CREATED, EventObjectType.PROJECT,
                 savedProject.getId(), "Создан проект переезда «" + savedProject.getName() + "»");
@@ -103,6 +108,17 @@ public class MoveProjectService {
 
         MoveProjectEntity savedProject = moveProjectRepository.saveAndFlush(project);
         return toResponse(savedProject);
+    }
+
+    @Transactional
+    public RescheduleMoveProjectResponse rescheduleMoveProject(UUID projectId, RescheduleMoveProjectRequest request, UserEntity user) {
+        var project = projectAccessService.getAccessibleProjectForUpdate(projectId, user.getId());
+        var moveDate = request.getMoveDate().truncatedTo(ChronoUnit.MICROS);
+        var tasks = moveTaskService.rescheduleTasks(projectId, request.getTaskIds(), moveDate);
+        // Проверяем задачи и при совпадении даты проекта; выбранные сроки могли ещё не пересчитываться.
+        project.setMoveDate(moveDate);
+        moveProjectRepository.flush();
+        return new RescheduleMoveProjectResponse(toResponse(project), tasks);
     }
 
     @Transactional

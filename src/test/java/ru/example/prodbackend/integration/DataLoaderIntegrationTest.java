@@ -20,6 +20,7 @@ import ru.example.prodbackend.item.entity.ItemEntity;
 import ru.example.prodbackend.item.service.ItemService;
 import ru.example.prodbackend.checklist.entity.FirstDayChecklistItemEntity;
 import ru.example.prodbackend.task.entity.MoveTaskEntity;
+import ru.example.prodbackend.task.entity.TaskDueType;
 import ru.example.prodbackend.user.repository.UserRepository;
 import ru.example.prodbackend.box.service.BoxService;
 import ru.example.prodbackend.checklist.service.FirstDayChecklistService;
@@ -111,6 +112,16 @@ class DataLoaderIntegrationTest extends BaseIntegrationTest {
                 "select i.firstDay from ItemEntity i where i.name = 'Постельное бельё'", Boolean.class)
                 .getSingleResult()).isTrue();
         assertThat(count("MoveTaskEntity")).isEqualTo(12);
+        assertThat(entityManager.createQuery("from MoveTaskEntity", MoveTaskEntity.class).getResultList()).allSatisfy(task -> {
+            if (task.getTitle().equals("Отключить интернет")) {
+                assertThat(task.getDueType()).isEqualTo(TaskDueType.FIXED);
+                assertThat(task.getOffsetDays()).isNull();
+            } else {
+                assertThat(task.getDueType()).isEqualTo(TaskDueType.RELATIVE);
+                assertThat(task.getOffsetDays()).isNotNull();
+                assertThat(task.getDueDate()).isEqualTo(moveDate.plusDays(task.getOffsetDays()));
+            }
+        });
         assertThat(count("FirstDayChecklistItemEntity")).isEqualTo(6);
         var linked = entityManager.createQuery("select c from FirstDayChecklistItemEntity c where c.item is not null", FirstDayChecklistItemEntity.class).getResultList();
         assertThat(linked).singleElement().satisfies(point -> {

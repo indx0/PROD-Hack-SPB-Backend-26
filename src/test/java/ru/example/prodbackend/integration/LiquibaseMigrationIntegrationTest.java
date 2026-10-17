@@ -47,9 +47,12 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                 assertHistory(jdbc);
                 assertConstraints(jdbc);
 
-                // Remove only the participant feature before checking the preceding archive migration's guard.
+                // Roll back task deadline metadata and participants before checking the archive migration guard.
                 var existingProjects = jdbc.queryForList("SELECT * FROM move_projects ORDER BY id");
-                runLiquibase(schema, 1);
+                var existingTasks = jdbc.queryForList("SELECT id, due_date, template_id FROM move_tasks ORDER BY id");
+                runLiquibase(schema, 2);
+                assertThat(jdbc.queryForList("SELECT id, due_date, template_id FROM move_tasks ORDER BY id")).isEqualTo(existingTasks);
+                assertThat(jdbc.queryForList("SELECT column_name FROM information_schema.columns WHERE table_schema = ? AND table_name = 'move_tasks'", String.class, schema)).doesNotContain("due_type", "offset_days");
                 assertHistory(jdbc, 17);
                 assertThat(jdbc.queryForObject("SELECT count(*) FROM information_schema.tables WHERE table_schema = ? AND table_name = 'project_participants'", Long.class, schema)).isZero();
                 assertThat(jdbc.queryForList("SELECT * FROM move_projects ORDER BY id")).isEqualTo(existingProjects);
@@ -72,6 +75,9 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                 runLiquibase(schema, 0);
                 assertHistory(jdbc);
                 assertThat(jdbc.queryForObject("SELECT count(*) FROM project_participants", Long.class)).isZero();
+                assertThat(jdbc.queryForList("SELECT id, due_date, template_id FROM move_tasks ORDER BY id")).isEqualTo(existingTasks);
+                assertThat(jdbc.queryForList("SELECT due_type FROM move_tasks", String.class)).containsOnly("FIXED");
+                assertThat(jdbc.queryForObject("SELECT count(*) FROM move_tasks WHERE offset_days IS NOT NULL", Long.class)).isZero();
 
                 // Roll back only the new columns, then upgrade a schema that already has items.
                 var items = jdbc.queryForList("SELECT id, name, quantity, first_day FROM items ORDER BY id");
@@ -80,7 +86,7 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                 var projects = jdbc.queryForList("SELECT id, name, move_date FROM move_projects ORDER BY id");
                 var checklist = jdbc.queryForList("SELECT id, name, completed_at FROM first_day_checklist_items ORDER BY id");
                 var events = jdbc.queryForList("SELECT id, actor_id, object_id, description, occurred_at FROM project_events ORDER BY id");
-                runLiquibase(schema, 7);
+                runLiquibase(schema, 8);
                 assertThat(jdbc.queryForList("""
                         SELECT column_name FROM information_schema.columns
                         WHERE table_schema = ? AND table_name = 'items'
@@ -123,7 +129,7 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                 assertHistory(jdbc);
                 assertThat(jdbc.queryForList("SELECT id, email FROM users ORDER BY email")).isEqualTo(users);
 
-                runLiquibase(schema, 18);
+                runLiquibase(schema, 19);
                 assertThat(jdbc.queryForList("""
                         SELECT tablename FROM pg_tables
                         WHERE schemaname = ? AND tablename NOT IN ('databasechangelog', 'databasechangeloglock')
@@ -176,7 +182,7 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
     }
 
     private void assertHistory(JdbcTemplate jdbc) {
-        assertHistory(jdbc, 18);
+        assertHistory(jdbc, 19);
     }
 
     private void assertHistory(JdbcTemplate jdbc, int expectedCount) {
@@ -210,6 +216,19 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                     VALUES (?, ?, 'Move', now(), now(), now())
                     """, id, owner);
         }
+        UUID template = UUID.randomUUID();
+        jdbc.update("INSERT INTO task_templates (id, title, stage, due_date_offset_days, created_at, updated_at) VALUES (?, 'Template', 'BEFORE_MOVE', -2, now(), now())", template);
+        UUID task = UUID.randomUUID();
+        jdbc.update("INSERT INTO move_tasks (id, project_id, title, stage, due_date, created_at, updated_at) VALUES (?, ?, 'Task', 'BEFORE_MOVE', '2026-11-08', now(), now())", task, project);
+        jdbc.update("UPDATE move_tasks SET template_id = ? WHERE id = ?", template, task);
+        assertThat(jdbc.queryForObject("SELECT due_type FROM move_tasks WHERE id = ?", String.class, task)).isEqualTo("FIXED");
+        rejects(jdbc, "UPDATE move_tasks SET due_type = NULL WHERE id = ?", "23502", task);
+        rejects(jdbc, "UPDATE move_tasks SET due_type = 'UNKNOWN' WHERE id = ?", "23514", task);
+        rejects(jdbc, "UPDATE move_tasks SET offset_days = -2 WHERE id = ?", "23514", task);
+        rejects(jdbc, "UPDATE move_tasks SET due_type = 'RELATIVE' WHERE id = ?", "23514", task);
+        jdbc.update("UPDATE move_tasks SET due_type = 'RELATIVE', offset_days = -2 WHERE id = ?", task);
+        rejects(jdbc, "UPDATE move_tasks SET due_date = NULL WHERE id = ?", "23514", task);
+        rejects(jdbc, "UPDATE move_tasks SET due_type = 'FIXED' WHERE id = ?", "23514", task);
         UUID room = UUID.randomUUID();
         assertThat(jdbc.queryForObject("SELECT archived_at FROM move_projects WHERE id = ?", java.sql.Timestamp.class, project)).isNull();
         String insertParticipant = "INSERT INTO project_participants (id, project_id, user_id) VALUES (?, ?, ?)";

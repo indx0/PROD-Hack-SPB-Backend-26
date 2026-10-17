@@ -7,6 +7,7 @@ import ru.example.prodbackend.move.entity.MoveProjectEntity;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 @Entity
@@ -50,6 +51,15 @@ public class MoveTaskEntity {
     @Column(name = "due_date")
     private LocalDate dueDate;
 
+    @Builder.Default
+    @NotNull
+    @Enumerated(EnumType.STRING)
+    @Column(name = "due_type", nullable = false, length = 16)
+    private TaskDueType dueType = TaskDueType.FIXED;
+
+    @Column(name = "offset_days")
+    private Integer offsetDays;
+
     @Size(max = 255)
     @Column(name = "assignee_name", nullable = true, length = 255)
     private String assigneeName;
@@ -69,12 +79,12 @@ public class MoveTaskEntity {
 
     @PrePersist
     protected void onCreate() {
-        createdAt = Instant.now();
+        createdAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
         updatedAt = createdAt;
     }
 
     @PreUpdate
     protected void onUpdate() {
-        updatedAt = Instant.now();
+        updatedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
     }
 }

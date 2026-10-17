@@ -3,6 +3,7 @@ package ru.example.prodbackend.task.dto.response;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 import ru.example.prodbackend.task.entity.TaskStage;
+import ru.example.prodbackend.task.entity.TaskDueType;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -20,6 +21,10 @@ public class MoveTaskResponse {
     private String description;
     private TaskStage stage;
     private LocalDate dueDate;
+    @Schema(description = "FIXED — фиксированный срок или без срока; RELATIVE — сохранённый срок относительно переезда")
+    private TaskDueType dueType;
+    @Schema(description = "Смещение в календарных днях для следующего явного пересчёта; только для RELATIVE", example = "-2")
+    private Integer offsetDays;
     private String assigneeName;
     private boolean completed;
     private Instant completedAt;

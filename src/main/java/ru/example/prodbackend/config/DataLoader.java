@@ -31,6 +31,7 @@ import ru.example.prodbackend.task.dto.request.CreateMoveTaskRequest;
 import ru.example.prodbackend.task.dto.request.MoveTaskFilter;
 import ru.example.prodbackend.task.dto.request.UpdateMoveTaskRequest;
 import ru.example.prodbackend.task.entity.TaskStage;
+import ru.example.prodbackend.task.entity.TaskDueType;
 import ru.example.prodbackend.task.service.MoveTaskService;
 import ru.example.prodbackend.user.entity.UserEntity;
 import ru.example.prodbackend.user.entity.UserRole;
@@ -109,13 +110,14 @@ public class DataLoader implements ApplicationRunner {
             if (task.getTitle().equals("Заказать грузчиков") || task.getTitle().equals("Отключить интернет")) {
                 var update = new UpdateMoveTaskRequest();
                 update.setAssigneeName("Анна");
+                if (task.getTitle().equals("Отключить интернет")) update.setDueDate(moveDate.minusDays(1));
                 moveTaskService.update(projectId, task.getId(), update, user.getId());
                 moveTaskService.changeCompletion(projectId, task.getId(), true, user.getId());
             }
         }
         moveTaskService.create(projectId, CreateMoveTaskRequest.builder().title("Упаковать кухню")
                 .description("Обернуть хрупкую посуду и подписать коробки.").stage(TaskStage.BEFORE_MOVE)
-                .dueDate(moveDate.minusDays(2)).assigneeName("Алексей").build(), user.getId());
+                .dueType(TaskDueType.RELATIVE).offsetDays(-2).assigneeName("Алексей").build(), user.getId());
 
         checklistService.create(projectId, CreateChecklistItemRequest.builder().name("Документы").build(), user.getId());
         checklistService.create(projectId, CreateChecklistItemRequest.builder().name("Аптечка").build(), user.getId());

@@ -20,6 +20,8 @@ import ru.example.prodbackend.common.dto.PaginationRequest;
 import ru.example.prodbackend.exception.dto.ErrorResponse;
 import ru.example.prodbackend.move.dto.request.CreateMoveProjectRequest;
 import ru.example.prodbackend.move.dto.request.UpdateMoveProjectRequest;
+import ru.example.prodbackend.move.dto.request.RescheduleMoveProjectRequest;
+import ru.example.prodbackend.move.dto.response.RescheduleMoveProjectResponse;
 import ru.example.prodbackend.move.dto.response.MoveProjectResponse;
 import ru.example.prodbackend.move.service.MoveProjectService;
 import ru.example.prodbackend.user.entity.UserEntity;
@@ -98,6 +100,22 @@ public class MoveProjectController {
             @Valid @RequestBody UpdateMoveProjectRequest request,
             @AuthenticationPrincipal UserEntity user) {
         return ResponseEntity.ok(moveProjectService.updateMoveProject(projectId, request, user));
+    }
+
+    @PostMapping("/{projectId}/reschedule")
+    @Operation(summary = "Перенести дату переезда и выбранные относительные сроки",
+            description = "Доступно создателю и участникам активного проекта. taskIds обязателен: [] меняет только дату проекта. Все выбранные задачи должны принадлежать проекту, быть невыполненными и иметь RELATIVE. Новая dueDate = календарная дата moveDate в UTC + сохранённый offsetDays. Невыбранные задачи сохраняются. Весь запрос атомарен. Повтор не сдвигает сроки второй раз и не меняет временные отметки при совпадении значений. Задачи проверяются даже при совпадении даты проекта. Порядок ответа соответствует первым вхождениям taskIds. Обычный PATCH проекта сроки не пересчитывает; клиентский дополнительный пересчёт после reschedule не нужен.",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Актуальный проект и выбранные задачи", content = @Content(schema = @Schema(implementation = RescheduleMoveProjectResponse.class))),
+                    @ApiResponse(responseCode = "400", description = "Некорректный UUID, JSON или дата", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "401", description = "Требуется авторизация", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект недоступен; TASK_NOT_FOUND: выбранной задачи нет в проекте", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: проект в архиве либо выбрана выполненная или FIXED-задача", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: обязательные поля отсутствуют, taskIds содержит null либо срок выходит за диапазон дат", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+            })
+    public ResponseEntity<RescheduleMoveProjectResponse> rescheduleMoveProject(@PathVariable UUID projectId,
+            @Valid @RequestBody RescheduleMoveProjectRequest request, @AuthenticationPrincipal UserEntity user) {
+        return ResponseEntity.ok(moveProjectService.rescheduleMoveProject(projectId, request, user));
     }
 
     @DeleteMapping("/{projectId}")

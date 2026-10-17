@@ -48,11 +48,12 @@ test:
 
   cache:
     key: maven-java17
+    when: always
     paths:
       - .m2/repository/
 
   script:
-    - mvn -B -ntp -Dmaven.repo.local="$CI_PROJECT_DIR/.m2/repository" clean verify
+    - mvn -B -ntp -s .ci/maven-settings.xml -Dmaven.repo.local="$CI_PROJECT_DIR/.m2/repository" clean verify
 
   artifacts:
     when: always

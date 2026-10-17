@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import ru.example.prodbackend.task.entity.TaskStage;
+import ru.example.prodbackend.task.entity.TaskDueType;
 
 import java.time.LocalDate;
 
@@ -23,6 +24,16 @@ public class UpdateMoveTaskRequest {
     private TaskStage stage;
 
     private LocalDate dueDate;
+
+    @Schema(description = "FIXED — ручная дата; RELATIVE — срок относительно переезда. null запрещён")
+    private TaskDueType dueType;
+    @Schema(description = "Смещение относительно переезда; только для RELATIVE, null запрещён")
+    private Integer offsetDays;
+
+    @JsonSetter(value = "dueType", nulls = Nulls.FAIL)
+    public void setDueType(TaskDueType dueType) { this.dueType = dueType; }
+    @JsonSetter(value = "offsetDays", nulls = Nulls.FAIL)
+    public void setOffsetDays(Integer offsetDays) { this.offsetDays = offsetDays; }
 
     @Size(max = 255)
     private String assigneeName;
@@ -71,7 +82,7 @@ public class UpdateMoveTaskRequest {
     @Schema(hidden = true)
     @AssertTrue(message = "Укажите хотя бы одно поле для изменения")
     public boolean isUpdatePresent() {
-        return title != null || stage != null || descriptionPresent || dueDatePresent || assigneeNamePresent;
+        return title != null || stage != null || descriptionPresent || dueDatePresent || assigneeNamePresent || dueType != null || offsetDays != null;
     }
 
     @JsonAnySetter

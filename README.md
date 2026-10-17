@@ -15,3 +15,5 @@ Java 17 · Spring Boot · PostgreSQL · JWT.
 | Как реализованы требования на backend и в мобильном приложении? | [Реализация требований](docs/requirements.md) |
 | Как устроен backend и какой стек используется? | [Архитектура](docs/architecture.md) |
 | Где находятся отчёты и как запустить тесты? | [Тесты и отчёты](TESTING.md) |
+
+Контракт относительных сроков и переноса даты переезда: [docs/task-deadlines.md](docs/task-deadlines.md).
