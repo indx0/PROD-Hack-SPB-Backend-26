@@ -2,13 +2,12 @@ package ru.example.prodbackend.box.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Positive;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import ru.example.prodbackend.box.entity.BoxStatus;
-
-import java.util.UUID;
 
 @Data
 @Builder
@@ -17,10 +16,10 @@ import java.util.UUID;
 public class BoxFilter {
 
     @Positive
-    @Schema(description = "Точный номер коробки внутри проекта")
+    @Schema(example = "1", description = "Точный номер коробки внутри проекта")
     private Integer number;
 
-    @Schema(description = "Идентификатор комнаты назначения")
+    @Schema(example = "550e8400-e29b-41d4-a716-446655440000", description = "Идентификатор комнаты назначения")
     private UUID roomId;
 
     @Schema(description = "Статус коробки")

@@ -4,30 +4,31 @@ import com.fasterxml.jackson.annotation.*;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Size;
+import java.time.LocalDate;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import ru.example.prodbackend.task.entity.TaskStage;
 import ru.example.prodbackend.task.entity.TaskDueType;
-
-import java.time.LocalDate;
+import ru.example.prodbackend.task.entity.TaskStage;
 
 @Getter
 @NoArgsConstructor(onConstructor_ = @JsonCreator)
 public class UpdateMoveTaskRequest {
 
+    @Schema(example = "Упаковать кухню", description = "Новое название задачи; отсутствие сохраняет значение, null запрещён")
     @Size(max = 255)
     private String title;
 
+    @Schema(example = "Подготовить вещи к переезду", description = "Новое описание; отсутствие сохраняет значение, null очищает")
     @Size(max = 10000)
     private String description;
-
+    @Schema(description = "Новый этап переезда; отсутствие сохраняет значение, null запрещён")
     private TaskStage stage;
-
+    @Schema(example = "2026-11-01", description = "Новая фиксированная дата без времени; отсутствие сохраняет срок, null очищает")
     private LocalDate dueDate;
 
     @Schema(description = "FIXED — ручная дата; RELATIVE — срок относительно переезда. null запрещён")
     private TaskDueType dueType;
-    @Schema(description = "Смещение относительно переезда; только для RELATIVE, null запрещён")
+    @Schema(example = "-2", description = "Смещение относительно переезда; только для RELATIVE, null запрещён")
     private Integer offsetDays;
 
     @JsonSetter(value = "dueType", nulls = Nulls.FAIL)
@@ -35,6 +36,7 @@ public class UpdateMoveTaskRequest {
     @JsonSetter(value = "offsetDays", nulls = Nulls.FAIL)
     public void setOffsetDays(Integer offsetDays) { this.offsetDays = offsetDays; }
 
+    @Schema(description = "Новый ответственный; отсутствие сохраняет значение, null очищает")
     @Size(max = 255)
     private String assigneeName;
 

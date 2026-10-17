@@ -15,7 +15,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class RegisterRequest {
 
-    @Schema(description = "Email пользователя, из валидации только проверка на пустоту и длина меньше 255", example = "user@example.com")
+    @Schema(description = "Адрес электронной почты: непустая строка до 255 символов; формат адреса не проверяется", example = "user@example.com")
     @Size(max = 255, message = "email is too long")
     @NotBlank(message = "email is blank")
     private String email;
@@ -31,7 +31,7 @@ public class RegisterRequest {
     private String lastName;
 
 
-    @Schema(description = "Любой пароль длинной больше 8и симовлов", example = "P@ssw0rd!")
+    @Schema(description = "Пароль: непустая строка длиной не менее 8 символов", example = "P@ssw0rd!")
     @Size(min = 8, message = "password length min = 8")
     @NotBlank(message = "password is blank")
     private String password;

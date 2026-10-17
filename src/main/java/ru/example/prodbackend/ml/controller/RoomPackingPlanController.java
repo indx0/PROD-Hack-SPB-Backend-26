@@ -5,7 +5,6 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -14,7 +13,9 @@ import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.multipart.MultipartHttpServletRequest;
+import ru.example.prodbackend.config.SwaggerTags;
 import ru.example.prodbackend.exception.dto.ErrorResponse;
+import ru.example.prodbackend.ml.dto.RoomPackingMultipartRequest;
 import ru.example.prodbackend.ml.dto.RoomPackingPlanRequest;
 import ru.example.prodbackend.ml.dto.RoomPackingPlanResponse;
 import ru.example.prodbackend.ml.exception.MlException;
@@ -23,28 +24,8 @@ import ru.example.prodbackend.ml.service.RoomPackingPlanService;
 @RestController
 @RequestMapping(value = "/api/ml/room-packing-plan", produces = MediaType.APPLICATION_JSON_VALUE)
 @RequiredArgsConstructor
-@Tag(name = "Room packing", description = "Планирование упаковки комнаты по тексту и/или фотографии")
+@Tag(name = SwaggerTags.PACKING)
 @SecurityRequirement(name = "jwtAuth")
-@ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Рекомендации без сохранения и создания коробок",
-                content = @Content(schema = @Schema(implementation = RoomPackingPlanResponse.class))),
-        @ApiResponse(responseCode = "400", description = "Некорректный JSON или multipart; разрешены description и не более одного photo",
-                content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-        @ApiResponse(responseCode = "401", description = "Требуется JWT, проект не нужен",
-                content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-        @ApiResponse(responseCode = "413", description = "Фото больше 10 МиБ или запрос больше 11 МиБ",
-                content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-        @ApiResponse(responseCode = "415", description = "Неподдерживаемый формат фото или Content-Type запроса",
-                content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-        @ApiResponse(responseCode = "422", description = "ROOM_INPUT_REQUIRED, DESCRIPTION_TOO_LONG, EMPTY_IMAGE или ROOM_PLAN_NOT_GENERATED",
-                content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-        @ApiResponse(responseCode = "502", description = "Некорректный ответ модели или ошибка LLM Proxy",
-                content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-        @ApiResponse(responseCode = "503", description = "LLM Proxy не настроен, недоступен или перегружен",
-                content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-        @ApiResponse(responseCode = "504", description = "Таймаут LLM Proxy",
-                content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-})
 public class RoomPackingPlanController {
     private final RoomPackingPlanService service;
 
@@ -52,7 +33,20 @@ public class RoomPackingPlanController {
             description = "Текст до 4000 символов после удаления крайних пробелов. JWT обязателен, проект не требуется. "
                     + "Рекомендации для типовых коробок около 40×30×30 см с загрузкой до 10 кг. "
                     + "Описание передаётся внешнему LLM Proxy. Результат не сохраняется. "
-                    + "Ожидание до 120 секунд; рекомендуемый таймаут клиента — 150 секунд.")
+                    + "Ожидание до 120 секунд; рекомендуемый таймаут клиента — 150 секунд.",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Рекомендации без сохранения и создания коробок",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = RoomPackingPlanResponse.class))),
+                    @ApiResponse(responseCode = "400", description = "INVALID_MULTIPART: Некорректные поля multipart; INVALID_PHOTO: Не удалось прочитать фотографию; INVALID_REQUEST_BODY: Некорректное тело JSON", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "401", description = "UNAUTHORIZED: Токен доступа отсутствует, недействителен или истёк",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "413", description = "IMAGE_TOO_LARGE: Фотография больше 10 МиБ или запрос больше 11 МиБ", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "415", description = "UNSUPPORTED_IMAGE_FORMAT: Используйте JPEG, PNG или WebP; UNSUPPORTED_MEDIA_TYPE: Неподдерживаемый Content-Type запроса", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "422", description = "ROOM_INPUT_REQUIRED: Нужны описание или фотография; DESCRIPTION_TOO_LONG: Описание длиннее 4000 символов; EMPTY_IMAGE: Фотография пуста; ROOM_PLAN_NOT_GENERATED: План не сформирован", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "502", description = "LLM_INVALID_RESPONSE: Некорректный ответ модели; LLM_UPSTREAM_ERROR: Ошибка LLM Proxy", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "503", description = "LLM_UNAVAILABLE: LLM Proxy не настроен, недоступен или перегружен", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "504", description = "LLM_TIMEOUT: Превышено время ожидания LLM Proxy", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+            })
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
     public RoomPackingPlanResponse planText(@RequestBody RoomPackingPlanRequest request) {
         return service.plan(request.description(), null);
@@ -63,11 +57,29 @@ public class RoomPackingPlanController {
                     + "Должен быть хотя бы один источник. Фото и текст передаются внешнему LLM Proxy. "
                     + "JWT обязателен, проект не требуется. Рекомендации приблизительны, данные не изменяются. "
                     + "Коробки около 40×30×30 см с загрузкой до 10 кг. "
-                    + "Ожидание до 120 секунд; рекомендуемый таймаут клиента — 150 секунд.")
+                    + "Ожидание до 120 секунд; рекомендуемый таймаут клиента — 150 секунд.",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Рекомендации без сохранения и создания коробок",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = RoomPackingPlanResponse.class))),
+                    @ApiResponse(responseCode = "400", description = "INVALID_MULTIPART: Некорректные поля multipart; INVALID_PHOTO: Не удалось прочитать фотографию; INVALID_REQUEST_BODY: Некорректное тело JSON", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "401", description = "UNAUTHORIZED: Токен доступа отсутствует, недействителен или истёк",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "413", description = "IMAGE_TOO_LARGE: Фотография больше 10 МиБ или запрос больше 11 МиБ", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "415", description = "UNSUPPORTED_IMAGE_FORMAT: Используйте JPEG, PNG или WebP; UNSUPPORTED_MEDIA_TYPE: Неподдерживаемый Content-Type запроса", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "422", description = "ROOM_INPUT_REQUIRED: Нужны описание или фотография; DESCRIPTION_TOO_LONG: Описание длиннее 4000 символов; EMPTY_IMAGE: Фотография пуста; ROOM_PLAN_NOT_GENERATED: План не сформирован", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "502", description = "LLM_INVALID_RESPONSE: Некорректный ответ модели; LLM_UPSTREAM_ERROR: Ошибка LLM Proxy", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "503", description = "LLM_UNAVAILABLE: LLM Proxy не настроен, недоступен или перегружен", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "504", description = "LLM_TIMEOUT: Превышено время ожидания LLM Proxy", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+            })
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            description = "Описание комнаты, фотография или оба источника. Нужен хотя бы один источник.",
+            required = true,
+            content = @Content(mediaType = MediaType.MULTIPART_FORM_DATA_VALUE,
+                    schema = @Schema(implementation = RoomPackingMultipartRequest.class)))
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public RoomPackingPlanResponse planPhoto(
-            @RequestPart(value = "photo", required = false) MultipartFile photo,
-            @Parameter(schema = @Schema(type = "string", maxLength = 4000))
+            @Parameter(description = "Фотография JPEG, PNG или WebP размером до 10 МиБ") @RequestPart(value = "photo", required = false) MultipartFile photo,
+            @Parameter(hidden = true)
             @RequestParam(value = "description", required = false) Object description,
             MultipartHttpServletRequest request) throws java.io.IOException, jakarta.servlet.ServletException {
         var descriptions = request.getParameterValues("description");

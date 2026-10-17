@@ -5,10 +5,11 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.net.URI;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.http.MediaType;
@@ -20,34 +21,27 @@ import ru.example.prodbackend.box.dto.BoxFilter;
 import ru.example.prodbackend.box.dto.BoxResponse;
 import ru.example.prodbackend.box.dto.BoxSummaryResponse;
 import ru.example.prodbackend.box.dto.ChangeBoxStatusRequest;
-import ru.example.prodbackend.box.dto.CreateBoxRequest;
 import ru.example.prodbackend.box.dto.CorrectBoxStatusRequest;
+import ru.example.prodbackend.box.dto.CreateBoxRequest;
 import ru.example.prodbackend.box.dto.UpdateBoxRequest;
 import ru.example.prodbackend.box.service.BoxService;
 import ru.example.prodbackend.common.dto.PageResponse;
 import ru.example.prodbackend.common.dto.PaginationRequest;
+import ru.example.prodbackend.config.SwaggerTags;
 import ru.example.prodbackend.exception.dto.ErrorResponse;
 import ru.example.prodbackend.user.entity.UserEntity;
-
-import java.net.URI;
-import java.util.UUID;
 
 @RestController
 @RequestMapping(value = "/api/projects/{projectId}/boxes", produces = MediaType.APPLICATION_JSON_VALUE)
 @RequiredArgsConstructor
-@Tag(name = "Boxes", description = "Коробки проекта переезда")
+@Tag(name = SwaggerTags.BOXES)
 @SecurityRequirement(name = "jwtAuth")
-@ApiResponses({
-        @ApiResponse(responseCode = "400", description = "Некорректный UUID или тело JSON", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-        @ApiResponse(responseCode = "401", description = "Access токен отсутствует, некорректный или истек",
-                content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-})
 public class BoxController {
 
     private final BoxService boxService;
 
     @Operation(
-            summary = "Создание коробки",
+            summary = "Создать коробку",
             description = """
                     Создаёт коробку с положительным номером, уникальным внутри проекта,
                     комнатой назначения и начальным статусом PACKING.
@@ -60,17 +54,19 @@ public class BoxController {
                     """,
             responses = {
                     @ApiResponse(responseCode = "201", description = "Коробка создана; Location содержит её адрес",
-                            content = @Content(schema = @Schema(implementation = BoxResponse.class))),
-                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не найден или недоступен; ROOM_NOT_FOUND: комнаты нет в этом проекте", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: номер уже занят другой коробкой проекта; для изменений — переезд в архиве, сначала восстановите его", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "422", description = "Ошибка валидации тела запроса",
-                            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-            }
-    )
+                            content = @Content(mediaType = "application/json", schema = @Schema(implementation = BoxResponse.class))),
+                    @ApiResponse(responseCode = "400", description = "INVALID_REQUEST_BODY: Тело отсутствует, содержит некорректный JSON или недопустимый формат поля; INVALID_REQUEST_PARAMETER: Некорректный формат параметра запроса", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "401", description = "UNAUTHORIZED: Токен доступа отсутствует, недействителен или истёк",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: Проект не найден или недоступен; ROOM_NOT_FOUND: Комнаты нет в этом проекте", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: Номер уже занят другой коробкой проекта; для изменений — переезд в архиве, сначала восстановите его", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: Ошибка валидации тела запроса",
+                            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+            })
     @PostMapping
     public ResponseEntity<BoxResponse> create(
             @Parameter(hidden = true) @AuthenticationPrincipal UserEntity user,
-            @PathVariable UUID projectId,
+            @Parameter(description = "Идентификатор проекта переезда") @PathVariable UUID projectId,
             @Valid @RequestBody CreateBoxRequest request
     ) {
         BoxResponse response = boxService.create(user.getId(), projectId, request);
@@ -83,7 +79,7 @@ public class BoxController {
     }
 
     @Operation(
-            summary = "Получение списка коробок",
+            summary = "Получить список коробок",
             description = """
                     Возвращает страницу коробок проекта. Фильтры объединяются через AND.
                     fragile, firstDay и carryWithMe фильтруют по точному true/false; отсутствие параметра не ограничивает выборку.
@@ -94,21 +90,23 @@ public class BoxController {
                     """,
             responses = {
                     @ApiResponse(responseCode = "200", description = "Страница коробок проекта"),
-                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не существует или недоступен текущему пользователю", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: некорректные фильтры или параметры пагинации; page >= 0, size от 1 до 100, number > 0; подробности в fieldErrors", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-            }
-    )
+                    @ApiResponse(responseCode = "400", description = "INVALID_REQUEST_PARAMETER: Некорректный формат параметра запроса", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "401", description = "UNAUTHORIZED: Токен доступа отсутствует, недействителен или истёк",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: Проект не существует или недоступен текущему пользователю", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: Некорректные фильтры или параметры пагинации; page >= 0, size от 1 до 100, number > 0; подробности в fieldErrors", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+            })
     @GetMapping
     public ResponseEntity<PageResponse<BoxResponse>> findAll(
             @Parameter(hidden = true) @AuthenticationPrincipal UserEntity user,
-            @PathVariable UUID projectId,
+            @Parameter(description = "Идентификатор проекта переезда") @PathVariable UUID projectId,
             @Valid @ModelAttribute @ParameterObject BoxFilter filter,
             @Valid @ModelAttribute @ParameterObject PaginationRequest pagination) {
         return ResponseEntity.ok(boxService.findAll(user.getId(), projectId, filter, pagination));
     }
 
     @Operation(
-            summary = "Получение карточки коробки",
+            summary = "Получить карточку коробки",
             description = """
                     Возвращает коробку указанного проекта, принадлежащего текущему пользователю.
                     Используется также для открытия карточки после сканирования QR-кода.
@@ -116,21 +114,23 @@ public class BoxController {
                     """,
             responses = {
                     @ApiResponse(responseCode = "200", description = "Карточка коробки",
-                            content = @Content(schema = @Schema(implementation = BoxResponse.class))),
-                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не найден или недоступен; BOX_NOT_FOUND: коробки нет в этом проекте", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-            }
-    )
+                            content = @Content(mediaType = "application/json", schema = @Schema(implementation = BoxResponse.class))),
+                    @ApiResponse(responseCode = "400", description = "INVALID_REQUEST_PARAMETER: Некорректный формат параметра запроса", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "401", description = "UNAUTHORIZED: Токен доступа отсутствует, недействителен или истёк",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: Проект не найден или недоступен; BOX_NOT_FOUND: Коробки нет в этом проекте", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+            })
     @GetMapping("/{boxId}")
     public ResponseEntity<BoxResponse> findById(
             @Parameter(hidden = true) @AuthenticationPrincipal UserEntity user,
-            @PathVariable UUID projectId,
-            @PathVariable UUID boxId
+            @Parameter(description = "Идентификатор проекта переезда") @PathVariable UUID projectId,
+            @Parameter(description = "Идентификатор коробки проекта") @PathVariable UUID boxId
     ) {
         return ResponseEntity.ok(boxService.findById(user.getId(), projectId, boxId));
     }
 
     @Operation(
-            summary = "Редактирование коробки",
+            summary = "Изменить коробку",
             description = """
                     Изменяет номер, комнату назначения, contentsDeferred, title, fragile, firstDay и carryWithMe.
                     Отсутствующие поля сохраняют значения; false снимает отметку, title="" очищает подпись.
@@ -142,24 +142,26 @@ public class BoxController {
                     """,
             responses = {
                     @ApiResponse(responseCode = "200", description = "Коробка обновлена",
-                            content = @Content(schema = @Schema(implementation = BoxResponse.class))),
-                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не найден или недоступен; BOX_NOT_FOUND: коробки нет в этом проекте; ROOM_NOT_FOUND: комнаты нет в этом проекте", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: номер уже занят другой коробкой проекта; для изменений — переезд в архиве, сначала восстановите его", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: ошибка валидации; подробности в fieldErrors", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-            }
-    )
+                            content = @Content(mediaType = "application/json", schema = @Schema(implementation = BoxResponse.class))),
+                    @ApiResponse(responseCode = "400", description = "INVALID_REQUEST_BODY: Тело отсутствует, содержит некорректный JSON или недопустимый формат поля; INVALID_REQUEST_PARAMETER: Некорректный формат параметра запроса", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "401", description = "UNAUTHORIZED: Токен доступа отсутствует, недействителен или истёк",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: Проект не найден или недоступен; BOX_NOT_FOUND: Коробки нет в этом проекте; ROOM_NOT_FOUND: Комнаты нет в этом проекте", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: Номер уже занят другой коробкой проекта; для изменений — переезд в архиве, сначала восстановите его", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: Ошибка валидации; подробности в fieldErrors", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+            })
     @PatchMapping("/{boxId}")
     public ResponseEntity<BoxResponse> update(
             @Parameter(hidden = true) @AuthenticationPrincipal UserEntity user,
-            @PathVariable UUID projectId,
-            @PathVariable UUID boxId,
+            @Parameter(description = "Идентификатор проекта переезда") @PathVariable UUID projectId,
+            @Parameter(description = "Идентификатор коробки проекта") @PathVariable UUID boxId,
             @Valid @RequestBody UpdateBoxRequest request
     ) {
         return ResponseEntity.ok(boxService.update(user.getId(), projectId, boxId, request));
     }
 
     @Operation(
-            summary = "Изменение статуса коробки",
+            summary = "Изменить статус коробки",
             description = """
                     Разрешён следующий шаг: PACKING → PACKED → LOADED → DELIVERED → UNPACKED.
                     Для PACKED нужна непустая коробка и packedAt у каждой вещи; для UNPACKED — unpackedAt у каждой вещи.
@@ -172,18 +174,20 @@ public class BoxController {
                     """,
             responses = {
                     @ApiResponse(responseCode = "200", description = "Коробка с актуальным статусом",
-                            content = @Content(schema = @Schema(implementation = BoxResponse.class))),
-                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не найден или недоступен; BOX_NOT_FOUND: коробки нет в этом проекте", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: недопустимый переход, пустая коробка или не все вещи отмечены; для изменений — переезд в архиве, сначала восстановите его", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "422", description = "Статус обязателен",
-                            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-            }
-    )
+                            content = @Content(mediaType = "application/json", schema = @Schema(implementation = BoxResponse.class))),
+                    @ApiResponse(responseCode = "400", description = "INVALID_REQUEST_BODY: Тело отсутствует, содержит некорректный JSON или недопустимый формат поля; INVALID_REQUEST_PARAMETER: Некорректный формат параметра запроса", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "401", description = "UNAUTHORIZED: Токен доступа отсутствует, недействителен или истёк",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: Проект не найден или недоступен; BOX_NOT_FOUND: Коробки нет в этом проекте", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: Недопустимый переход, пустая коробка или не все вещи отмечены; для изменений — переезд в архиве, сначала восстановите его", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: Статус обязателен",
+                            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+            })
     @PatchMapping("/{boxId}/status")
     public ResponseEntity<BoxResponse> changeStatus(
             @Parameter(hidden = true) @AuthenticationPrincipal UserEntity user,
-            @PathVariable UUID projectId,
-            @PathVariable UUID boxId,
+            @Parameter(description = "Идентификатор проекта переезда") @PathVariable UUID projectId,
+            @Parameter(description = "Идентификатор коробки проекта") @PathVariable UUID boxId,
             @Valid @RequestBody ChangeBoxStatusRequest request
     ) {
         return ResponseEntity.ok(boxService.changeStatus(user.getId(), projectId, boxId, request.getStatus()));
@@ -204,42 +208,47 @@ public class BoxController {
                     Клиент должен показать эти последствия перед подтверждением.
                     """,
             responses = {
-                    @ApiResponse(responseCode = "200", description = "Актуальная коробка или успешный повтор", content = @Content(schema = @Schema(implementation = BoxResponse.class))),
-                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект недоступен; BOX_NOT_FOUND: коробки нет в этом проекте", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: статус изменился, направление вперёд или содержимое не готово; для изменений — переезд в архиве, сначала восстановите его", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: обязательные поля отсутствуют или confirmed не true", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+                    @ApiResponse(responseCode = "200", description = "Актуальная коробка или успешный повтор", content = @Content(mediaType = "application/json", schema = @Schema(implementation = BoxResponse.class))),
+                    @ApiResponse(responseCode = "400", description = "INVALID_REQUEST_BODY: Тело отсутствует, содержит некорректный JSON или недопустимый формат поля; INVALID_REQUEST_PARAMETER: Некорректный формат параметра запроса", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "401", description = "UNAUTHORIZED: Токен доступа отсутствует, недействителен или истёк",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: Проект недоступен; BOX_NOT_FOUND: Коробки нет в этом проекте", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: Статус изменился, направление вперёд или содержимое не готово; для изменений — переезд в архиве, сначала восстановите его", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: Обязательные поля отсутствуют или confirmed не true", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
             })
     public ResponseEntity<BoxResponse> correctStatus(
             @Parameter(hidden = true) @AuthenticationPrincipal UserEntity user,
-            @PathVariable UUID projectId, @PathVariable UUID boxId,
+            @Parameter(description = "Идентификатор проекта переезда") @PathVariable UUID projectId, @Parameter(description = "Идентификатор коробки проекта") @PathVariable UUID boxId,
             @Valid @RequestBody CorrectBoxStatusRequest request) {
         return ResponseEntity.ok(boxService.correctStatus(user.getId(), projectId, boxId, request));
     }
 
     @Operation(
-            summary = "Удаление коробки",
+            summary = "Удалить коробку",
             description = """
                     Удаляет коробку вместе с содержимым. Подтверждение выполняется на клиенте.
                     Вещи и коробка удаляются в одной транзакции после проверки участия в проекте.
                     """,
             responses = {
                     @ApiResponse(responseCode = "204", description = "Коробка удалена", content = @Content),
-                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: переезд в архиве; сначала восстановите его", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не найден или недоступен; BOX_NOT_FOUND: коробки нет в этом проекте", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-            }
-    )
+                    @ApiResponse(responseCode = "400", description = "INVALID_REQUEST_PARAMETER: Некорректный формат параметра запроса", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "401", description = "UNAUTHORIZED: Токен доступа отсутствует, недействителен или истёк",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: Проект не найден или недоступен; BOX_NOT_FOUND: Коробки нет в этом проекте", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: Переезд в архиве; сначала восстановите его", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+            })
     @DeleteMapping("/{boxId}")
     public ResponseEntity<Void> delete(
             @Parameter(hidden = true) @AuthenticationPrincipal UserEntity user,
-            @PathVariable UUID projectId,
-            @PathVariable UUID boxId
+            @Parameter(description = "Идентификатор проекта переезда") @PathVariable UUID projectId,
+            @Parameter(description = "Идентификатор коробки проекта") @PathVariable UUID boxId
     ) {
         boxService.delete(user.getId(), projectId, boxId);
         return ResponseEntity.noContent().build();
     }
 
     @Operation(
-            summary = "Получение статистики коробок",
+            summary = "Получить статистику коробок",
             description = """
                     Возвращает общее количество коробок, счётчики всех пяти статусов,
                     количество коробок с отложенным заполнением и прогресс распаковки по комнатам.
@@ -248,14 +257,16 @@ public class BoxController {
                     """,
             responses = {
                     @ApiResponse(responseCode = "200", description = "Статистика коробок проекта",
-                            content = @Content(schema = @Schema(implementation = BoxSummaryResponse.class))),
-                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не существует или недоступен текущему пользователю", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-            }
-    )
+                            content = @Content(mediaType = "application/json", schema = @Schema(implementation = BoxSummaryResponse.class))),
+                    @ApiResponse(responseCode = "400", description = "INVALID_REQUEST_PARAMETER: Некорректный формат параметра запроса", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "401", description = "UNAUTHORIZED: Токен доступа отсутствует, недействителен или истёк",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: Проект не существует или недоступен текущему пользователю", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+            })
     @GetMapping("/summary")
     public ResponseEntity<BoxSummaryResponse> summary(
             @Parameter(hidden = true) @AuthenticationPrincipal UserEntity user,
-            @PathVariable UUID projectId
+            @Parameter(description = "Идентификатор проекта переезда") @PathVariable UUID projectId
     ) {
         return ResponseEntity.ok(boxService.summary(user.getId(), projectId));
     }

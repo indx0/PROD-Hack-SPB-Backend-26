@@ -7,27 +7,26 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import java.util.UUID;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-
-import java.util.UUID;
 
 @Getter
 @NoArgsConstructor
 public class UpdateBoxRequest {
 
     @Positive
-    @Schema(description = "Новый номер коробки")
+    @Schema(example = "1", description = "Новый номер коробки")
     private Integer number;
 
-    @Schema(description = "Идентификатор новой комнаты этого же проекта")
+    @Schema(example = "550e8400-e29b-41d4-a716-446655440000", description = "Идентификатор новой комнаты этого же проекта")
     private UUID roomId;
 
     @Schema(description = "Признак отложенного заполнения содержимого")
     private Boolean contentsDeferred;
 
     @Size(max = 255)
-    @Schema(description = "Подпись до 255 символов; пробелы по краям удаляются, пустая строка очищает подпись; null запрещён")
+    @Schema(example = "Упаковать кухню", description = "Подпись до 255 символов; пробелы по краям удаляются, пустая строка очищает подпись; null запрещён")
     private String title;
     @Schema(description = "Хрупкое содержимое; false снимает отметку, null запрещён")
     private Boolean fragile;

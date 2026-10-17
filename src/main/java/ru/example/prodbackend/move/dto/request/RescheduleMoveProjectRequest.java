@@ -3,11 +3,10 @@ package ru.example.prodbackend.move.dto.request;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
-import lombok.*;
-
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import lombok.*;
 
 @Data
 @Builder

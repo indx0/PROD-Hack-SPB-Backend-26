@@ -1,14 +1,13 @@
 package ru.example.prodbackend.task.dto.request;
 
 import com.fasterxml.jackson.annotation.*;
-import ru.example.prodbackend.task.entity.TaskDueType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import lombok.*;
-
 import java.time.LocalDate;
 import java.util.UUID;
+import lombok.*;
+import ru.example.prodbackend.task.entity.TaskDueType;
 
 @Data
 @Builder
@@ -16,6 +15,7 @@ import java.util.UUID;
 @AllArgsConstructor
 public class ApplyTaskTemplateRequest {
 
+    @Schema(example = "550e8400-e29b-41d4-a716-446655440000", description = "Идентификатор готовой задачи")
     @NotNull
     private UUID templateId;
 
@@ -40,6 +40,7 @@ public class ApplyTaskTemplateRequest {
     @Schema(description = "Смещение в днях, только для RELATIVE", example = "-2")
     private Integer offsetDays;
 
+    @Schema(description = "Имя ответственного; null, если ответственный не назначен")
     @Size(max = 255)
     private String assigneeName;
 }

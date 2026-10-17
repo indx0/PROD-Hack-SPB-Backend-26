@@ -7,12 +7,11 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.util.UUID;
 
 @Data
 @Builder
@@ -22,11 +21,11 @@ public class CreateBoxRequest {
 
     @NotNull
     @Positive
-    @Schema(description = "Положительный номер, уникальный внутри проекта")
+    @Schema(example = "1", description = "Положительный номер, уникальный внутри проекта")
     private Integer number;
 
     @NotNull
-    @Schema(description = "Идентификатор комнаты этого же проекта")
+    @Schema(example = "550e8400-e29b-41d4-a716-446655440000", description = "Идентификатор комнаты этого же проекта")
     private UUID roomId;
 
     @Schema(description = "Отложить заполнение содержимого", defaultValue = "false")

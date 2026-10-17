@@ -5,28 +5,29 @@ import com.fasterxml.jackson.annotation.JsonSetter;
 import com.fasterxml.jackson.annotation.Nulls;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
-import ru.example.prodbackend.item.entity.ItemFlag;
-import jakarta.validation.constraints.NotNull;
-import java.util.List;
 import java.util.HashSet;
+import java.util.List;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import ru.example.prodbackend.item.entity.ItemFlag;
 
 @Getter
 @NoArgsConstructor
 public class UpdateItemRequest {
 
+    @Schema(example = "Посуда", description = "Новое название вещи; отсутствие сохраняет значение, null запрещён")
     @Size(min = 1, max = 255)
     @Pattern(regexp = "(?s).*\\S.*", message = "Item name must not be blank")
     private String name;
-
+    @Schema(description = "Отметка потери; отсутствие сохраняет значение, null запрещён")
     private Boolean lost;
 
     @Positive
-    @Schema(description = "Изменение только в PACKING; новое количество сбрасывает packedAt. Повтор текущего значения сохраняет отметку")
+    @Schema(example = "2", description = "Изменение только в PACKING; новое количество сбрасывает packedAt. Повтор текущего значения сохраняет отметку")
     private Integer quantity;
 
     @Schema(description = "false снимает связь с пунктом первого дня, сохраняя пункт; true не создаёт пункт автоматически")
@@ -38,6 +39,7 @@ public class UpdateItemRequest {
     @Schema(description = "Отметка распаковки всей записи. Изменяется только в коробке DELIVERED")
     private Boolean unpacked;
 
+    @Schema(description = "Полная замена меток: fragile, first_day, carry_personally; [] снимает все, отсутствие сохраняет, null запрещён")
     @Size(max = 3)
     private List<@NotNull ItemFlag> flags;
 

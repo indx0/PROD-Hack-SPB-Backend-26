@@ -5,9 +5,9 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -18,26 +18,17 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import ru.example.prodbackend.box.dto.BoxSummaryResponse;
 import ru.example.prodbackend.box.service.BoxService;
+import ru.example.prodbackend.config.SwaggerTags;
 import ru.example.prodbackend.exception.dto.ErrorResponse;
 import ru.example.prodbackend.task.dto.response.TaskSummaryResponse;
 import ru.example.prodbackend.task.service.MoveTaskService;
 import ru.example.prodbackend.user.entity.UserEntity;
 
-import java.util.UUID;
-
 @RestController
 @RequestMapping(value = "/api/projects/{projectId}/progress", produces = MediaType.APPLICATION_JSON_VALUE)
 @RequiredArgsConstructor
-@Tag(name = "Progress", description = "Сводка по коробкам и выполнению задач проекта")
+@Tag(name = SwaggerTags.PROGRESS)
 @SecurityRequirement(name = "jwtAuth")
-@ApiResponses({
-        @ApiResponse(responseCode = "400", description = "INVALID_REQUEST_PARAMETER: некорректный UUID",
-                content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-        @ApiResponse(responseCode = "401", description = "UNAUTHORIZED: требуется действующий access токен",
-                content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-        @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не найден или недоступен",
-                content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-})
 public class ProgressController {
     private final BoxService boxService;
     private final MoveTaskService moveTaskService;
@@ -51,11 +42,18 @@ public class ProgressController {
                     Включает только комнаты с коробками. Для пустого проекта — нули и пустой список комнат.
                     Доступ разрешён любому участнику проекта. Чтение не изменяет данные и не создаёт события.
                     """,
-            responses = @ApiResponse(responseCode = "200", description = "Сводка по коробкам",
-                    content = @Content(schema = @Schema(implementation = BoxSummaryResponse.class))))
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Сводка по коробкам",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = BoxSummaryResponse.class))),
+                    @ApiResponse(responseCode = "400", description = "INVALID_REQUEST_PARAMETER: Некорректный формат параметра запроса", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "401", description = "UNAUTHORIZED: Токен доступа отсутствует, недействителен или истёк",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: Проект не найден или недоступен",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+            })
     public ResponseEntity<BoxSummaryResponse> boxes(
             @Parameter(hidden = true) @AuthenticationPrincipal UserEntity user,
-            @PathVariable UUID projectId
+            @Parameter(description = "Идентификатор проекта переезда") @PathVariable UUID projectId
     ) {
         return ResponseEntity.ok(boxService.summary(user.getId(), projectId));
     }
@@ -70,11 +68,18 @@ public class ProgressController {
                     Фильтры и пагинация не предусмотрены. Доступ разрешён любому участнику проекта.
                     Чтение не изменяет данные и не создаёт события.
                     """,
-            responses = @ApiResponse(responseCode = "200", description = "Статистика выполнения задач",
-                    content = @Content(schema = @Schema(implementation = TaskSummaryResponse.class))))
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Статистика выполнения задач",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = TaskSummaryResponse.class))),
+                    @ApiResponse(responseCode = "400", description = "INVALID_REQUEST_PARAMETER: Некорректный формат параметра запроса", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "401", description = "UNAUTHORIZED: Токен доступа отсутствует, недействителен или истёк",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: Проект не найден или недоступен",
+                content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+            })
     public ResponseEntity<TaskSummaryResponse> tasks(
             @Parameter(hidden = true) @AuthenticationPrincipal UserEntity user,
-            @PathVariable UUID projectId
+            @Parameter(description = "Идентификатор проекта переезда") @PathVariable UUID projectId
     ) {
         return ResponseEntity.ok(moveTaskService.summary(projectId, user.getId()));
     }

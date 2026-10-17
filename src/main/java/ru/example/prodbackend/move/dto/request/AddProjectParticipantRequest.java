@@ -5,16 +5,15 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Size;
-import lombok.*;
-
 import java.util.UUID;
+import lombok.*;
 
 @Data
 @Builder
 @NoArgsConstructor(onConstructor_ = @JsonCreator)
 @AllArgsConstructor
 public class AddProjectParticipantRequest {
-    @Schema(description = "UUID существующего пользователя; укажите ровно одно из userId и email")
+    @Schema(example = "550e8400-e29b-41d4-a716-446655440000", description = "UUID существующего пользователя; укажите ровно одно из userId и email")
     private UUID userId;
 
     @Email

@@ -13,11 +13,11 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class AuthenticationResponse {
 
-    @Schema(description = "access_token, обрати внимание, что я всегда в ответе пишу через нижний слеш")
+    @Schema(description = "Токен доступа JWT; JSON-поле access_token")
     @JsonProperty("access_token")
     private String accessToken;
 
-    @Schema(description = "refresh_token, обрати внимание, что я всегда в ответе пишу через нижний слеш")
+    @Schema(description = "Токен обновления сессии; JSON-поле refresh_token")
     @JsonProperty("refresh_token")
     private String refreshToken;
 }

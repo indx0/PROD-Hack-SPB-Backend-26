@@ -9,6 +9,7 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 public class UpdateProfileResponse {
+    @Schema(description = "Актуальный профиль пользователя")
     private UserProfileResponse profile;
 
     @Schema(description = "Новый access токен при изменении email; иначе null")

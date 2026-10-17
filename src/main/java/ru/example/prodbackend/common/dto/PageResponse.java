@@ -1,10 +1,9 @@
 package ru.example.prodbackend.common.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.util.List;
 import lombok.*;
 import org.springframework.data.domain.Page;
-
-import java.util.List;
 
 @Data
 @Builder

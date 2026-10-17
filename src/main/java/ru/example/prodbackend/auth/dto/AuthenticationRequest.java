@@ -14,11 +14,11 @@ import lombok.NoArgsConstructor;
 public class AuthenticationRequest {
 
 
-    @Schema(description = "Email пользователя, валидации нету, главное не пустой", example = "user@example.com")
+    @Schema(description = "Адрес электронной почты; обязательная непустая строка", example = "user@example.com")
     @NotBlank(message = "email is blank")
     private String email;
 
-    @Schema(description = "Пароль, валидации нету, главное не пустой", example = "P@ssw0rd!")
+    @Schema(description = "Пароль; обязательная непустая строка", example = "P@ssw0rd!")
     @NotBlank(message = "password is blank")
     private String password;
 }

@@ -1,10 +1,9 @@
 package ru.example.prodbackend.move.dto.response;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.*;
-
 import java.time.Instant;
 import java.util.UUID;
+import lombok.*;
 
 @Data
 @Builder
@@ -12,33 +11,33 @@ import java.util.UUID;
 @AllArgsConstructor
 public class MoveProjectResponse {
 
-    @Schema(description = "Идентификатор проекта переезда")
+    @Schema(example = "550e8400-e29b-41d4-a716-446655440000", description = "Идентификатор проекта переезда")
     private UUID id;
 
-    @Schema(description = "UUID создателя; все добавленные участники имеют те же права")
+    @Schema(example = "550e8400-e29b-41d4-a716-446655440000", description = "UUID создателя; все добавленные участники имеют те же права")
     private UUID ownerId;
 
-    @Schema(description = "Название переезда")
+    @Schema(example = "Посуда", description = "Название переезда")
     private String name;
 
-    @Schema(description = "Дата и время переезда")
+    @Schema(example = "2026-11-01T09:00:00Z", description = "Дата и время переезда")
     private Instant moveDate;
 
-    @Schema(description = "Адрес отправления; может быть null")
+    @Schema(example = "Москва, ул. Примерная, д. 1", description = "Адрес отправления; может быть null")
     private String originAddress;
 
-    @Schema(description = "Адрес назначения; может быть null")
+    @Schema(example = "Москва, ул. Новая, д. 2", description = "Адрес назначения; может быть null")
     private String destinationAddress;
 
     @Schema(description = "Проект в архиве: доступен для чтения, изменения запрещены до восстановления")
     private boolean archived;
 
-    @Schema(types = {"string", "null"}, format = "date-time", description = "Время архивации; null для активного проекта")
+    @Schema(example = "2026-11-01T09:00:00Z", types = {"string", "null"}, format = "date-time", description = "Время архивации; null для активного проекта")
     private Instant archivedAt;
 
-    @Schema(description = "Дата создания проекта")
+    @Schema(example = "2026-11-01T09:00:00Z", description = "Дата создания проекта")
     private Instant createdAt;
 
-    @Schema(description = "Дата последнего изменения проекта")
+    @Schema(example = "2026-11-01T09:00:00Z", description = "Дата последнего изменения проекта")
     private Instant updatedAt;
 }

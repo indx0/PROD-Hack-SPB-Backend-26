@@ -1,10 +1,9 @@
 package ru.example.prodbackend.room.dto.response;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.*;
-
 import java.time.Instant;
 import java.util.UUID;
+import lombok.*;
 
 @Data
 @Builder
@@ -12,10 +11,10 @@ import java.util.UUID;
 @AllArgsConstructor
 public class RoomResponse {
 
-    @Schema(description = "Идентификатор комнаты")
+    @Schema(example = "550e8400-e29b-41d4-a716-446655440000", description = "Идентификатор комнаты")
     private UUID id;
 
-    @Schema(description = "Идентификатор проекта переезда")
+    @Schema(example = "550e8400-e29b-41d4-a716-446655440000", description = "Идентификатор проекта переезда")
     private UUID projectId;
 
     @Schema(description = "Название комнаты", example = "Кухня")
@@ -24,9 +23,9 @@ public class RoomResponse {
     @Schema(types = {"string", "null"}, description = "Ключ значка; null — нет явного выбора. Для отсутствующего или неизвестного ключа клиент использует home", example = "kitchen")
     private String iconKey;
 
-    @Schema(description = "Дата создания")
+    @Schema(example = "2026-11-01T09:00:00Z", description = "Дата создания")
     private Instant createdAt;
 
-    @Schema(description = "Дата последнего изменения")
+    @Schema(example = "2026-11-01T09:00:00Z", description = "Дата последнего изменения")
     private Instant updatedAt;
 }

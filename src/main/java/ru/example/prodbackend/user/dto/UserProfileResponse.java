@@ -1,13 +1,12 @@
 package ru.example.prodbackend.user.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import ru.example.prodbackend.user.entity.UserRole;
-
-import java.util.UUID;
 
 @Data
 @Builder
