@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.*;
+import ru.example.prodbackend.box.entity.BoxStatus;
 import ru.example.prodbackend.move.entity.MoveProjectEntity;
 import ru.example.prodbackend.user.entity.UserEntity;
 
@@ -57,6 +58,14 @@ public class ProjectEventEntity {
     @Size(max = 2000)
     @Column(nullable = false, length = 2000)
     private String description;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "previous_status", length = 32)
+    private BoxStatus previousStatus;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "new_status", length = 32)
+    private BoxStatus newStatus;
 
     @PrePersist
     protected void onCreate() {

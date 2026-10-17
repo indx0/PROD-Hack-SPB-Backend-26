@@ -52,7 +52,8 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                 var boxes = jdbc.queryForList("SELECT id, status FROM boxes ORDER BY id");
                 var rooms = jdbc.queryForList("SELECT id, name FROM rooms ORDER BY id");
                 var checklist = jdbc.queryForList("SELECT id, name, completed_at FROM first_day_checklist_items ORDER BY id");
-                runLiquibase(schema, 4);
+                var events = jdbc.queryForList("SELECT id, actor_id, object_id, description, occurred_at FROM project_events ORDER BY id");
+                runLiquibase(schema, 5);
                 assertThat(jdbc.queryForList("""
                         SELECT column_name FROM information_schema.columns
                         WHERE table_schema = ? AND table_name = 'items'
@@ -65,6 +66,11 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                         SELECT column_name FROM information_schema.columns
                         WHERE table_schema = ? AND table_name = 'rooms'
                         """, String.class, schema)).doesNotContain("icon_key");
+                assertThat(jdbc.queryForList("""
+                        SELECT column_name FROM information_schema.columns
+                        WHERE table_schema = ? AND table_name = 'project_events'
+                        """, String.class, schema)).doesNotContain("previous_status", "new_status");
+                assertThat(jdbc.queryForList("SELECT event_type FROM project_events", String.class)).containsOnly("BOX_STATUS_CHANGED", "BOX_CREATED");
                 runLiquibase(schema, 0);
                 assertHistory(jdbc);
                 assertThat(jdbc.queryForList("SELECT id, name, quantity, first_day FROM items ORDER BY id")).isEqualTo(items);
@@ -75,6 +81,8 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                 assertThat(jdbc.queryForList("SELECT id, name, completed_at FROM first_day_checklist_items ORDER BY id")).isEqualTo(checklist);
                 assertThat(jdbc.queryForObject("SELECT count(*) FROM first_day_checklist_items WHERE item_id IS NOT NULL", Long.class)).isZero();
                 assertThat(jdbc.queryForObject("SELECT count(*) FROM items WHERE packed_at IS NOT NULL OR unpacked_at IS NOT NULL", Long.class)).isZero();
+                assertThat(jdbc.queryForList("SELECT id, actor_id, object_id, description, occurred_at FROM project_events ORDER BY id")).isEqualTo(events);
+                assertThat(jdbc.queryForObject("SELECT count(*) FROM project_events WHERE previous_status IS NOT NULL OR new_status IS NOT NULL", Long.class)).isZero();
 
                 var users = jdbc.queryForList("SELECT id, email FROM users ORDER BY email");
                 assertThat(users).hasSize(2);
@@ -82,7 +90,7 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                 assertHistory(jdbc);
                 assertThat(jdbc.queryForList("SELECT id, email FROM users ORDER BY email")).isEqualTo(users);
 
-                runLiquibase(schema, 15);
+                runLiquibase(schema, 16);
                 assertThat(jdbc.queryForList("""
                         SELECT tablename FROM pg_tables
                         WHERE schemaname = ? AND tablename NOT IN ('databasechangelog', 'databasechangeloglock')
@@ -136,7 +144,7 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
 
     private void assertHistory(JdbcTemplate jdbc) {
         assertThat(jdbc.queryForList("SELECT author FROM databasechangelog", String.class))
-                .hasSize(15).containsOnly("indx0", "timn2020");
+                .hasSize(16).containsOnly("indx0", "timn2020");
     }
 
     private void assertConstraints(JdbcTemplate jdbc) {
@@ -237,6 +245,24 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT item_id FROM first_day_checklist_items WHERE id = ?", UUID.class, point)).isNull();
         assertThat(jdbc.queryForObject("SELECT name FROM first_day_checklist_items WHERE id = ?", String.class, point)).isEqualTo("Первый день");
         assertThat(jdbc.queryForObject("SELECT completed_at FROM first_day_checklist_items WHERE id = ?", java.sql.Timestamp.class, point)).isNotNull();
+
+        UUID event = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO project_events (id, project_id, actor_id, event_type, object_type, object_id, occurred_at, description)
+                VALUES (?, ?, ?, 'BOX_CREATED', 'BOX', ?, now(), 'Создана коробка')
+                """, event, project, owner, box);
+        assertThat(jdbc.queryForObject("SELECT previous_status FROM project_events WHERE id = ?", String.class, event)).isNull();
+        assertThat(jdbc.queryForObject("SELECT new_status FROM project_events WHERE id = ?", String.class, event)).isNull();
+        UUID correction = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO project_events (id, project_id, actor_id, event_type, object_type, object_id, occurred_at, description, previous_status, new_status)
+                VALUES (?, ?, ?, 'BOX_STATUS_CORRECTED', 'BOX', ?, now(), 'Исправлен статус: DELIVERED → PACKING', 'DELIVERED', 'PACKING')
+                """, correction, project, owner, box);
+        assertThat(jdbc.queryForObject("SELECT previous_status FROM project_events WHERE id = ?", String.class, correction)).isEqualTo("DELIVERED");
+        assertThat(jdbc.queryForObject("SELECT new_status FROM project_events WHERE id = ?", String.class, correction)).isEqualTo("PACKING");
+        rejects(jdbc, "UPDATE project_events SET event_type = 'UNKNOWN' WHERE id = ?", "23514", correction);
+        rejects(jdbc, "UPDATE project_events SET previous_status = 'UNKNOWN' WHERE id = ?", "23514", correction);
+        rejects(jdbc, "UPDATE project_events SET new_status = 'UNKNOWN' WHERE id = ?", "23514", correction);
     }
 
     private void rejects(JdbcTemplate jdbc, String sql, String sqlState, Object... args) {

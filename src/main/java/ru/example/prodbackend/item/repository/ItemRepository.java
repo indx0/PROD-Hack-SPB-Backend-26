@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 import ru.example.prodbackend.item.entity.ItemEntity;
 
 import java.util.Collection;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -33,6 +34,11 @@ public interface ItemRepository extends JpaRepository<ItemEntity, UUID> {
     @Modifying(flushAutomatically = true)
     @Query("delete from ItemEntity i where i.box.id = :boxId")
     int deleteByBox_Id(@Param("boxId") UUID boxId);
+
+    // Caller holds the box lock shared by all operations that change its contents.
+    @Modifying(flushAutomatically = true)
+    @Query("update ItemEntity i set i.unpackedAt = null, i.updatedAt = :updatedAt where i.box.id = :boxId and i.unpackedAt is not null")
+    int clearUnpackedMarks(@Param("boxId") UUID boxId, @Param("updatedAt") Instant updatedAt);
 
     @EntityGraph(attributePaths = {"box", "box.room", "box.project"})
     Page<ItemEntity> findAllByBox_Id(UUID boxId, Pageable pageable);

@@ -16,6 +16,8 @@ import ru.example.prodbackend.common.dto.PageResponse;
 import ru.example.prodbackend.common.dto.PaginationRequest;
 import ru.example.prodbackend.event.dto.ProjectEventResponse;
 import ru.example.prodbackend.move.service.ProjectAccessService;
+import ru.example.prodbackend.box.entity.BoxEntity;
+import ru.example.prodbackend.box.entity.BoxStatus;
 
 import java.util.UUID;
 
@@ -40,9 +42,17 @@ public class ProjectEventService {
                 .objectType(objectType).objectId(objectId).description(description).build());
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void recordStatusCorrection(BoxEntity box, BoxStatus previousStatus, BoxStatus newStatus, String description) {
+        projectEventRepository.save(ProjectEventEntity.builder().project(box.getProject()).actor(box.getProject().getOwner())
+                .eventType(ProjectEventType.BOX_STATUS_CORRECTED).objectType(EventObjectType.BOX).objectId(box.getId())
+                .previousStatus(previousStatus).newStatus(newStatus).description(description).build());
+    }
+
     private ProjectEventResponse toResponse(ProjectEventEntity event) {
         return ProjectEventResponse.builder().id(event.getId()).projectId(event.getProject().getId())
                 .actorId(event.getActor() == null ? null : event.getActor().getId()).eventType(event.getEventType())
-                .objectType(event.getObjectType()).objectId(event.getObjectId()).description(event.getDescription()).occurredAt(event.getOccurredAt()).build();
+                .objectType(event.getObjectType()).objectId(event.getObjectId()).description(event.getDescription()).occurredAt(event.getOccurredAt())
+                .previousStatus(event.getPreviousStatus()).newStatus(event.getNewStatus()).build();
     }
 }

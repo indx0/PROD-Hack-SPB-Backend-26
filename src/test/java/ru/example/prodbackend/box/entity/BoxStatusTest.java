@@ -65,4 +65,23 @@ class BoxStatusTest {
                 .isInstanceOf(IllegalArgumentException.class);
         assertThat(box.getStatus()).isEqualTo(current);
     }
+
+    @Test
+    void correctionAllowsEveryBackwardPairAndRejectsSameForwardAndNull() {
+        for (BoxStatus current : BoxStatus.values()) {
+            for (BoxStatus target : BoxStatus.values()) {
+                BoxEntity box = BoxEntity.builder().status(current).build();
+                if (target.ordinal() < current.ordinal()) {
+                    box.correctStatus(target);
+                    assertThat(box.getStatus()).isEqualTo(target);
+                } else {
+                    assertThatThrownBy(() -> box.correctStatus(target)).isInstanceOf(IllegalArgumentException.class);
+                    assertThat(box.getStatus()).isEqualTo(current);
+                }
+            }
+            BoxEntity box = BoxEntity.builder().status(current).build();
+            assertThatThrownBy(() -> box.correctStatus(null)).isInstanceOf(IllegalArgumentException.class);
+            assertThat(box.getStatus()).isEqualTo(current);
+        }
+    }
 }

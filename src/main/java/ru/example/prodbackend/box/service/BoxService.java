@@ -10,6 +10,7 @@ import ru.example.prodbackend.box.dto.BoxFilter;
 import ru.example.prodbackend.box.dto.BoxResponse;
 import ru.example.prodbackend.box.dto.BoxSummaryResponse;
 import ru.example.prodbackend.box.dto.CreateBoxRequest;
+import ru.example.prodbackend.box.dto.CorrectBoxStatusRequest;
 import ru.example.prodbackend.box.dto.RoomBoxSummaryResponse;
 import ru.example.prodbackend.box.dto.UpdateBoxRequest;
 import ru.example.prodbackend.box.entity.BoxEntity;
@@ -31,6 +32,8 @@ import ru.example.prodbackend.room.entity.RoomEntity;
 import ru.example.prodbackend.room.repository.RoomRepository;
 
 import java.util.EnumMap;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -157,6 +160,44 @@ public class BoxService {
         boxRepository.saveAndFlush(box);
 
         recordEvent(box, ProjectEventType.BOX_STATUS_CHANGED, "Коробка №" + box.getNumber() + ": " + previousStatus + " → " + status);
+        return toResponse(box, counts);
+    }
+
+    @Transactional
+    public BoxResponse correctStatus(UUID userId, UUID projectId, UUID boxId, CorrectBoxStatusRequest request) {
+        BoxEntity box = requireOwnedBox(userId, projectId, boxId, true);
+        if (request.getExpectedStatus() == null) throw new RequestValidationException("expectedStatus", "Укажите ожидаемый статус");
+        if (request.getTargetStatus() == null) throw new RequestValidationException("targetStatus", "Укажите целевой статус");
+        if (!Boolean.TRUE.equals(request.getConfirmed())) throw new RequestValidationException("confirmed", "Подтвердите исправление статуса");
+
+        BoxStatus previous = box.getStatus();
+        BoxStatus target = request.getTargetStatus();
+        if (previous == target) return toResponse(box);
+        if (previous != request.getExpectedStatus()) {
+            throw new ResourceConflictException("Статус коробки уже изменился: обновите данные и подтвердите исправление заново");
+        }
+        if (!previous.canCorrectTo(target)) {
+            throw new ResourceConflictException("Коррекция разрешена только назад; для следующего этапа используйте обычное изменение статуса");
+        }
+
+        BoxItemCounts counts = itemCounts(boxId);
+        if (target == BoxStatus.PACKED || target == BoxStatus.LOADED) {
+            if (counts.totalItems() == 0) throw new ResourceConflictException("Нельзя вернуть пустую коробку в " + target + "; выберите PACKING");
+            if (counts.packedItems() != counts.totalItems()) {
+                throw new ResourceConflictException("Нельзя вернуть коробку в " + target + ": упаковано " + counts.packedItems()
+                        + " из " + counts.totalItems() + " вещей; выберите PACKING");
+            }
+        }
+        boolean resetUnpacked = target == BoxStatus.PACKING || target == BoxStatus.PACKED || target == BoxStatus.LOADED;
+        if (resetUnpacked) {
+            itemRepository.clearUnpackedMarks(boxId, Instant.now().truncatedTo(ChronoUnit.MICROS));
+            counts = new BoxItemCounts(boxId, counts.totalItems(), counts.packedItems(), 0);
+        }
+        box.correctStatus(target);
+        boxRepository.saveAndFlush(box);
+        String description = "Исправлен статус коробки №" + box.getNumber() + ": " + previous + " → " + target
+                + (resetUnpacked ? ". Отметки распаковки сброшены." : ". Отметки распаковки сохранены.");
+        projectEventService.recordStatusCorrection(box, previous, target, description);
         return toResponse(box, counts);
     }
 

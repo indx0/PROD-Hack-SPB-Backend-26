@@ -7,6 +7,7 @@ import ru.example.prodbackend.move.entity.MoveProjectEntity;
 import ru.example.prodbackend.room.entity.RoomEntity;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 @Entity
@@ -75,13 +76,13 @@ public class BoxEntity {
 
     @PrePersist
     protected void onCreate() {
-        createdAt = Instant.now();
+        createdAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
         updatedAt = createdAt;
     }
 
     @PreUpdate
     protected void onUpdate() {
-        updatedAt = Instant.now();
+        updatedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
     }
 
     /** Allows only a sequential forward step or an idempotent repeat. */
@@ -90,6 +91,14 @@ public class BoxEntity {
             throw new IllegalArgumentException("Invalid box status transition: " + status + " -> " + next);
         }
         status = next;
+    }
+
+    /** Separate from normal forward transitions; business checks belong to BoxService. */
+    public void correctStatus(BoxStatus target) {
+        if (!status.canCorrectTo(target)) {
+            throw new IllegalArgumentException("Invalid box status correction: " + status + " -> " + target);
+        }
+        status = target;
     }
 
 }

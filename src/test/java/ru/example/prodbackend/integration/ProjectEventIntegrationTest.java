@@ -11,6 +11,8 @@ import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import ru.example.prodbackend.box.dto.CreateBoxRequest;
+import ru.example.prodbackend.box.dto.CorrectBoxStatusRequest;
+import ru.example.prodbackend.box.entity.BoxEntity;
 import ru.example.prodbackend.box.entity.BoxStatus;
 import ru.example.prodbackend.box.repository.BoxRepository;
 import ru.example.prodbackend.box.service.BoxService;
@@ -171,5 +173,30 @@ class ProjectEventIntegrationTest extends AuthIntegrationTestSupport {
 
     private void failEventWrite() {
         doThrow(new DataAccessResourceFailureException("Тестовый сбой записи журнала")).when(eventRepository).save(any(ProjectEventEntity.class));
+    }
+
+    @Test
+    void eventWriteFailureRollsBackCorrectionAndUnpackingMarks() {
+        var project = moveProjectService.createMoveProject(request(), owner);
+        var room = roomRepository.saveAndFlush(RoomEntity.builder().project(moveProjectRepository.findById(project.getId()).orElseThrow()).name("Кухня").build());
+        var box = boxRepository.saveAndFlush(BoxEntity.builder().project(moveProjectRepository.findById(project.getId()).orElseThrow())
+                .room(room).number(1).status(BoxStatus.DELIVERED).build());
+        Instant mark = Instant.parse("2026-10-01T10:00:00Z");
+        var item = itemRepository.saveAndFlush(ItemEntity.builder().box(box).name("Тарелки").packedAt(mark).unpackedAt(mark).build());
+        Instant itemUpdatedAt = itemRepository.findById(item.getId()).orElseThrow().getUpdatedAt();
+        long events = eventRepository.count();
+        failEventWrite();
+        var correction = CorrectBoxStatusRequest.builder().expectedStatus(BoxStatus.DELIVERED).targetStatus(BoxStatus.PACKING).confirmed(true).build();
+
+        assertThrows(DataAccessResourceFailureException.class, () -> boxService.correctStatus(owner.getId(), project.getId(), box.getId(), correction));
+
+        var savedBox = boxRepository.findById(box.getId()).orElseThrow();
+        assertEquals(BoxStatus.DELIVERED, savedBox.getStatus());
+        assertEquals(box.getUpdatedAt(), savedBox.getUpdatedAt());
+        var savedItem = itemRepository.findById(item.getId()).orElseThrow();
+        assertEquals(mark, savedItem.getPackedAt());
+        assertEquals(mark, savedItem.getUnpackedAt());
+        assertEquals(itemUpdatedAt, savedItem.getUpdatedAt());
+        assertEquals(events, eventRepository.count());
     }
 }

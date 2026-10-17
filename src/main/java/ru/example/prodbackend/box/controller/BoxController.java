@@ -21,6 +21,7 @@ import ru.example.prodbackend.box.dto.BoxResponse;
 import ru.example.prodbackend.box.dto.BoxSummaryResponse;
 import ru.example.prodbackend.box.dto.ChangeBoxStatusRequest;
 import ru.example.prodbackend.box.dto.CreateBoxRequest;
+import ru.example.prodbackend.box.dto.CorrectBoxStatusRequest;
 import ru.example.prodbackend.box.dto.UpdateBoxRequest;
 import ru.example.prodbackend.box.service.BoxService;
 import ru.example.prodbackend.common.dto.PageResponse;
@@ -166,6 +167,7 @@ public class BoxController {
                     Ответ содержит totalItems, packedItems, unpackedItems и готовность с учётом текущего статуса.
                     Повтор текущего статуса успешен и не изменяет updatedAt.
                     Пропуск этапа и возврат назад запрещены.
+                    Для исправления ошибочного статуса используйте отдельный POST /{boxId}/status/correction.
                     Событие BOX_STATUS_CHANGED сохраняется в той же транзакции. Повтор статуса не создаёт событие.
                     """,
             responses = {
@@ -185,6 +187,33 @@ public class BoxController {
             @Valid @RequestBody ChangeBoxStatusRequest request
     ) {
         return ResponseEntity.ok(boxService.changeStatus(user.getId(), projectId, boxId, request.getStatus()));
+    }
+
+    @PostMapping("/{boxId}/status/correction")
+    @Operation(summary = "Исправить ошибочный статус коробки",
+            description = """
+                    Возвращает коробку на любой более ранний этап. Требует confirmed=true и expectedStatus,
+                    который пользователь видел перед подтверждением. Несовпадение ожидаемого статуса — 409.
+                    Если targetStatus уже установлен, ответ успешен без изменений времени, вещей и журнала,
+                    даже если expectedStatus устарел. Подтверждение и обязательные поля нужны и для повтора.
+                    packedAt всегда сохраняется. Для PACKING, PACKED и LOADED очищаются unpackedAt всех вещей.
+                    UNPACKED → DELIVERED сохраняет unpackedAt; ошибочные отметки можно снять отдельным PATCH вещи.
+                    Для PACKED и LOADED коробка должна быть непустой, все вещи должны иметь packedAt, включая lost.
+                    Названия, количество, lost, firstDay и связи с чек-листом сохраняются. В PACKING снова доступно изменение состава.
+                    Коррекция вперёд запрещена. BOX_STATUS_CORRECTED, previousStatus и newStatus записываются вместе с изменением.
+                    Клиент должен показать эти последствия перед подтверждением.
+                    """,
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Актуальная коробка или успешный повтор", content = @Content(schema = @Schema(implementation = BoxResponse.class))),
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект недоступен; BOX_NOT_FOUND: коробки нет в этом проекте", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: статус изменился, направление вперёд или содержимое не готово", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: обязательные поля отсутствуют или confirmed не true", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+            })
+    public ResponseEntity<BoxResponse> correctStatus(
+            @Parameter(hidden = true) @AuthenticationPrincipal UserEntity user,
+            @PathVariable UUID projectId, @PathVariable UUID boxId,
+            @Valid @RequestBody CorrectBoxStatusRequest request) {
+        return ResponseEntity.ok(boxService.correctStatus(user.getId(), projectId, boxId, request));
     }
 
     @Operation(
