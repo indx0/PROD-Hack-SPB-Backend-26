@@ -7,20 +7,24 @@ import ru.example.prodbackend.ml.client.LlmProxyClient;
 import ru.example.prodbackend.ml.dto.ItemDescriptionResponse;
 import ru.example.prodbackend.ml.dto.ItemsDescriptionResponse;
 import ru.example.prodbackend.ml.validation.PhotoValidator;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class ItemDescriptionService {
     private final PhotoValidator photos;
     private final LlmProxyClient client;
+    private final MlRateLimiter rateLimiter;
 
-    public ItemDescriptionResponse describe(MultipartFile photo) {
+    public ItemDescriptionResponse describe(UUID userId, MultipartFile photo) {
         var validated = photos.validate(photo);
+        rateLimiter.acquire(userId);
         return client.describe(validated.bytes(), validated.mime());
     }
 
-    public ItemsDescriptionResponse describeItems(MultipartFile photo) {
+    public ItemsDescriptionResponse describeItems(UUID userId, MultipartFile photo) {
         var validated = photos.validate(photo);
+        rateLimiter.acquire(userId);
         return client.describeItems(validated.bytes(), validated.mime());
     }
 

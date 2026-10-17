@@ -2,6 +2,7 @@ package ru.example.prodbackend.exception;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import ru.example.prodbackend.exception.dto.ErrorResponse;
 import ru.example.prodbackend.exception.dto.FieldErrorResponse;
+import ru.example.prodbackend.ml.exception.MlRateLimitException;
 
 import java.sql.SQLException;
 import java.time.Instant;
@@ -22,7 +24,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ru.example.prodbackend.ml.exception.MlException.class)
     public ResponseEntity<ErrorResponse> handleMl(ru.example.prodbackend.ml.exception.MlException exception) {
-        return ResponseEntity.status(exception.getStatus()).body(ErrorResponse.builder()
+        var response = ResponseEntity.status(exception.getStatus());
+        if (exception instanceof MlRateLimitException rateLimit) {
+            response.header(HttpHeaders.RETRY_AFTER, Long.toString(rateLimit.getRetryAfterSeconds()));
+        }
+        return response.body(ErrorResponse.builder()
                 .code(exception.getCode()).message(exception.getMessage())
                 .traceId(exception.getTraceId()).time(Instant.now()).build());
     }
