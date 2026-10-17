@@ -49,6 +49,7 @@ class ItemBoxQueryIntegrationTest {
     @Autowired private ItemService itemService;
     @Autowired private BoxRepository boxRepository;
     @Autowired private FirstDayChecklistService checklistService;
+    @Autowired private org.springframework.jdbc.core.JdbcTemplate jdbc;
     @Autowired private JdbcCapture jdbcCapture;
 
     private UserEntity owner;
@@ -262,7 +263,7 @@ class ItemBoxQueryIntegrationTest {
     }
 
     @Test
-    void checklistPageFetchesCurrentLinkedItemsBoxesAndRoomsWithoutNPlusOne() {
+    void archivePageFetchesSnapshotWithoutLiveInventoryQueries() {
         for (int number = 1; number <= 6; number++) {
             var point = FirstDayChecklistItemEntity.builder().project(project).name("Первый день " + number).build();
             if (number != 1) {
@@ -273,6 +274,7 @@ class ItemBoxQueryIntegrationTest {
             entityManager.persist(point);
         }
         flushAndClear();
+        ru.example.prodbackend.support.LegacyChecklistTestSupport.snapshot(jdbc);
         PaginationRequest pagination = new PaginationRequest();
         pagination.setSize(4);
         jdbcCapture.start();

@@ -6,11 +6,11 @@
 
 ### Функциональные требования
 
-- **План переезда:** создать проект с названием, датой и необязательными адресами; использовать готовые задачи или добавить свои; разделить задачи на этапы «до», «в день» и «после»; указать срок и ответственного, отмечать выполнение.
+- **План переезда:** создать проект с названием, датой и необязательными адресами; использовать готовые задачи или добавить свои; разделить задачи на этапы «до», «в день» и «после»; указать срок и ответственного, отмечать выполнение. Объединять задачи в папки с названием и цветом, связывать задачи с вещами. Добавлять участников проекта и назначать им задачи.
 - **Коробки:** создавать коробки с уникальным в проекте номером и комнатой назначения; быстро добавлять вещи; откладывать заполнение описи с напоминанием; удалять коробки и вещи с подтверждением.
 - **Статусы:** «собирается» → «собрана» → «погружена» → «доставлена» → «распакована». Недопустимые переходы запрещены.
 - **Поиск и маркировка:** искать вещи по названию и коробки по номеру; показывать коробку, комнату и статус; создавать этикетку с номером, комнатой и QR, открывать коробку по QR, показывать и печатать этикетку или PDF.
-- **Контроль:** чек-лист погрузки по комнатам, отметки доставки, счётчики статусов и прогресс распаковки; чек-лист первого дня (зубные щётки, зарядки, чайник, постельное бельё); отметка потерянных вещей и подсказки по нераспакованным коробкам.
+- **Контроль:** чек-лист погрузки по комнатам, отметки доставки, счётчики статусов и прогресс распаковки; задачи первого дня; отметка потерянных вещей и подсказки по нераспакованным коробкам. Первый день ведётся обычными задачами; прежний отдельный чек-лист доступен только как архив.
 - **Памятки:** локальные материалы об упаковке хрупкого, перевозке ценностей и вещах, которые упаковывают последними.
 - **Дополнительно:** план упаковки комнаты по описанию или фото (количество коробок, распределение и порядок упаковки), опись коробки по фото.
 
@@ -80,6 +80,7 @@ flowchart LR
 ```
 
 При отказе основного PostgreSQL подключения backend переключаются на резервный экземпляр.
+Лимит ML-запросов сейчас хранится в памяти одного backend; при запуске нескольких экземпляров нужен общий счётчик, например в Redis.
 
 ### Схема бизнес-процесса: сборка коробки
 
@@ -108,11 +109,11 @@ sequenceDiagram
 
 ### API
 
-[Swagger](https://hack-lead-01-ru3-vm1-3a8de1.vmaas-spirit.t-education.com/docs) содержит все эндпоинты, модели запросов и ответов, а также коды и причины ошибок для каждого метода и подробное описание каждого эндпоинта и ошибок.
+[Swagger](https://hack-lead-01-ru3-vm1-3a8de1.vmaas-spirit.t-education.com/docs) содержит описание каждого эндпоинта, модели запросов и ответов, коды и причины ошибок.
 
 ### Модель данных
 
-Связи разделены на три схемы, чтобы их было удобно читать. Таблицы `users` и `move_projects` повторяются между схемами. Необязательный внешний ключ показан как `o|`.
+Связи разделены на небольшие схемы. Общие таблицы повторяются между ними. Необязательный внешний ключ показан как `o|`.
 
 **Пользователи и доступ**
 
@@ -138,6 +139,8 @@ erDiagram
     items o|--o| first_day_checklist_items : linked
 ```
 
+`first_day_checklist_items` — прежняя таблица, новые пункты в неё не записываются.
+
 **Задачи и шаблоны**
 
 ```mermaid
@@ -152,7 +155,19 @@ erDiagram
     task_set_applications o|--o{ move_tasks : creates
 ```
 
-Ниже перечислены **все таблицы приложения и их поля**. `timestamptz` означает `timestamp with time zone`; `?` означает допускаемый `NULL`. Все `id` — первичные ключи, поля `*_id` ссылаются на таблицы диаграммы, кроме `project_events.object_id` (идентификатор объекта события без внешнего ключа).
+**Папки, назначения и архив первого дня**
+
+```mermaid
+erDiagram
+    move_projects ||--o{ task_folders : groups
+    task_folders o|--o{ move_tasks : contains
+    users o|--o{ move_tasks : assigned
+    items o|--o{ move_tasks : linked
+    move_projects ||--o{ first_day_checklist_archive : archives
+    move_projects ||--o| first_day_checklist_migrations : migrated
+```
+
+Ниже перечислены **все таблицы приложения и их поля**. `timestamptz` означает `timestamp with time zone`; `?` — допускаемый `NULL`. Первичные ключи — `id`, у `first_day_checklist_migrations` — `project_id`.
 
 | Таблица | Поля и типы |
 | --- | --- |
@@ -166,12 +181,17 @@ erDiagram
 | `task_templates` | `id uuid`, `owner_id uuid?`, `title varchar(255)`, `description varchar(10000)?`, `stage varchar(32)`, `due_date_offset_days integer`, `deleted_at timestamptz?`, `created_at timestamptz`, `updated_at timestamptz` |
 | `task_sets` | `id uuid`, `owner_id uuid`, `name varchar(255)`, `description varchar(10000)?`, `deleted_at timestamptz?`, `created_at timestamptz`, `updated_at timestamptz` |
 | `task_set_items` | `id uuid`, `task_set_id uuid`, `title varchar(255)`, `description varchar(10000)?`, `stage varchar(32)`, `offset_days integer`, `position integer` |
-| `task_set_applications` | `id uuid`, `project_id uuid`, `task_set_id uuid`, `task_set_name varchar(255)`, `applied_at timestamptz` |
-| `move_tasks` | `id uuid`, `project_id uuid`, `template_id uuid?`, `task_set_application_id uuid?`, `task_set_position integer?`, `title varchar(255)`, `description varchar(10000)?`, `stage varchar(32)`, `due_date date?`, `due_type varchar(16)`, `offset_days integer?`, `assignee_name varchar(255)?`, `completed_at timestamptz?`, `created_at timestamptz`, `updated_at timestamptz` |
+| `task_set_applications` | `id uuid`, `project_id uuid`, `task_set_id uuid`, `task_set_name varchar(255)`, `folder_id uuid?`, `applied_at timestamptz` |
+| `task_folders` | `id uuid`, `project_id uuid`, `name varchar(80)`, `color_key varchar(16)`, `initial_name varchar(80)`, `initial_color_key varchar(16)`, `created_at timestamptz`, `updated_at timestamptz` |
+| `move_tasks` | `id uuid`, `project_id uuid`, `template_id uuid?`, `task_set_application_id uuid?`, `task_set_position integer?`, `folder_id uuid?`, `assignee_id uuid?`, `linked_item_id uuid?`, `title varchar(255)`, `description varchar(10000)?`, `stage varchar(32)`, `due_date date?`, `due_type varchar(16)`, `offset_days integer?`, `assignee_name varchar(255)?`, `completed_at timestamptz?`, `created_at timestamptz`, `updated_at timestamptz` |
 | `first_day_checklist_items` | `id uuid`, `project_id uuid`, `item_id uuid?`, `name varchar(255)`, `completed_at timestamptz?`, `created_at timestamptz`, `updated_at timestamptz` |
+| `first_day_checklist_archive` | `id uuid`, `project_id uuid`, `target_task_id uuid`, `folder_id uuid`, `name varchar(255)`, `completed_at timestamptz?`, `created_at timestamptz`, `updated_at timestamptz`, `item_id uuid?`, `item_name varchar(255)?`, `box_id uuid?`, `box_number integer?`, `room_id uuid?`, `room_name varchar(255)?`, `room_icon_key varchar(255)?` |
+| `first_day_checklist_migrations` | `project_id uuid`, `folder_id uuid`, `source_count bigint`, `completed_count bigint`, `migrated_at timestamptz` |
 | `project_events` | `id uuid`, `project_id uuid`, `actor_id uuid?`, `event_type varchar(32)`, `object_type varchar(32)`, `object_id uuid`, `description varchar(2000)`, `previous_status varchar(32)?`, `new_status varchar(32)?`, `occurred_at timestamptz` |
 
-Ключевые ограничения БД: уникальны `users.email`, `boxes(project_id, number)`, `rooms(project_id, name)` и `project_participants(project_id, user_id)`. Внешний ключ `(boxes.room_id, boxes.project_id)` не позволяет привязать коробку к комнате другого переезда.
+Ключевые ограничения БД: уникальны `users.email`, `boxes(project_id, number)`, `rooms(project_id, name)` и `project_participants(project_id, user_id)`. Составные внешние ключи не позволяют привязать коробку к комнате другого переезда или задачу к чужой папке. Удаление папки сохраняет задачи без папки; удаление вещи снимает связи задач с ней.
+
+Архив первого дня хранит неизменяемый снимок, а `first_day_checklist_migrations` предотвращает повторный перенос старых пунктов в задачи. У обеих таблиц внешний ключ есть только у `project_id`; остальные UUID исторические. `task_set_applications.folder_id` и `project_events.object_id` также сохраняются без внешнего ключа.
 
 ## 5. Выбор конкретных технологий
 

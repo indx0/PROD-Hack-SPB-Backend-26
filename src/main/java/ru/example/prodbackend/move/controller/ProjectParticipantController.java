@@ -56,4 +56,21 @@ public class ProjectParticipantController {
             @Parameter(hidden = true) @AuthenticationPrincipal UserEntity user, @Valid @RequestBody AddProjectParticipantRequest request) {
         return ResponseEntity.ok(participantService.add(projectId, user.getId(), request));
     }
+
+    @DeleteMapping("/{userId}")
+    @Operation(summary = "Отозвать доступ участника к переезду", description = "Любой участник активного переезда может удалить другого или выйти сам. Создателя удалить нельзя. Назначения удаляемого участника снимаются, включая выполненные задачи; данные и выполнение сохраняются. Повтор возвращает 204, пока вызывающий имеет доступ; после самовыхода — 404. Повторное добавление не восстанавливает назначения. Архив запрещает отзыв доступа.",
+            responses = {
+                    @ApiResponse(responseCode = "204", description = "Доступ отозван или участник уже отсутствует", content = @Content),
+                    @ApiResponse(responseCode = "400", description = "INVALID_REQUEST_PARAMETER: Некорректный UUID", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "401", description = "UNAUTHORIZED: Токен доступа отсутствует, недействителен или истёк", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: Проект не найден или недоступен", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: Переезд в архиве или удаляется создатель", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+            })
+    public ResponseEntity<Void> remove(@Parameter(description = "Идентификатор проекта переезда") @PathVariable UUID projectId,
+            @Parameter(description = "UUID аккаунта участника, доступ которого отзывается") @PathVariable UUID userId,
+            @Parameter(hidden = true) @AuthenticationPrincipal UserEntity user) {
+        participantService.remove(projectId, user.getId(), userId);
+        return ResponseEntity.noContent().build();
+    }
+
 }

@@ -24,11 +24,10 @@ public class LlmProxyConfig {
 
     @Bean(destroyMethod = "shutdownNow")
     ExecutorService llmExecutor() {
-        // No queue: bound retained image payloads and reject overload immediately.
-        return new ThreadPoolExecutor(0, 4, 60, TimeUnit.SECONDS, new SynchronousQueue<>(), task -> {
+        return Executors.newCachedThreadPool(task -> {
             Thread thread = new Thread(task, "llm-proxy-request");
             thread.setDaemon(true);
             return thread;
-        }, new ThreadPoolExecutor.AbortPolicy());
+        });
     }
 }

@@ -15,6 +15,9 @@ import ru.example.prodbackend.task.entity.TaskDueType;
 @AllArgsConstructor
 public class ApplyTaskTemplateRequest {
 
+    @Schema(types = {"string", "null"}, format = "uuid", description = "Папка этого переезда для создаваемой задачи; отсутствие или null — без папки. Чужая или отсутствующая папка — 404 TASK_FOLDER_NOT_FOUND. Подтверждается folderId в ответе")
+    private UUID folderId;
+
     @Schema(example = "550e8400-e29b-41d4-a716-446655440000", description = "Идентификатор готовой задачи")
     @NotNull
     private UUID templateId;
@@ -40,7 +43,21 @@ public class ApplyTaskTemplateRequest {
     @Schema(description = "Смещение в днях, только для RELATIVE", example = "-2")
     private Integer offsetDays;
 
-    @Schema(description = "Имя ответственного; null, если ответственный не назначен")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @Schema(description = "UUID аккаунта участника этого переезда, включая создателя. Имеет приоритет над assigneeName; явный null снимает назначение. Отсутствие в PATCH сохраняет назначение")
+    private UUID assigneeId;
+
+    @JsonIgnore
+    @Schema(hidden = true)
+    private boolean assigneeIdPresent;
+
+    @JsonSetter(value = "assigneeId", nulls = Nulls.SET)
+    public void setAssigneeId(UUID assigneeId) {
+        this.assigneeId = assigneeId;
+        this.assigneeIdPresent = true;
+    }
+
+    @Schema(description = "Свободное имя ответственного, если assigneeId не передан; null снимает назначение")
     @Size(max = 255)
     private String assigneeName;
 }

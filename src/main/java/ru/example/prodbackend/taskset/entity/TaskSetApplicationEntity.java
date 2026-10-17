@@ -25,6 +25,8 @@ public class TaskSetApplicationEntity {
     private TaskSetEntity taskSet;
     @Column(name = "task_set_name", nullable = false, length = 255)
     private String taskSetName;
+    @Column(name = "folder_id", updatable = false)
+    private UUID folderId;
     @Column(name = "applied_at", nullable = false, updatable = false)
     private Instant appliedAt;
     @PrePersist protected void onCreate() { appliedAt = Instant.now().truncatedTo(ChronoUnit.MICROS); }

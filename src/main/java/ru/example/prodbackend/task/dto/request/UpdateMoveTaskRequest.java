@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
+import java.util.UUID;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import ru.example.prodbackend.task.entity.TaskDueType;
@@ -13,6 +14,32 @@ import ru.example.prodbackend.task.entity.TaskStage;
 @Getter
 @NoArgsConstructor(onConstructor_ = @JsonCreator)
 public class UpdateMoveTaskRequest {
+
+    @Schema(types = {"string", "null"}, format = "uuid", description = "Папка этого переезда: отсутствие сохраняет значение, null выносит задачу из папки. Чужая или отсутствующая папка — 404 TASK_FOLDER_NOT_FOUND; весь PATCH откатывается")
+    private UUID folderId;
+
+    @Schema(types = {"string", "null"}, format = "uuid", description = "Связанная вещь этого переезда: отсутствие сохраняет связь, null снимает. Чужая или отсутствующая вещь — 404; весь PATCH откатывается. Не меняет item.firstDay")
+    private UUID linkedItemId;
+
+    @JsonIgnore
+    @Schema(hidden = true)
+    private boolean folderIdPresent;
+
+    @JsonIgnore
+    @Schema(hidden = true)
+    private boolean linkedItemIdPresent;
+
+    @JsonSetter(value = "folderId", nulls = Nulls.SET)
+    public void setFolderId(UUID folderId) {
+        this.folderId = folderId;
+        this.folderIdPresent = true;
+    }
+
+    @JsonSetter(value = "linkedItemId", nulls = Nulls.SET)
+    public void setLinkedItemId(UUID linkedItemId) {
+        this.linkedItemId = linkedItemId;
+        this.linkedItemIdPresent = true;
+    }
 
     @Schema(example = "Упаковать кухню", description = "Новое название задачи; отсутствие сохраняет значение, null запрещён")
     @Size(max = 255)
@@ -36,7 +63,21 @@ public class UpdateMoveTaskRequest {
     @JsonSetter(value = "offsetDays", nulls = Nulls.FAIL)
     public void setOffsetDays(Integer offsetDays) { this.offsetDays = offsetDays; }
 
-    @Schema(description = "Новый ответственный; отсутствие сохраняет значение, null очищает")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @Schema(description = "UUID аккаунта участника этого переезда, включая создателя. Имеет приоритет над assigneeName; явный null снимает назначение. Отсутствие в PATCH сохраняет назначение")
+    private UUID assigneeId;
+
+    @JsonIgnore
+    @Schema(hidden = true)
+    private boolean assigneeIdPresent;
+
+    @JsonSetter(value = "assigneeId", nulls = Nulls.SET)
+    public void setAssigneeId(UUID assigneeId) {
+        this.assigneeId = assigneeId;
+        this.assigneeIdPresent = true;
+    }
+
+    @Schema(description = "Свободное имя ответственного: без assigneeId снимает связь с аккаунтом; null очищает назначение, отсутствие сохраняет")
     @Size(max = 255)
     private String assigneeName;
 
@@ -84,7 +125,7 @@ public class UpdateMoveTaskRequest {
     @Schema(hidden = true)
     @AssertTrue(message = "Укажите хотя бы одно поле для изменения")
     public boolean isUpdatePresent() {
-        return title != null || stage != null || descriptionPresent || dueDatePresent || assigneeNamePresent || dueType != null || offsetDays != null;
+        return title != null || stage != null || descriptionPresent || dueDatePresent || assigneeNamePresent || assigneeIdPresent || dueType != null || offsetDays != null || folderIdPresent || linkedItemIdPresent;
     }
 
     @JsonAnySetter

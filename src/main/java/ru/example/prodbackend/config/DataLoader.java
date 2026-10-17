@@ -14,9 +14,8 @@ import ru.example.prodbackend.auth.service.RefreshTokenService;
 import ru.example.prodbackend.box.dto.CreateBoxRequest;
 import ru.example.prodbackend.box.entity.BoxStatus;
 import ru.example.prodbackend.box.service.BoxService;
-import ru.example.prodbackend.checklist.dto.request.CreateChecklistItemRequest;
-import ru.example.prodbackend.checklist.dto.request.UpdateChecklistItemRequest;
-import ru.example.prodbackend.checklist.service.FirstDayChecklistService;
+import ru.example.prodbackend.taskfolder.service.TaskFolderService;
+import ru.example.prodbackend.taskfolder.dto.CreateTaskFolderRequest;
 import ru.example.prodbackend.common.dto.PaginationRequest;
 import ru.example.prodbackend.item.dto.CreateItemRequest;
 import ru.example.prodbackend.item.dto.UpdateItemRequest;
@@ -65,7 +64,7 @@ public class DataLoader implements ApplicationRunner {
     private final RoomService roomService;
     private final BoxService boxService;
     private final MoveTaskService moveTaskService;
-    private final FirstDayChecklistService checklistService;
+    private final TaskFolderService taskFolderService;
     private final TaskSetService taskSetService;
     private final TaskTemplateService taskTemplateService;
 
@@ -110,7 +109,7 @@ public class DataLoader implements ApplicationRunner {
 
         createBox(user.getId(), projectId, livingRoom, 1, BoxStatus.PACKING, true);
         createBox(user.getId(), projectId, kitchen, 2, BoxStatus.PACKED, false, "Тарелки", "Кружки", "Столовые приборы");
-        List<UUID> bedroomItems = createBox(user.getId(), projectId, bedroom, 3, BoxStatus.LOADED, false, "Постельное бельё", "Подушки", "Плед");
+        createBox(user.getId(), projectId, bedroom, 3, BoxStatus.LOADED, false, "Постельное бельё", "Подушки", "Плед");
         createBox(user.getId(), projectId, livingRoom, 4, BoxStatus.DELIVERED, false, "Книги", "Настольная лампа", "Фоторамки");
         createBox(user.getId(), projectId, bathroom, 5, BoxStatus.UNPACKED, false, "Полотенца", "Шампунь", "Фен");
 
@@ -127,13 +126,12 @@ public class DataLoader implements ApplicationRunner {
                 .description("Обернуть хрупкую посуду и подписать коробки.").stage(TaskStage.BEFORE_MOVE)
                 .dueType(TaskDueType.RELATIVE).offsetDays(-2).assigneeName("Алексей").build(), user.getId());
 
-        checklistService.create(projectId, CreateChecklistItemRequest.builder().name("Документы").build(), user.getId());
-        checklistService.create(projectId, CreateChecklistItemRequest.builder().name("Аптечка").build(), user.getId());
-        for (var item : checklistService.findAll(projectId, new PaginationRequest(), user.getId()).getContent()) {
-            if (item.getName().equals("Постельное бельё")) checklistService.link(projectId, item.getId(), bedroomItems.get(0), user.getId());
-            if (item.getName().equals("Зарядки") || item.getName().equals("Документы")) {
-                checklistService.update(projectId, item.getId(), UpdateChecklistItemRequest.builder().completed(true).build(), user.getId());
-            }
+        UUID personalFolderId = UUID.randomUUID();
+        taskFolderService.create(projectId, new CreateTaskFolderRequest(personalFolderId, "Личные задачи", "mint"), user.getId());
+        for (String title : List.of("Документы", "Аптечка")) {
+            var task = moveTaskService.create(projectId, CreateMoveTaskRequest.builder().title(title)
+                    .folderId(personalFolderId).stage(TaskStage.BEFORE_MOVE).dueType(TaskDueType.FIXED).build(), user.getId());
+            if (title.equals("Документы")) moveTaskService.changeCompletion(projectId, task.getId(), true, user.getId());
         }
     }
 

@@ -2,6 +2,7 @@ package ru.example.prodbackend.exception;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import ru.example.prodbackend.exception.dto.ErrorResponse;
 import ru.example.prodbackend.exception.dto.FieldErrorResponse;
+import ru.example.prodbackend.ml.exception.MlRateLimitException;
 
 import java.sql.SQLException;
 import java.time.Instant;
@@ -20,9 +22,27 @@ import java.util.UUID;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(TaskSetAlreadyAppliedException.class)
+    public ResponseEntity<ErrorResponse> handleTaskSetAlreadyApplied(TaskSetAlreadyAppliedException exception) {
+        var body = ErrorResponse.builder().code("TASK_SET_ALREADY_APPLIED").message(exception.getMessage())
+                .traceId(UUID.randomUUID()).time(Instant.now()).build();
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    }
+
+    @ExceptionHandler(TaskFolderNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleTaskFolderNotFound(TaskFolderNotFoundException exception) {
+        var body = ErrorResponse.builder().code("TASK_FOLDER_NOT_FOUND").message(exception.getMessage())
+                .traceId(UUID.randomUUID()).time(Instant.now()).build();
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
+    }
+
     @ExceptionHandler(ru.example.prodbackend.ml.exception.MlException.class)
     public ResponseEntity<ErrorResponse> handleMl(ru.example.prodbackend.ml.exception.MlException exception) {
-        return ResponseEntity.status(exception.getStatus()).body(ErrorResponse.builder()
+        var response = ResponseEntity.status(exception.getStatus());
+        if (exception instanceof MlRateLimitException rateLimit) {
+            response.header(HttpHeaders.RETRY_AFTER, Long.toString(rateLimit.getRetryAfterSeconds()));
+        }
+        return response.body(ErrorResponse.builder()
                 .code(exception.getCode()).message(exception.getMessage())
                 .traceId(exception.getTraceId()).time(Instant.now()).build());
     }
@@ -48,6 +68,13 @@ public class GlobalExceptionHandler {
                 .traceId(UUID.randomUUID()).time(Instant.now()).build());
     }
 
+
+    @ExceptionHandler(FirstDayChecklistRetiredException.class)
+    public ResponseEntity<ErrorResponse> handleFirstDayChecklistRetired(FirstDayChecklistRetiredException exception) {
+        var body = ErrorResponse.builder().code("FIRST_DAY_CHECKLIST_RETIRED").message(exception.getMessage())
+                .traceId(UUID.randomUUID()).time(Instant.now()).build();
+        return ResponseEntity.status(HttpStatus.GONE).body(body);
+    }
 
     @ExceptionHandler(ChecklistItemNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleChecklistItemNotFound(ChecklistItemNotFoundException exception) {

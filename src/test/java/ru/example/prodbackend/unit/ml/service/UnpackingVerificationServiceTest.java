@@ -2,6 +2,7 @@ package ru.example.prodbackend.unit.ml.service;
 
 import ru.example.prodbackend.ml.service.UnpackingInventoryService;
 import ru.example.prodbackend.ml.service.UnpackingVerificationService;
+import ru.example.prodbackend.ml.service.MlRateLimiter;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
@@ -17,13 +18,14 @@ import static org.mockito.Mockito.*;
 
 class UnpackingVerificationServiceTest {
     private final UnpackingInventoryService inventories = mock(UnpackingInventoryService.class);
+    private final MlRateLimiter limiter = mock(MlRateLimiter.class);
     private final LlmProxyClient client = mock(LlmProxyClient.class);
     private final UUID user = UUID.randomUUID(), project = UUID.randomUUID(), box = UUID.randomUUID();
     private final InventoryItem cup = new InventoryItem(UUID.randomUUID(), "Кружка");
     private final InventoryItem charger = new InventoryItem(UUID.randomUUID(), "Зарядка");
     private final byte[] bytes = {(byte)255, (byte)216, (byte)255};
     private final MockMultipartFile photo = new MockMultipartFile("photo", bytes);
-    private final UnpackingVerificationService service = new UnpackingVerificationService(inventories, new PhotoValidator(), client);
+    private final UnpackingVerificationService service = new UnpackingVerificationService(inventories, new PhotoValidator(), client, limiter);
 
     @Test
     void buildsPartialReportFromSnapshotAndDoesNotInferLoss() {
@@ -40,10 +42,11 @@ class UnpackingVerificationServiceTest {
         });
         assertThat(result.notSeen()).containsExactly(cup);
         assertThat(result.unmatched()).containsExactly("Тарелка");
-        var order = inOrder(inventories, client);
+        var order = inOrder(inventories, limiter, client);
         order.verify(inventories).snapshot(user, project, box);
+        order.verify(limiter).acquire(user);
         order.verify(client).verifyUnpacking(bytes, "image/jpeg", snapshot);
-        verifyNoMoreInteractions(inventories, client);
+        verifyNoMoreInteractions(inventories, limiter, client);
     }
 
     @Test
@@ -67,9 +70,9 @@ class UnpackingVerificationServiceTest {
     void accessFailurePrecedesPhotoReadingAndLlmCall() {
         var photos = mock(PhotoValidator.class);
         when(inventories.snapshot(user, project, box)).thenThrow(new MoveProjectNotFoundException("missing"));
-        assertThatThrownBy(() -> new UnpackingVerificationService(inventories, photos, client)
+        assertThatThrownBy(() -> new UnpackingVerificationService(inventories, photos, client, limiter)
                 .verify(user, project, box, null)).isInstanceOf(MoveProjectNotFoundException.class);
-        verifyNoInteractions(photos, client);
+        verifyNoInteractions(photos, limiter, client);
     }
 
     @Test
@@ -77,6 +80,6 @@ class UnpackingVerificationServiceTest {
         when(inventories.snapshot(user, project, box)).thenReturn(List.of(cup));
         assertThatThrownBy(() -> service.verify(user, project, box, new MockMultipartFile("photo", new byte[0])))
                 .isInstanceOf(ru.example.prodbackend.ml.exception.MlException.class);
-        verifyNoInteractions(client);
+        verifyNoInteractions(limiter, client);
     }
 }

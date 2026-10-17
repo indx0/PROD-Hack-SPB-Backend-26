@@ -37,22 +37,20 @@ public class FirstDayChecklistController {
     private final FirstDayChecklistService checklistService;
 
     @PostMapping
-    @Operation(summary = "Добавить пункт чек-листа", description = "Необязательный itemId связывает вещь этого проекта и включает firstDay. Название пункта независимо от названия вещи.",
+    @Operation(deprecated = true, summary = "Добавить пункт чек-листа", description = "Запись отключена после серверного переноса. Используйте API обычных задач и папок. После проверки доступа возвращает 410 FIRST_DAY_CHECKLIST_RETIRED, включая архивные проекты.",
             responses = {
-                    @ApiResponse(responseCode = "201", description = "Невыполненный пункт создан", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ChecklistItemResponse.class))),
-                    @ApiResponse(responseCode = "400", description = "INVALID_REQUEST_BODY: Тело отсутствует, содержит некорректный JSON или недопустимый формат поля; INVALID_REQUEST_PARAMETER: Некорректный формат параметра запроса", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "410", description = "FIRST_DAY_CHECKLIST_RETIRED: Запись отключена; используйте API задач и папок", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "400", description = "INVALID_REQUEST_BODY: Некорректный JSON или недопустимый формат поля; INVALID_REQUEST_PARAMETER: Некорректный формат параметра запроса", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "401", description = "UNAUTHORIZED: Токен доступа отсутствует, недействителен или истёк", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: Проект недоступен; NOT_FOUND: Вещь отсутствует или принадлежит другому проекту", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: Вещь уже связана с другим пунктом или перемещена во время привязки; повторите запрос; для изменений — переезд в архиве, сначала восстановите его", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: Название пустое или длиннее 255 символов", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: Проект не найден или недоступен", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
             })
-    public ResponseEntity<ChecklistItemResponse> create(@Parameter(description = "Идентификатор проекта переезда") @PathVariable UUID projectId, @Valid @RequestBody CreateChecklistItemRequest request,
+    public ResponseEntity<ChecklistItemResponse> create(@Parameter(description = "Идентификатор проекта переезда") @PathVariable UUID projectId, @RequestBody(required = false) CreateChecklistItemRequest request,
                                                        @Parameter(hidden = true) @AuthenticationPrincipal UserEntity user) {
         return ResponseEntity.status(HttpStatus.CREATED).body(checklistService.create(projectId, request, user.getId()));
     }
 
     @GetMapping
-    @Operation(summary = "Получить чек-лист первого дня", description = "Сортировка createdAt ASC, id ASC. page от 0, size от 1 до 100; по умолчанию 0 и 20. Название вещи, коробка и комната актуальны; без связи поля itemId, itemName, boxId, boxNumber, roomId, roomName равны null.",
+    @Operation(deprecated = true, summary = "Получить чек-лист первого дня", description = "Архивный снимок на момент серверного переноса. Изменения и удаление задач или вещей не меняют архив. GET ничего не переносит. Сортировка createdAt ASC, id ASC; page от 0, size от 1 до 100, по умолчанию 0 и 20. Актуальный план доступен через API задач и папок.",
             responses = {
                     @ApiResponse(responseCode = "200", description = "Страница пунктов чек-листа"),
                     @ApiResponse(responseCode = "400", description = "INVALID_REQUEST_PARAMETER: Некорректный формат параметра запроса", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
@@ -66,43 +64,38 @@ public class FirstDayChecklistController {
     }
 
     @PatchMapping("/{itemId}")
-    @Operation(summary = "Изменить название или выполнение пункта", description = "Отсутствующие и null-поля сохраняются; пустой объект допустим. Повтор текущего completed не меняет время выполнения и updatedAt.",
+    @Operation(deprecated = true, summary = "Изменить название или выполнение пункта", description = "Запись отключена после серверного переноса. Используйте API обычных задач и папок. После проверки доступа возвращает 410 FIRST_DAY_CHECKLIST_RETIRED, включая архивные проекты.",
             responses = {
-                    @ApiResponse(responseCode = "200", description = "Актуальный пункт чек-листа", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ChecklistItemResponse.class))),
-                    @ApiResponse(responseCode = "400", description = "INVALID_REQUEST_BODY: Тело отсутствует, содержит некорректный JSON или недопустимый формат поля; INVALID_REQUEST_PARAMETER: Некорректный формат параметра запроса", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "410", description = "FIRST_DAY_CHECKLIST_RETIRED: Запись отключена; используйте API задач и папок", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "400", description = "INVALID_REQUEST_BODY: Некорректный JSON или недопустимый формат поля; INVALID_REQUEST_PARAMETER: Некорректный формат параметра запроса", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "401", description = "UNAUTHORIZED: Токен доступа отсутствует, недействителен или истёк", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: Проект недоступен; CHECKLIST_ITEM_NOT_FOUND: Пункта нет в этом проекте", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: Переезд в архиве; сначала восстановите его", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: Название пустое или длиннее 255 символов", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: Проект не найден или недоступен", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
             })
     public ResponseEntity<ChecklistItemResponse> update(@Parameter(description = "Идентификатор проекта переезда") @PathVariable UUID projectId, @Parameter(description = "Идентификатор пункта чек-листа") @PathVariable UUID itemId,
-                                                       @Valid @RequestBody UpdateChecklistItemRequest request, @Parameter(hidden = true) @AuthenticationPrincipal UserEntity user) {
+                                                       @RequestBody(required = false) UpdateChecklistItemRequest request, @Parameter(hidden = true) @AuthenticationPrincipal UserEntity user) {
         return ResponseEntity.ok(checklistService.update(projectId, itemId, request, user.getId()));
     }
 
     @PutMapping("/{checklistItemId}/item")
-    @Operation(summary = "Привязать вещь к пункту или заменить связь", description = "Вещь должна принадлежать этому проекту. Привязка включает firstDay=true. Повтор той же связи успешен; новая вещь заменяет старую. firstDay прежней вещи сохраняется.",
+    @Operation(deprecated = true, summary = "Привязать вещь к пункту или заменить связь", description = "Запись отключена после серверного переноса. Используйте API обычных задач и папок. После проверки доступа возвращает 410 FIRST_DAY_CHECKLIST_RETIRED, включая архивные проекты.",
             responses = {
-                    @ApiResponse(responseCode = "200", description = "Пункт с актуальной связью", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ChecklistItemResponse.class))),
-                    @ApiResponse(responseCode = "400", description = "INVALID_REQUEST_BODY: Тело отсутствует, содержит некорректный JSON или недопустимый формат поля; INVALID_REQUEST_PARAMETER: Некорректный формат параметра запроса", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "410", description = "FIRST_DAY_CHECKLIST_RETIRED: Запись отключена; используйте API задач и папок", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "400", description = "INVALID_REQUEST_BODY: Некорректный JSON или недопустимый формат поля; INVALID_REQUEST_PARAMETER: Некорректный формат параметра запроса", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "401", description = "UNAUTHORIZED: Токен доступа отсутствует, недействителен или истёк", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: Проект недоступен; CHECKLIST_ITEM_NOT_FOUND: Пункта нет в этом проекте; NOT_FOUND: Вещь отсутствует или принадлежит другому проекту", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: Вещь уже связана с другим пунктом или перемещена во время привязки; повторите запрос; для изменений — переезд в архиве, сначала восстановите его", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: ItemId обязателен", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: Проект не найден или недоступен", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
             })
     public ResponseEntity<ChecklistItemResponse> link(@Parameter(description = "Идентификатор проекта переезда") @PathVariable UUID projectId, @Parameter(description = "Идентификатор пункта чек-листа") @PathVariable UUID checklistItemId,
-            @Valid @RequestBody LinkChecklistItemRequest request, @Parameter(hidden = true) @AuthenticationPrincipal UserEntity user) {
-        return ResponseEntity.ok(checklistService.link(projectId, checklistItemId, request.getItemId(), user.getId()));
+            @RequestBody(required = false) LinkChecklistItemRequest request, @Parameter(hidden = true) @AuthenticationPrincipal UserEntity user) {
+        return ResponseEntity.ok(checklistService.link(projectId, checklistItemId, request == null ? null : request.getItemId(), user.getId()));
     }
 
     @DeleteMapping("/{checklistItemId}/item")
-    @Operation(summary = "Снять связь с вещью", description = "Сохраняет пункт, название, выполнение и firstDay вещи. Повтор успешен. Возвращает пункт с null в полях связи.",
+    @Operation(deprecated = true, summary = "Снять связь с вещью", description = "Запись отключена после серверного переноса. Используйте API обычных задач и папок. После проверки доступа возвращает 410 FIRST_DAY_CHECKLIST_RETIRED, включая архивные проекты.",
             responses = {
-                    @ApiResponse(responseCode = "200", description = "Самостоятельный пункт чек-листа", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ChecklistItemResponse.class))),
+                    @ApiResponse(responseCode = "410", description = "FIRST_DAY_CHECKLIST_RETIRED: Запись отключена; используйте API задач и папок", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "400", description = "INVALID_REQUEST_PARAMETER: Некорректный формат параметра запроса", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "401", description = "UNAUTHORIZED: Токен доступа отсутствует, недействителен или истёк", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: Проект недоступен; CHECKLIST_ITEM_NOT_FOUND: Пункта нет в этом проекте", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: Переезд в архиве; сначала восстановите его", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: Проект не найден или недоступен", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
             })
     public ResponseEntity<ChecklistItemResponse> unlink(@Parameter(description = "Идентификатор проекта переезда") @PathVariable UUID projectId, @Parameter(description = "Идентификатор пункта чек-листа") @PathVariable UUID checklistItemId,
             @Parameter(hidden = true) @AuthenticationPrincipal UserEntity user) {
@@ -110,13 +103,12 @@ public class FirstDayChecklistController {
     }
 
     @DeleteMapping("/{itemId}")
-    @Operation(summary = "Удалить пункт чек-листа", description = "Вещь и её firstDay сохраняются. Подтверждение выполняет интерфейс. Повторное удаление возвращает 404.",
+    @Operation(deprecated = true, summary = "Удалить пункт чек-листа", description = "Запись отключена после серверного переноса. Используйте API обычных задач и папок. После проверки доступа возвращает 410 FIRST_DAY_CHECKLIST_RETIRED, включая архивные проекты.",
             responses = {
-                    @ApiResponse(responseCode = "204", description = "Пункт удалён", content = @Content),
+                    @ApiResponse(responseCode = "410", description = "FIRST_DAY_CHECKLIST_RETIRED: Запись отключена; используйте API задач и папок", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "400", description = "INVALID_REQUEST_PARAMETER: Некорректный формат параметра запроса", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "401", description = "UNAUTHORIZED: Токен доступа отсутствует, недействителен или истёк", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: Проект недоступен; CHECKLIST_ITEM_NOT_FOUND: Пункта нет в этом проекте", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: Переезд в архиве; сначала восстановите его", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: Проект не найден или недоступен", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
             })
     public ResponseEntity<Void> delete(@Parameter(description = "Идентификатор проекта переезда") @PathVariable UUID projectId, @Parameter(description = "Идентификатор пункта чек-листа") @PathVariable UUID itemId, @Parameter(hidden = true) @AuthenticationPrincipal UserEntity user) {
         checklistService.delete(projectId, itemId, user.getId());

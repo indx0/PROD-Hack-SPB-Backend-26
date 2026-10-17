@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
+import java.util.UUID;
 import lombok.*;
 import ru.example.prodbackend.task.entity.TaskDueType;
 import ru.example.prodbackend.task.entity.TaskStage;
@@ -15,6 +16,12 @@ import ru.example.prodbackend.task.entity.TaskStage;
 @NoArgsConstructor(onConstructor_ = @JsonCreator)
 @AllArgsConstructor
 public class CreateMoveTaskRequest {
+
+    @Schema(types = {"string", "null"}, format = "uuid", description = "Папка этого переезда. Отсутствие или null создаёт задачу без папки; чужая или отсутствующая папка — 404 TASK_FOLDER_NOT_FOUND")
+    private UUID folderId;
+
+    @Schema(types = {"string", "null"}, format = "uuid", description = "Связанная вещь этого переезда. Отсутствие или null означает отсутствие связи; чужая или отсутствующая вещь — 404. Не изменяет item.firstDay или упаковку")
+    private UUID linkedItemId;
 
     @Schema(example = "Упаковать кухню", description = "Название задачи")
     @NotBlank(message = "title is blank")
@@ -50,7 +57,21 @@ public class CreateMoveTaskRequest {
     @Schema(description = "Смещение в днях, только для RELATIVE", example = "-2")
     private Integer offsetDays;
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @Schema(description = "UUID аккаунта участника этого переезда, включая создателя. Имеет приоритет над assigneeName; явный null снимает назначение. Отсутствие в PATCH сохраняет назначение")
+    private UUID assigneeId;
+
+    @JsonIgnore
+    @Schema(hidden = true)
+    private boolean assigneeIdPresent;
+
+    @JsonSetter(value = "assigneeId", nulls = Nulls.SET)
+    public void setAssigneeId(UUID assigneeId) {
+        this.assigneeId = assigneeId;
+        this.assigneeIdPresent = true;
+    }
+
     @Size(max = 255)
-    @Schema(description = "Необязательное имя ответственного")
+    @Schema(description = "Свободное имя ответственного, если assigneeId не передан; пробелы по краям удаляются")
     private String assigneeName;
 }

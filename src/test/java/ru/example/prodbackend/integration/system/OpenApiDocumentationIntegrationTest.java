@@ -74,7 +74,14 @@ class OpenApiDocumentationIntegrationTest extends BaseIntegrationTest {
             boolean publicEndpoint = path.getKey().startsWith("/api/auth/") || path.getKey().equals("/api/demo/ping");
             if (publicEndpoint) assertTrue(operation.path("security").isEmpty(), label);
             else assertTrue(operation.path("security").toString().contains("jwtAuth"), label);
-            assertTrue(operation.path("responses").properties().stream().anyMatch(entry -> entry.getKey().matches("2\\d\\d")), label + ": нет успешного ответа");
+            boolean retiredChecklistWrite = path.getKey().startsWith("/api/move-projects/{projectId}/first-day-checklist")
+                    && !method.getKey().equals("get");
+            boolean hasSuccess = operation.path("responses").properties().stream().anyMatch(entry -> entry.getKey().matches("2\\d\\d"));
+            if (retiredChecklistWrite) {
+                assertTrue(operation.path("deprecated").asBoolean(), label);
+                assertTrue(operation.path("responses").has("410"), label);
+                assertFalse(hasSuccess, label + ": отключённая запись не должна обещать успех");
+            } else assertTrue(hasSuccess, label + ": нет успешного ответа");
             operation.path("responses").properties().forEach(response -> {
                 russian(response.getValue().path("description"), label + ": " + response.getKey());
                 JsonNode value = response.getValue();
@@ -123,6 +130,22 @@ class OpenApiDocumentationIntegrationTest extends BaseIntegrationTest {
                 .getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
         JsonNode actual = jsonMapper.readTree(json);
         for (String field : Set.of("code", "message", "fieldErrors")) assertEquals(example.path(field), actual.path(field), field);
+    }
+
+    @Test
+    void documentsAssignmentAndMembershipRevocation() throws Exception {
+        var api = documentation();
+        for (String type : Set.of("CreateMoveTaskRequest", "UpdateMoveTaskRequest", "ApplyTaskTemplateRequest", "MoveTaskResponse")) {
+            var properties = api.path("components").path("schemas").path(type).path("properties");
+            assertEquals("uuid", properties.path("assigneeId").path("format").asText(), type);
+            assertTrue(properties.has("assigneeName"), type);
+            assertFalse(properties.has("assigneeIdPresent"), type);
+        }
+        var operation = api.path("paths").path("/api/move-projects/{projectId}/participants/{userId}").path("delete");
+        assertFalse(operation.isMissingNode());
+        assertTrue(operation.path("requestBody").isMissingNode());
+        assertFalse(operation.path("responses").path("204").has("content"));
+        for (String code : Set.of("204", "400", "401", "404", "409")) assertTrue(operation.path("responses").has(code));
     }
 
     private void russian(JsonNode text, String label) {

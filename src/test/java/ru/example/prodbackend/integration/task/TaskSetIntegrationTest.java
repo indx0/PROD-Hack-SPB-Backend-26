@@ -170,7 +170,7 @@ class TaskSetIntegrationTest extends AuthIntegrationTestSupport {
     @Test
     void projectCreationWithoutChoiceHasNoTasksAndSelectedSetsAreAtomicAndDeduplicated() throws Exception {
         assertThat(count("move_tasks")).isZero();
-        assertThat(count("first_day_checklist_items")).isEqualTo(4);
+        assertThat(count("first_day_checklist_items")).isZero();
         var secondSet = id(call(token, post("/api/task-sets"), setBody("Другой набор")).andExpect(status().isCreated()));
         UUID created = id(call(token, post("/api/move-projects"), projectBody(List.of(setId, secondSet, setId))).andExpect(status().isCreated()));
         assertThat(jdbc.queryForObject("SELECT count(*) FROM move_tasks WHERE project_id = ?", Long.class, created)).isEqualTo(6);

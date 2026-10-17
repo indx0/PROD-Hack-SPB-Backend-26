@@ -34,7 +34,13 @@ public class ProjectAccessService {
     /** Archive/restore also take this lock, but must be allowed to load archived projects. */
     @Transactional(propagation = Propagation.MANDATORY)
     public MoveProjectEntity lockAccessibleProject(UUID projectId, UUID userId) {
-        return moveProjectRepository.findForUpdate(projectId, userId)
+        var project = moveProjectRepository.findForUpdate(projectId, userId)
                 .orElseThrow(() -> new MoveProjectNotFoundException("Проект переезда не найден"));
+        // The locking query can have started before a concurrent membership removal committed.
+        // A new statement observes the committed membership after acquiring the project lock.
+        if (!moveProjectRepository.hasAccess(projectId, userId)) {
+            throw new MoveProjectNotFoundException("Проект переезда не найден");
+        }
+        return project;
     }
 }

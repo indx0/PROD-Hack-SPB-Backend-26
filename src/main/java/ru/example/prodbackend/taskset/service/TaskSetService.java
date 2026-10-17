@@ -9,6 +9,8 @@ import org.springframework.transaction.annotation.Transactional;
 import ru.example.prodbackend.common.dto.PageResponse;
 import ru.example.prodbackend.common.dto.PaginationRequest;
 import ru.example.prodbackend.exception.TaskSetNotFoundException;
+import ru.example.prodbackend.exception.TaskFolderNotFoundException;
+import ru.example.prodbackend.exception.TaskSetAlreadyAppliedException;
 import ru.example.prodbackend.move.entity.MoveProjectEntity;
 import ru.example.prodbackend.move.service.ProjectAccessService;
 import ru.example.prodbackend.task.entity.MoveTaskEntity;
@@ -19,11 +21,14 @@ import ru.example.prodbackend.taskset.dto.*;
 import ru.example.prodbackend.taskset.entity.*;
 import ru.example.prodbackend.taskset.repository.*;
 import ru.example.prodbackend.user.repository.UserRepository;
+import ru.example.prodbackend.taskfolder.repository.TaskFolderRepository;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
+import java.util.Objects;
+import java.util.Comparator;
 
 @Service
 @RequiredArgsConstructor
@@ -34,6 +39,7 @@ public class TaskSetService {
     private final MoveTaskRepository tasks;
     private final UserRepository users;
     private final ProjectAccessService projectAccess;
+    private final TaskFolderRepository folders;
 
     @Transactional
     public TaskSetResponse create(UUID userId, SaveTaskSetRequest request) {
@@ -76,27 +82,42 @@ public class TaskSetService {
     }
 
     @Transactional
-    public TaskSetApplicationResponse apply(UUID userId, UUID projectId, UUID setId) {
+    public TaskSetApplicationResponse apply(UUID userId, UUID projectId, UUID setId, ApplyTaskSetRequest request) {
         var project = projectAccess.getAccessibleProjectForUpdate(projectId, userId);
-        return toApplicationResponse(applyLocked(project, setId, userId));
+        return toApplicationResponse(applyLocked(project, setId, userId,
+                request == null ? null : request.getFolderId(), request != null && request.isFolderIdPresent()));
     }
 
     /** Только при создании проекта в уже открытой транзакции. Порядок: проект → наборы по UUID. */
     @Transactional(propagation = Propagation.MANDATORY)
     public void applyInitialSets(MoveProjectEntity project, List<UUID> setIds, UUID userId) {
-        for (UUID setId : setIds.stream().distinct().sorted().toList()) applyLocked(project, setId, userId);
+        for (UUID setId : setIds.stream().distinct().sorted().toList()) applyLocked(project, setId, userId, null, false);
     }
 
-    private TaskSetApplicationEntity applyLocked(MoveProjectEntity project, UUID setId, UUID userId) {
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void applyInitialApplications(MoveProjectEntity project, List<InitialTaskSetApplicationRequest> requests, UUID userId) {
+        for (var request : requests.stream().sorted(Comparator.comparing(InitialTaskSetApplicationRequest::taskSetId)).toList()) {
+            applyLocked(project, request.taskSetId(), userId, request.folderId(), true);
+        }
+    }
+
+    private TaskSetApplicationEntity applyLocked(MoveProjectEntity project, UUID setId, UUID userId, UUID folderId, boolean folderIdPresent) {
         var set = lockOwned(setId, userId);
         var existing = applications.findByProject_IdAndTaskSet_Id(project.getId(), setId);
-        if (existing.isPresent()) return existing.get(); // Повтор допустим и после мягкого удаления набора.
+        if (existing.isPresent()) {
+            // Compare provenance before looking up a folder: it may have been deleted legitimately.
+            if (folderIdPresent && !Objects.equals(existing.get().getFolderId(), folderId)) throw new TaskSetAlreadyAppliedException();
+            return existing.get(); // Повтор допустим и после мягкого удаления набора.
+        }
         requireActive(set);
+        var folder = folderId == null ? null : folders.findByIdAndProject_Id(folderId, project.getId())
+                .orElseThrow(TaskFolderNotFoundException::new);
         var deadlines = set.getItems().stream().map(item -> TaskDeadline.relative(project.getMoveDate(), item.getOffsetDays())).toList();
-        var application = applications.saveAndFlush(TaskSetApplicationEntity.builder().project(project).taskSet(set).taskSetName(set.getName()).build());
+        var application = applications.saveAndFlush(TaskSetApplicationEntity.builder().project(project).taskSet(set)
+                .taskSetName(set.getName()).folderId(folderId).build());
         for (int i = 0; i < set.getItems().size(); i++) {
             var item = set.getItems().get(i);
-            var task = MoveTaskEntity.builder().project(project).title(item.getTitle()).description(item.getDescription()).stage(item.getStage())
+            var task = MoveTaskEntity.builder().project(project).folder(folder).title(item.getTitle()).description(item.getDescription()).stage(item.getStage())
                     .taskSetApplication(application).taskSetPosition(item.getPosition()).build();
             deadlines.get(i).applyTo(task);
             tasks.save(task);
@@ -108,7 +129,7 @@ public class TaskSetService {
     private TaskSetApplicationResponse toApplicationResponse(TaskSetApplicationEntity application) {
         var copied = tasks.findAllByTaskSetApplication_IdOrderByTaskSetPositionAscIdAsc(application.getId()).stream().map(MoveTaskMapper::toResponse).toList();
         return new TaskSetApplicationResponse(application.getId(), application.getProject().getId(), application.getTaskSet().getId(),
-                application.getTaskSetName(), application.getAppliedAt(), copied);
+                application.getTaskSetName(), application.getFolderId(), application.getAppliedAt(), copied);
     }
 
     private TaskSetEntity lockOwned(UUID setId, UUID userId) { return sets.lockOwned(setId, userId).orElseThrow(TaskSetNotFoundException::new); }

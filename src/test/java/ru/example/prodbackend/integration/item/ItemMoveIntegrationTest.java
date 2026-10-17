@@ -90,10 +90,11 @@ class ItemMoveIntegrationTest extends BaseIntegrationTest {
             pointId = point.getId();
             entityManager.flush();
         });
+        ru.example.prodbackend.support.LegacyChecklistTestSupport.snapshot(jdbc);
     }
 
     @Test
-    void movesExistingRecordAndUpdatesInventorySearchChecklistAndCounters() throws Exception {
+    void movesExistingRecordUpdatesInventoryAndCountersAndPreservesChecklistArchive() throws Exception {
         String createdAt = jsonMapper.readTree(perform(get(itemUrl(sourceId, itemId)), null)
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).get("createdAt").asText();
         move(sourceId, itemId, targetId).andExpect(status().isOk())
@@ -111,7 +112,7 @@ class ItemMoveIntegrationTest extends BaseIntegrationTest {
         perform(get(itemsUrl(targetId)), null).andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(2));
         perform(get("/api/move-projects/" + projectId + "/items").param("q", "зарядка"), null).andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].id").value(itemId.toString())).andExpect(jsonPath("$.content[0].boxId").value(targetId.toString()));
-        assertChecklistLocation(targetId);
+        assertChecklistSnapshot();
         perform(get(boxUrl(sourceId)), null).andExpect(status().isOk()).andExpect(jsonPath("$.totalItems").value(0))
                 .andExpect(jsonPath("$.readyToPack").value(false)).andExpect(jsonPath("$.status").value("PACKING"));
         perform(get(boxUrl(targetId)), null).andExpect(status().isOk()).andExpect(jsonPath("$.totalItems").value(2))
@@ -154,7 +155,7 @@ class ItemMoveIntegrationTest extends BaseIntegrationTest {
         jdbc.update("UPDATE boxes SET status = 'DELIVERED' WHERE id = ?", targetId);
         move(sourceId, itemId, targetId).andExpect(status().isConflict());
         assertThat(location()).isEqualTo(sourceId);
-        assertChecklistLocation(sourceId);
+        assertChecklistSnapshot();
     }
 
     @Test
@@ -165,7 +166,7 @@ class ItemMoveIntegrationTest extends BaseIntegrationTest {
         assertThat(location()).isEqualTo(targetId);
         assertThat(jdbc.queryForObject("SELECT box_id FROM items WHERE id = ?", UUID.class, secondItemId)).isEqualTo(sourceId);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM items WHERE box_id IN (?, ?)", Long.class, sourceId, targetId)).isEqualTo(2);
-        assertChecklistLocation(targetId);
+        assertChecklistSnapshot();
     }
 
     @Test
@@ -175,7 +176,7 @@ class ItemMoveIntegrationTest extends BaseIntegrationTest {
         assertThat(statuses).containsExactlyInAnyOrder(200, 409);
         assertThat(location()).isIn(targetId, thirdId);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM items WHERE id = ?", Long.class, itemId)).isEqualTo(1);
-        assertChecklistLocation(location());
+        assertChecklistSnapshot();
     }
 
     @ParameterizedTest
@@ -213,7 +214,9 @@ class ItemMoveIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void checklistLinkWaitsForProjectAndUsesCommittedTransferLocation() throws Exception {
+    void taskLinkWaitsForProjectAndUsesCommittedTransferLocation() throws Exception {
+        UUID taskId = UUID.randomUUID();
+        jdbc.update("INSERT INTO move_tasks(id,project_id,title,stage,created_at,updated_at) VALUES (?,?,'Связанная задача','BEFORE_MOVE',now(),now())", taskId, projectId);
         var executor = Executors.newFixedThreadPool(2);
         var moved = new CountDownLatch(1);
         var release = new CountDownLatch(1);
@@ -224,8 +227,8 @@ class ItemMoveIntegrationTest extends BaseIntegrationTest {
                 await(release);
             }));
             assertThat(moved.await(10, TimeUnit.SECONDS)).isTrue();
-            String linkUrl = "/api/move-projects/" + projectId + "/first-day-checklist/" + pointId + "/item";
-            var second = executor.submit(() -> perform(put(linkUrl), Map.of("itemId", itemId)).andExpect(status().isOk())
+            String linkUrl = "/api/move-projects/" + projectId + "/tasks/" + taskId;
+            var second = executor.submit(() -> perform(patch(linkUrl), Map.of("linkedItemId", itemId)).andExpect(status().isOk())
                     .andExpect(jsonPath("$.boxId").value(targetId.toString())));
             // The link waits on the project before reading the item's location.
             long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
@@ -241,8 +244,8 @@ class ItemMoveIntegrationTest extends BaseIntegrationTest {
             release.countDown();
             first.get(10, TimeUnit.SECONDS);
             second.get(10, TimeUnit.SECONDS);
-            perform(put(linkUrl), Map.of("itemId", itemId)).andExpect(status().isOk()).andExpect(jsonPath("$.boxId").value(targetId.toString()));
-            assertChecklistLocation(targetId);
+            perform(patch(linkUrl), Map.of("linkedItemId", itemId)).andExpect(status().isOk()).andExpect(jsonPath("$.boxId").value(targetId.toString()));
+            assertChecklistSnapshot();
         } finally {
             release.countDown();
             executor.shutdownNow();
@@ -271,10 +274,10 @@ class ItemMoveIntegrationTest extends BaseIntegrationTest {
         }
     }
 
-    private void assertChecklistLocation(UUID expectedBox) throws Exception {
+    private void assertChecklistSnapshot() throws Exception {
         perform(get("/api/move-projects/" + projectId + "/first-day-checklist"), null).andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].id").value(pointId.toString())).andExpect(jsonPath("$.content[0].itemId").value(itemId.toString()))
-                .andExpect(jsonPath("$.content[0].boxId").value(expectedBox.toString())).andExpect(jsonPath("$.content[0].name").value("Первый день"));
+                .andExpect(jsonPath("$.content[0].boxId").value(sourceId.toString())).andExpect(jsonPath("$.content[0].name").value("Первый день"));
     }
 
     private UUID location() {

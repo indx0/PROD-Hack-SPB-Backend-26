@@ -1,149 +1,229 @@
 package ru.example.prodbackend.integration.checklist;
 
-import ru.example.prodbackend.support.AuthIntegrationTestSupport;
-
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.ResultActions;
-import ru.example.prodbackend.checklist.dto.response.ChecklistItemResponse;
-import ru.example.prodbackend.checklist.repository.FirstDayChecklistRepository;
-import ru.example.prodbackend.move.dto.response.MoveProjectResponse;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import ru.example.prodbackend.support.AuthIntegrationTestSupport;
+import ru.example.prodbackend.support.LegacyChecklistTestSupport;
+import tools.jackson.databind.JsonNode;
 
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-import java.util.stream.Collectors;
-
-import static org.junit.jupiter.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 class FirstDayChecklistIntegrationTest extends AuthIntegrationTestSupport {
-
-    @Autowired
-    private FirstDayChecklistRepository checklistRepository;
-
-    private String token;
-    private UUID projectId;
+    private static final Instant CREATED = Instant.parse("2025-01-02T03:04:05.123456Z");
+    private static final Instant UPDATED = CREATED.plusSeconds(50);
+    private static final Instant COMPLETED = CREATED.plusSeconds(20);
+    @Autowired private JdbcTemplate jdbc;
+    private String token, url, itemsUrl;
+    private UUID project, source, duplicate, item, box, room;
 
     @BeforeEach
-    void setUpProject() throws Exception {
+    void setUp() throws Exception {
         token = registerUser().getAccessToken();
-        projectId = createProject();
+        project = id(call(post("/api/move-projects"), Map.of("name", "Старый план", "moveDate", "2026-11-01T09:00:00Z")));
+        url = "/api/move-projects/" + project;
+        room = id(call(post(url + "/rooms"), Map.of("name", "Кухня", "iconKey", "kitchen")));
+        box = id(call(post("/api/projects/" + project + "/boxes"), Map.of("number", 1, "roomId", room)));
+        itemsUrl = url + "/boxes/" + box + "/items";
+        item = id(call(post(itemsUrl), Map.of("name", "Вещь", "firstDay", false)));
+        source = UUID.randomUUID(); duplicate = UUID.randomUUID();
+        jdbc.update("INSERT INTO first_day_checklist_items(id,project_id,name,item_id,completed_at,created_at,updated_at) VALUES (?,?,'  Одинаковое название  ',?,?,?,?)",
+                source, project, item, Timestamp.from(COMPLETED), Timestamp.from(CREATED), Timestamp.from(UPDATED));
+        jdbc.update("INSERT INTO first_day_checklist_items(id,project_id,name,created_at,updated_at) VALUES (?,?,'  Одинаковое название  ',?,?)",
+                duplicate, project, Timestamp.from(CREATED.plusSeconds(1)), Timestamp.from(UPDATED));
     }
 
     @Test
-    void startsWithFourDefaultsSupportsCreationAndSharedPagination() throws Exception {
-        var defaults = checklistRepository.findAllByProject_Id(projectId, PageRequest.of(0, 100)).getContent();
-        assertEquals(Set.of("Зубные щётки", "Зарядки", "Чайник", "Постельное бельё"), defaults.stream().map(item -> item.getName()).collect(Collectors.toSet()));
-        assertTrue(defaults.stream().allMatch(item -> item.getCompletedAt() == null));
-        call("GET", projectId, "?page=1&size=2", "", token).andExpect(status().isOk())
-                .andExpect(jsonPath("$.content.length()").value(2)).andExpect(jsonPath("$.page").value(1))
-                .andExpect(jsonPath("$.size").value(2)).andExpect(jsonPath("$.totalElements").value(4)).andExpect(jsonPath("$.totalPages").value(2));
-        var response = call("POST", projectId, "", "{\"name\":\"  Аптечка  \"}", token).andExpect(status().isCreated())
-                .andExpect(jsonPath("$.name").value("Аптечка")).andExpect(jsonPath("$.completed").value(false))
-                .andExpect(jsonPath("$.project").doesNotExist()).andReturn().getResponse();
-        var item = jsonMapper.readValue(response.getContentAsByteArray(), ChecklistItemResponse.class);
-        assertEquals(projectId, item.getProjectId());
-        assertEquals("Аптечка", checklistRepository.findById(item.getId()).orElseThrow().getName());
-        call("GET", projectId, "?page=100&size=2", "", token).andExpect(status().isOk())
-                .andExpect(jsonPath("$.content").isEmpty()).andExpect(jsonPath("$.totalElements").value(5));
-    }
-
-    @Test
-    void renameCompletionAndRepeatedOrEmptyPatchArePredictable() throws Exception {
-        UUID itemId = firstItem();
-        String path = "/" + itemId;
-        call("PATCH", projectId, path, "{\"name\":\"  Дорожная аптечка  \",\"completed\":true}", token)
-                .andExpect(status().isOk()).andExpect(jsonPath("$.name").value("Дорожная аптечка")).andExpect(jsonPath("$.completed").value(true));
-        var saved = checklistRepository.findById(itemId).orElseThrow();
-        var completedAt = saved.getCompletedAt();
-        var updatedAt = saved.getUpdatedAt();
-        assertNotNull(completedAt);
-        for (String body : new String[]{"{\"completed\":true}", "{}", "{\"name\":null,\"completed\":null}"}) {
-            call("PATCH", projectId, path, body, token).andExpect(status().isOk());
-            saved = checklistRepository.findById(itemId).orElseThrow();
-            assertEquals(completedAt, saved.getCompletedAt());
-            assertEquals(updatedAt, saved.getUpdatedAt());
-            assertEquals("Дорожная аптечка", saved.getName());
+    void backfillPreservesAllFieldsAndCountsOnlyRealTasks() throws Exception {
+        var sources = jdbc.queryForList("SELECT * FROM first_day_checklist_items ORDER BY id");
+        var inventory = jdbc.queryForList("SELECT * FROM items");
+        var boxes = jdbc.queryForList("SELECT * FROM boxes");
+        LegacyChecklistTestSupport.backfill(jdbc);
+        assertThat(jdbc.queryForList("SELECT * FROM first_day_checklist_items ORDER BY id")).isEqualTo(sources);
+        assertThat(jdbc.queryForList("SELECT * FROM items")).isEqualTo(inventory);
+        assertThat(jdbc.queryForList("SELECT * FROM boxes")).isEqualTo(boxes);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM move_tasks", Long.class)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM task_folders", Long.class)).isEqualTo(1);
+        var folder = jdbc.queryForMap("SELECT * FROM task_folders");
+        assertThat(folder).containsEntry("name", "Личные задачи").containsEntry("color_key", "mint");
+        for (UUID task : List.of(source, duplicate)) {
+            var row = jdbc.queryForMap("SELECT * FROM move_tasks WHERE id=?", task);
+            assertThat(row).containsEntry("title", "  Одинаковое название  ").containsEntry("stage", "BEFORE_MOVE")
+                    .containsEntry("due_type", "FIXED").containsEntry("due_date", null).containsEntry("offset_days", null)
+                    .containsEntry("assignee_id", null).containsEntry("assignee_name", null).containsEntry("description", null)
+                    .containsEntry("template_id", null).containsEntry("task_set_application_id", null).containsEntry("task_set_position", null)
+                    .containsEntry("folder_id", folder.get("id")).containsEntry("updated_at", Timestamp.from(UPDATED));
         }
-        call("PATCH", projectId, path, "{\"completed\":false}", token).andExpect(status().isOk()).andExpect(jsonPath("$.completedAt").isEmpty());
-        assertNull(checklistRepository.findById(itemId).orElseThrow().getCompletedAt());
+        assertThat(jdbc.queryForMap("SELECT * FROM move_tasks WHERE id=?", source)).containsEntry("completed_at", Timestamp.from(COMPLETED))
+                .containsEntry("created_at", Timestamp.from(CREATED)).containsEntry("linked_item_id", item);
+        assertThat(jdbc.queryForMap("SELECT * FROM move_tasks WHERE id=?", duplicate)).containsEntry("completed_at", null).containsEntry("linked_item_id", null);
+        assertThat(jdbc.queryForMap("SELECT source_count,completed_count FROM first_day_checklist_migrations"))
+                .containsEntry("source_count", 2L).containsEntry("completed_count", 1L);
+        call(get("/api/projects/" + project + "/progress/tasks"), null).andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalTasks").value(2)).andExpect(jsonPath("$.completedTasks").value(1));
+        var tasks = jdbc.queryForList("SELECT * FROM move_tasks ORDER BY id");
+        var archive = jdbc.queryForList("SELECT * FROM first_day_checklist_archive ORDER BY id");
+        LegacyChecklistTestSupport.backfill(jdbc);
+        assertThat(jdbc.queryForList("SELECT * FROM move_tasks ORDER BY id")).isEqualTo(tasks);
+        assertThat(jdbc.queryForList("SELECT * FROM first_day_checklist_archive ORDER BY id")).isEqualTo(archive);
     }
 
     @Test
-    void invalidInputDoesNotChangeChecklist() throws Exception {
-        UUID itemId = firstItem();
-        String originalName = checklistRepository.findById(itemId).orElseThrow().getName();
-        for (String name : new String[]{"", "   ", "x".repeat(256)}) {
-            String body = jsonMapper.writeValueAsString(Map.of("name", name));
-            assertErrorResponse(call("POST", projectId, "", body, token), 422, "VALIDATION_ERROR");
-            assertErrorResponse(call("PATCH", projectId, "/" + itemId, body, token), 422, "VALIDATION_ERROR");
-        }
-        assertErrorResponse(call("POST", projectId, "", "{}", token), 422, "VALIDATION_ERROR");
-        assertErrorResponse(call("PATCH", projectId, "/" + itemId, "{\"completed\":{}}", token), 400, "INVALID_REQUEST_BODY");
-        assertErrorResponse(call("DELETE", projectId, "/not-a-uuid", "", token), 400, "INVALID_REQUEST_PARAMETER");
-        for (String query : new String[]{"page=-1", "size=0", "size=101"}) {
-            assertErrorResponse(call("GET", projectId, "?" + query, "", token), 422, "VALIDATION_ERROR");
-        }
-        assertEquals(4L, checklistRepository.count());
-        assertEquals(originalName, checklistRepository.findById(itemId).orElseThrow().getName());
+    void uuidConflictUsesDurableMappingAndNeverMatchesByTitle() throws Exception {
+        jdbc.update("INSERT INTO move_tasks(id,project_id,title,stage,created_at,updated_at) VALUES (?,?,'Чужая задача','AFTER_MOVE',now(),now())", source, project);
+        var existing = jdbc.queryForMap("SELECT * FROM move_tasks WHERE id=?", source);
+        LegacyChecklistTestSupport.backfill(jdbc);
+        UUID mapped = jdbc.queryForObject("SELECT target_task_id FROM first_day_checklist_archive WHERE id=?", UUID.class, source);
+        assertThat(mapped).isNotEqualTo(source);
+        assertThat(jdbc.queryForMap("SELECT * FROM move_tasks WHERE id=?", source)).isEqualTo(existing);
+        assertThat(jdbc.queryForObject("SELECT completed_at FROM move_tasks WHERE id=?", Timestamp.class, mapped)).isEqualTo(Timestamp.from(COMPLETED));
+        jdbc.update("DELETE FROM move_tasks WHERE id=?", mapped);
+        LegacyChecklistTestSupport.backfill(jdbc);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM move_tasks WHERE id=?", Long.class, mapped)).isZero();
+        assertThat(jdbc.queryForObject("SELECT target_task_id FROM first_day_checklist_archive WHERE id=?", UUID.class, source)).isEqualTo(mapped);
     }
 
     @Test
-    void foreignUserAndWrongProjectCannotAccessChecklist() throws Exception {
-        UUID itemId = firstItem();
-        String otherToken = registerUser("other@example.com").getAccessToken();
-        for (String method : new String[]{"GET", "POST", "PATCH", "DELETE"}) {
-            String suffix = method.equals("PATCH") || method.equals("DELETE") ? "/" + itemId : "";
-            assertErrorResponse(call(method, projectId, suffix, "{\"name\":\"Чужое изменение\"}", otherToken), 404, "MOVE_PROJECT_NOT_FOUND");
-        }
-        UUID otherProject = createProject();
-        assertErrorResponse(call("PATCH", otherProject, "/" + itemId, "{\"completed\":true}", token), 404, "CHECKLIST_ITEM_NOT_FOUND");
-        assertErrorResponse(call("DELETE", otherProject, "/" + itemId, "", token), 404, "CHECKLIST_ITEM_NOT_FOUND");
-        assertErrorResponse(call("DELETE", projectId, "/" + UUID.randomUUID(), "", token), 404, "CHECKLIST_ITEM_NOT_FOUND");
-        assertErrorResponse(call("GET", UUID.randomUUID(), "", "", token), 404, "MOVE_PROJECT_NOT_FOUND");
-        assertNull(checklistRepository.findById(itemId).orElseThrow().getCompletedAt());
-        assertEquals(8L, checklistRepository.count());
+    void historicalTargetUuidRemainsReservedAfterItsTaskWasDeleted() {
+        UUID historicalSource = UUID.randomUUID(), historicalProject = UUID.randomUUID(), historicalFolder = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO move_projects(id,owner_id,name,move_date,created_at,updated_at)
+                SELECT ?,owner_id,'Исторический проект',move_date,now(),now() FROM move_projects WHERE id=?
+                """, historicalProject, project);
+        jdbc.update("INSERT INTO first_day_checklist_migrations(project_id,folder_id,source_count,completed_count,migrated_at) VALUES (?,?,1,0,now())",
+                historicalProject, historicalFolder);
+        jdbc.update("""
+                INSERT INTO first_day_checklist_archive(id,project_id,target_task_id,folder_id,name,created_at,updated_at)
+                VALUES (?,?,?,?, 'Удалённая историческая задача',now(),now())
+                """, historicalSource, historicalProject, source, historicalFolder);
+        LegacyChecklistTestSupport.backfill(jdbc);
+        UUID mapped = jdbc.queryForObject("SELECT target_task_id FROM first_day_checklist_archive WHERE id=?", UUID.class, source);
+        assertThat(mapped).isNotEqualTo(source);
+        assertThat(jdbc.queryForObject("SELECT target_task_id FROM first_day_checklist_archive WHERE id=?", UUID.class, historicalSource)).isEqualTo(source);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM move_tasks WHERE id=?", Long.class, source)).isZero();
     }
 
     @Test
-    void deleteRemovesOnlySelectedItemAndRepeatedDeleteReturns404() throws Exception {
-        UUID itemId = firstItem();
-        call("DELETE", projectId, "/" + itemId, "", token).andExpect(status().isNoContent()).andExpect(content().string(""));
-        assertFalse(checklistRepository.existsById(itemId));
-        assertEquals(3L, checklistRepository.count());
-        assertErrorResponse(call("DELETE", projectId, "/" + itemId, "", token), 404, "CHECKLIST_ITEM_NOT_FOUND");
+    void deletingOrMovingTasksAndDeletingFolderNeverResurrectsOrReattaches() throws Exception {
+        LegacyChecklistTestSupport.backfill(jdbc);
+        UUID oldFolder = jdbc.queryForObject("SELECT folder_id FROM first_day_checklist_migrations", UUID.class);
+        UUID otherFolder = UUID.randomUUID();
+        call(post(url + "/task-folders"), Map.of("id", otherFolder, "name", "Своя папка", "colorKey", "coral")).andExpect(status().isCreated());
+        call(patch(url + "/tasks/" + source), Map.of("title", "Изменено", "folderId", otherFolder)).andExpect(status().isOk());
+        call(delete(url + "/tasks/" + duplicate), null).andExpect(status().isNoContent());
+        call(delete(url + "/task-folders/" + oldFolder), null).andExpect(status().isNoContent());
+        LegacyChecklistTestSupport.backfill(jdbc);
+        assertThat(jdbc.queryForMap("SELECT title,folder_id FROM move_tasks WHERE id=?", source)).containsEntry("title", "Изменено").containsEntry("folder_id", otherFolder);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM move_tasks", Long.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM task_folders WHERE id=?", Long.class, oldFolder)).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM first_day_checklist_archive", Long.class)).isEqualTo(2);
+        call(delete(url), null).andExpect(status().isNoContent());
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM first_day_checklist_archive", Long.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM first_day_checklist_migrations", Long.class)).isZero();
     }
 
     @Test
-    void allChecklistOperationsRequireAccessToken() throws Exception {
-        for (String method : new String[]{"GET", "POST", "PATCH", "DELETE"}) {
-            String suffix = method.equals("PATCH") || method.equals("DELETE") ? "/" + firstItem() : "";
-            assertErrorResponse(call(method, projectId, suffix, "{\"name\":\"Аптечка\"}", null), 401, "UNAUTHORIZED");
+    void archiveSnapshotSurvivesInventoryMovesRenamesFlagChangesAndDeletion() throws Exception {
+        LegacyChecklistTestSupport.backfill(jdbc);
+        var before = json(call(get(url + "/first-day-checklist"), null));
+        UUID otherRoom = id(call(post(url + "/rooms"), Map.of("name", "Спальня")));
+        UUID otherBox = id(call(post("/api/projects/" + project + "/boxes"), Map.of("number", 2, "roomId", otherRoom)));
+        call(patch(itemsUrl + "/" + item), Map.of("name", "Новое имя", "firstDay", true)).andExpect(status().isOk());
+        call(put(itemsUrl + "/" + item + "/box"), Map.of("targetBoxId", otherBox)).andExpect(status().isOk());
+        var task = jdbc.queryForObject("SELECT linked_item_id FROM move_tasks WHERE id=?", UUID.class, source);
+        assertThat(task).isEqualTo(item);
+        var current = json(call(get(url + "/tasks"), null)).get("content");
+        assertThat(current.toString()).contains("Новое имя", otherBox.toString(), "Спальня");
+        call(delete(url + "/boxes/" + otherBox + "/items/" + item), null).andExpect(status().isNoContent());
+        assertThat(jdbc.queryForObject("SELECT linked_item_id FROM move_tasks WHERE id=?", UUID.class, source)).isNull();
+        assertThat(json(call(get(url + "/first-day-checklist"), null))).isEqualTo(before);
+        assertThat(before.get("content").get(0).get("itemId").asText()).isEqualTo(item.toString());
+        assertThat(before.get("content").get(0).get("roomName").asText()).isEqualTo("Кухня");
+    }
+
+    @Test
+    void archivedProjectsAreBackfilledButNormalWritesStayBlockedUntilRestore() throws Exception {
+        call(put(url + "/archive"), null).andExpect(status().isOk());
+        LegacyChecklistTestSupport.backfill(jdbc);
+        call(get(url + "/tasks"), null).andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(2));
+        call(patch(url + "/tasks/" + source), Map.of("title", "Недоступно")).andExpect(status().isConflict());
+        call(delete(url + "/archive"), null).andExpect(status().isOk());
+        call(patch(url + "/tasks/" + source), Map.of("title", "Доступно")).andExpect(status().isOk());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"POST", "PATCH", "DELETE", "PUT_LINK", "DELETE_LINK"})
+    void everyLegacyWriteReturns410ForOwnerAndParticipantButDoesNotExposeForeignProject(String operation) throws Exception {
+        LegacyChecklistTestSupport.backfill(jdbc);
+        var rows = jdbc.queryForList("SELECT * FROM first_day_checklist_archive ORDER BY id");
+        var tasks = jdbc.queryForList("SELECT * FROM move_tasks ORDER BY id");
+        String foreign = registerUser("foreign@example.com").getAccessToken();
+        String member = registerUser("member@example.com").getAccessToken();
+        call(post(url + "/participants"), Map.of("email", "member@example.com")).andExpect(status().isOk());
+        String path = url + "/first-day-checklist" + (operation.equals("POST") ? "" : "/" + source)
+                + (operation.endsWith("LINK") ? "/item" : "");
+        String method = operation.startsWith("PUT") ? "PUT" : operation.startsWith("DELETE") ? "DELETE" : operation;
+        for (String access : List.of(token, member)) {
+            for (boolean archived : List.of(false, true)) {
+                if (archived) call(put(url + "/archive"), null).andExpect(status().isOk());
+                mockMvc.perform(request(HttpMethod.valueOf(method), path).header(HttpHeaders.AUTHORIZATION, "Bearer " + access)
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                        .andExpect(status().isGone()).andExpect(jsonPath("$.code").value("FIRST_DAY_CHECKLIST_RETIRED"));
+                if (archived) call(delete(url + "/archive"), null).andExpect(status().isOk());
+            }
         }
+        mockMvc.perform(request(HttpMethod.valueOf(method), path).header(HttpHeaders.AUTHORIZATION, "Bearer " + foreign)
+                .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("MOVE_PROJECT_NOT_FOUND"));
+        mockMvc.perform(request(HttpMethod.valueOf(method), path)).andExpect(status().isUnauthorized());
+        assertThat(jdbc.queryForList("SELECT * FROM first_day_checklist_archive ORDER BY id")).isEqualTo(rows);
+        assertThat(jdbc.queryForList("SELECT * FROM move_tasks ORDER BY id")).isEqualTo(tasks);
     }
 
-    private UUID firstItem() {
-        return checklistRepository.findAllByProject_Id(projectId, PageRequest.of(0, 1)).getContent().get(0).getId();
+    @Test
+    void getIsPaginatedDeprecatedAndNeverMigratesOnReadAndEmptyProjectsGetNoFolder() throws Exception {
+        call(get(url + "/first-day-checklist"), null).andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(0));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM move_tasks", Long.class)).isZero();
+        UUID empty = id(call(post("/api/move-projects"), Map.of("name", "Пустой", "moveDate", "2026-11-01T09:00:00Z")));
+        LegacyChecklistTestSupport.backfill(jdbc);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM task_folders WHERE project_id=?", Long.class, empty)).isZero();
+        call(get(url + "/first-day-checklist").param("page", "1").param("size", "1"), null).andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(2)).andExpect(jsonPath("$.totalPages").value(2)).andExpect(jsonPath("$.content[0].id").value(duplicate.toString()));
+        call(get(url + "/first-day-checklist").param("size", "101"), null).andExpect(status().isUnprocessableEntity());
+        var spec = json(mockMvc.perform(get("/v3/api-docs")).andExpect(status().isOk()));
+        var paths = spec.get("paths");
+        for (var entry : List.of(Map.entry("/api/move-projects/{projectId}/first-day-checklist", "post"),
+                Map.entry("/api/move-projects/{projectId}/first-day-checklist/{itemId}", "patch"),
+                Map.entry("/api/move-projects/{projectId}/first-day-checklist/{itemId}", "delete"),
+                Map.entry("/api/move-projects/{projectId}/first-day-checklist/{checklistItemId}/item", "put"),
+                Map.entry("/api/move-projects/{projectId}/first-day-checklist/{checklistItemId}/item", "delete"))) {
+            var endpoint = paths.get(entry.getKey()).get(entry.getValue());
+            assertThat(endpoint.get("deprecated").asBoolean()).isTrue();
+            assertThat(endpoint.get("responses").get("410").get("description").asText()).contains("FIRST_DAY_CHECKLIST_RETIRED");
+        }
+        assertThat(paths.get("/api/move-projects/{projectId}/first-day-checklist").get("get").get("description").asText()).contains("Архивный снимок", "GET ничего не переносит");
     }
 
-    private UUID createProject() throws Exception {
-        byte[] body = mockMvc.perform(post("/api/move-projects").header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"Чек-лист\",\"moveDate\":\"2026-11-01T09:00:00Z\"}"))
-                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsByteArray();
-        return jsonMapper.readValue(body, MoveProjectResponse.class).getId();
-    }
-
-    private ResultActions call(String method, UUID project, String suffix, String body, String accessToken) throws Exception {
-        var request = request(HttpMethod.valueOf(method), "/api/move-projects/" + project + "/first-day-checklist" + suffix)
-                .contentType(MediaType.APPLICATION_JSON).content(body);
-        if (accessToken != null) request.header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken);
+    private ResultActions call(MockHttpServletRequestBuilder request, Object body) throws Exception {
+        request.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
+        if (body != null) request.contentType(MediaType.APPLICATION_JSON).content(jsonMapper.writeValueAsString(body));
         return mockMvc.perform(request);
     }
+    private UUID id(ResultActions result) throws Exception { result.andExpect(status().isCreated()); return UUID.fromString(json(result).get("id").asText()); }
+    private JsonNode json(ResultActions result) throws Exception { return jsonMapper.readTree(result.andReturn().getResponse().getContentAsByteArray()); }
 }
