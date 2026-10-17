@@ -31,8 +31,8 @@ public class RegisterRequest {
     private String lastName;
 
 
-    @Schema(description = "Пароль: непустая строка длиной не менее 8 символов", example = "P@ssw0rd!")
-    @Size(min = 8, message = "password length min = 8")
+    @Schema(description = "Пароль: от 1 символа; пустая строка и строка только из пробелов запрещены", example = "P@ssw0rd!")
+    @Size(min = 1, message = "password length min = 1")
     @NotBlank(message = "password is blank")
     private String password;
 

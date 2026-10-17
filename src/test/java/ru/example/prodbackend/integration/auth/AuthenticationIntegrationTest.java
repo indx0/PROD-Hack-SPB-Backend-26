@@ -40,16 +40,18 @@ class AuthenticationIntegrationTest extends AuthIntegrationTestSupport {
     @Autowired
     private JwtService jwtService;
 
-    @Test
-    void registrationReturnsTokensAndStoresHashedSecrets() throws Exception {
-        AuthenticationResponse tokens = registerUser();
+    @ParameterizedTest
+    @ValueSource(strings = {"a", "short", PASSWORD})
+    void registrationReturnsTokensAndStoresHashedSecrets(String password) throws Exception {
+        AuthenticationResponse tokens = readTokenPair(postJson(REGISTER_URL, RegisterRequest.builder()
+                .email(EMAIL).firstName("Alice").lastName("Smith").password(password).build()));
         UserEntity user = userRepository.findByEmail(EMAIL).orElseThrow();
 
         assertEquals("Alice", user.getFirstName());
         assertEquals("Smith", user.getLastName());
         assertEquals(1L, userRepository.count());
-        assertNotEquals(PASSWORD, user.getPassword());
-        assertTrue(passwordEncoder.matches(PASSWORD, user.getPassword()));
+        assertNotEquals(password, user.getPassword());
+        assertTrue(passwordEncoder.matches(password, user.getPassword()));
         assertAccessTokenBelongsToUser(tokens.getAccessToken());
 
         var sessions = refreshTokenRepository.findAllByUser(user);
@@ -62,6 +64,9 @@ class AuthenticationIntegrationTest extends AuthIntegrationTestSupport {
         assertNotNull(session.getCreatedAt());
         assertTrue(session.getExpiryAt().isAfter(Instant.now()));
         assertTrue(session.getExpiryAt().isAfter(session.getCreatedAt()));
+        AuthenticationResponse loginTokens = readTokenPair(
+                postJson(AUTHENTICATE_URL, new AuthenticationRequest(EMAIL, password)));
+        assertAccessTokenBelongsToUser(loginTokens.getAccessToken());
     }
 
     @Test
@@ -256,7 +261,7 @@ class AuthenticationIntegrationTest extends AuthIntegrationTestSupport {
                 Arguments.of("email exceeds 255 characters", "a".repeat(256), PASSWORD, "email"),
                 Arguments.of("null password", EMAIL, null, "password"),
                 Arguments.of("blank password", EMAIL, "   ", "password"),
-                Arguments.of("password shorter than 8 characters", EMAIL, "short", "password")
+                Arguments.of("empty password", EMAIL, "", "password")
         );
     }
 

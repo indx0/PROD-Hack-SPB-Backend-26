@@ -13,8 +13,8 @@ public class ChangePasswordRequest {
     @NotBlank
     private String currentPassword;
 
-    @Schema(example = "P@ssw0rd!", description = "Новый пароль: не менее 8 символов")
+    @Schema(example = "P@ssw0rd!", description = "Новый пароль: от 1 символа; пустая строка и строка только из пробелов запрещены")
     @NotBlank
-    @Size(min = 8, message = "password length min = 8")
+    @Size(min = 1, message = "password length min = 1")
     private String newPassword;
 }
