@@ -36,6 +36,14 @@ public class ItemEntity {
     @Column(nullable = false)
     private boolean lost;
 
+    @Builder.Default
+    @Positive(message = "quantity not positive")
+    @Column(name = "quantity", nullable = false)
+    private int quantity = 1;
+
+    @Column(name = "first_day", nullable = false)
+    private boolean firstDay;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

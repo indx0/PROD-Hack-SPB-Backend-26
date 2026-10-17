@@ -16,6 +16,8 @@ import java.util.UUID;
 public class ItemResponse {
     private UUID id;
     private String name;
+    private int quantity;
+    private boolean firstDay;
     private boolean lost;
     private UUID projectId;
     private UUID boxId;

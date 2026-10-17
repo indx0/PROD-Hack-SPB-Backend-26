@@ -86,7 +86,7 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
             database.setLiquibaseSchemaName(schema);
             try (Liquibase liquibase = new Liquibase(CHANGELOG, resources, database)) {
                 if (rollback) {
-                    liquibase.rollback(10, new Contexts(), new LabelExpression());
+                    liquibase.rollback(11, new Contexts(), new LabelExpression());
                 } else {
                     liquibase.validate();
                     liquibase.update(new Contexts(), new LabelExpression());
@@ -107,7 +107,7 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
 
     private void assertHistory(JdbcTemplate jdbc) {
         assertThat(jdbc.queryForList("SELECT author FROM databasechangelog", String.class))
-                .hasSize(10).containsOnly("indx0");
+                .hasSize(11).containsOnly("indx0", "timn2020");
     }
 
     private void assertConstraints(JdbcTemplate jdbc) {
@@ -155,6 +155,23 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
         rejects(jdbc, insertBox, "23514", UUID.randomUUID(), -1, project, room);
         rejects(jdbc, insertBox, "23503", UUID.randomUUID(), 2, project, otherRoom);
         rejects(jdbc, "UPDATE boxes SET status = 'UNKNOWN' WHERE id = ?", "23514", box);
+
+        UUID item = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO items (id, box_id, name, lost, created_at, updated_at)
+                VALUES (?, ?, 'Тарелки', false, now(), now())
+                """, item, box);
+        assertThat(jdbc.queryForObject("SELECT quantity FROM items WHERE id = ?", Integer.class, item)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT first_day FROM items WHERE id = ?", Boolean.class, item)).isFalse();
+
+        jdbc.update("UPDATE items SET quantity = 6, first_day = true WHERE id = ?", item);
+        assertThat(jdbc.queryForObject("SELECT quantity FROM items WHERE id = ?", Integer.class, item)).isEqualTo(6);
+        assertThat(jdbc.queryForObject("SELECT first_day FROM items WHERE id = ?", Boolean.class, item)).isTrue();
+
+        rejects(jdbc, "UPDATE items SET quantity = 0 WHERE id = ?", "23514", item);
+        rejects(jdbc, "UPDATE items SET quantity = -1 WHERE id = ?", "23514", item);
+        rejects(jdbc, "UPDATE items SET quantity = NULL WHERE id = ?", "23502", item);
+        rejects(jdbc, "UPDATE items SET first_day = NULL WHERE id = ?", "23502", item);
     }
 
     private void rejects(JdbcTemplate jdbc, String sql, String sqlState, Object... args) {

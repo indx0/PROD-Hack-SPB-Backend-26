@@ -128,7 +128,15 @@ public class DataLoader implements ApplicationRunner {
             if (next != BoxStatus.PACKING && next.ordinal() <= status.ordinal()) boxService.changeStatus(userId, projectId, box.getId(), next);
         }
         for (String name : items) {
-            entityManager.persist(ItemEntity.builder().box(entityManager.getReference(BoxEntity.class, box.getId())).name(name).build());
+            int quantity = switch (name) {
+                case "Тарелки", "Кружки" -> 6;
+                case "Полотенца", "Подушки" -> 2;
+                default -> 1;
+            };
+            boolean firstDay = name.equals("Постельное бельё") || name.equals("Полотенца");
+            entityManager.persist(ItemEntity.builder()
+                    .box(entityManager.getReference(BoxEntity.class, box.getId()))
+                    .name(name).quantity(quantity).firstDay(firstDay).build());
         }
         return box.getId();
     }

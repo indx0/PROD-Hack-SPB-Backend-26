@@ -43,16 +43,24 @@ public class ItemService {
     @Transactional
     public ItemResponse create(UUID userId, UUID projectId, UUID boxId, CreateItemRequest request) {
         BoxEntity box = requireOwnedBox(userId, projectId, boxId, true);
-        ItemEntity item = ItemEntity.builder().box(box).name(request.getName().strip()).build();
+
+        ItemEntity item = ItemEntity.builder().box(box).name(request.getName().strip())
+                .quantity(request.getQuantity()).firstDay(request.getFirstDay()).build();
+
         return toResponse(itemRepository.saveAndFlush(item));
     }
 
     @Transactional
     public List<ItemResponse> createBatch(UUID userId, UUID projectId, UUID boxId, CreateItemsRequest request) {
         BoxEntity box = requireOwnedBox(userId, projectId, boxId, true);
-        List<ItemEntity> items = request.getNames().stream()
-                .map(name -> ItemEntity.builder().box(box).name(name.strip()).build())
-                .toList();
+
+        List<CreateItemRequest> entries = request.getItems() != null ? request.getItems()
+                : request.getNames().stream().map(name -> CreateItemRequest.builder().name(name).build()).toList();
+
+        List<ItemEntity> items = entries.stream()
+                .map(entry -> ItemEntity.builder().box(box).name(entry.getName().strip())
+                        .quantity(entry.getQuantity()).firstDay(entry.getFirstDay()).build()).toList();
+
         return itemRepository.saveAllAndFlush(items).stream().map(this::toResponse).toList();
     }
 
@@ -60,14 +68,13 @@ public class ItemService {
     public ItemResponse update(UUID userId, UUID projectId, UUID boxId, UUID itemId, UpdateItemRequest request) {
         requireOwnedBox(userId, projectId, boxId, true);
         ItemEntity item = requireItem(boxId, itemId);
-        if (request.getName() != null) {
-            item.setName(request.getName().strip());
-        }
-        if (request.getLost() != null) {
-            item.setLost(request.getLost());
-        }
+        if (request.getName() != null) item.setName(request.getName().strip());
+        if (request.getLost() != null) item.setLost(request.getLost());
+        if (request.getQuantity() != null) item.setQuantity(request.getQuantity());
+        if (request.getFirstDay() != null) item.setFirstDay(request.getFirstDay());
         return toResponse(itemRepository.saveAndFlush(item));
     }
+
 
     @Transactional
     public void delete(UUID userId, UUID projectId, UUID boxId, UUID itemId) {
@@ -122,9 +129,20 @@ public class ItemService {
 
     private ItemResponse toResponse(ItemEntity item) {
         BoxEntity box = item.getBox();
-        return ItemResponse.builder().id(item.getId()).name(item.getName()).lost(item.isLost())
-                .projectId(box.getProject().getId()).boxId(box.getId()).boxNumber(box.getNumber())
-                .roomId(box.getRoom().getId()).roomName(box.getRoom().getName()).boxStatus(box.getStatus())
-                .createdAt(item.getCreatedAt()).updatedAt(item.getUpdatedAt()).build();
+        return ItemResponse.builder()
+                .id(item.getId())
+                .name(item.getName())
+                .lost(item.isLost())
+                .quantity(item.getQuantity())
+                .firstDay(item.isFirstDay())
+                .projectId(box.getProject().getId())
+                .boxId(box.getId())
+                .boxNumber(box.getNumber())
+                .roomId(box.getRoom().getId())
+                .roomName(box.getRoom().getName())
+                .boxStatus(box.getStatus())
+                .createdAt(item.getCreatedAt())
+                .updatedAt(item.getUpdatedAt())
+                .build();
     }
 }

@@ -83,6 +83,12 @@ class DataLoaderIntegrationTest extends BaseIntegrationTest {
                 .containsExactlyInAnyOrder(1L, 1L);
         assertThat(count("RoomEntity")).isEqualTo(4);
         assertThat(count("ItemEntity")).isEqualTo(12);
+        assertThat(entityManager.createQuery(
+                "select i.quantity from ItemEntity i where i.name = 'Тарелки'", Integer.class)
+                .getSingleResult()).isEqualTo(6);
+        assertThat(entityManager.createQuery(
+                "select i.firstDay from ItemEntity i where i.name = 'Постельное бельё'", Boolean.class)
+                .getSingleResult()).isTrue();
         assertThat(count("MoveTaskEntity")).isEqualTo(12);
         assertThat(count("FirstDayChecklistItemEntity")).isEqualTo(6);
         assertThat(count("ProjectEventEntity")).isEqualTo(18);
