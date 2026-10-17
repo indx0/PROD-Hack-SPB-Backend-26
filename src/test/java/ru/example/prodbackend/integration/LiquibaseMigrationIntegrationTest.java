@@ -48,7 +48,7 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                 assertConstraints(jdbc);
                 var copiedTasks = jdbc.queryForList("SELECT id, title, due_date FROM move_tasks ORDER BY id");
                 runLiquibase(schema, 1); // Отмена только наборов сохраняет созданные задачи.
-                assertHistory(jdbc, 19);
+                assertHistory(jdbc, 20);
                 assertThat(jdbc.queryForList("SELECT id, title, due_date FROM move_tasks ORDER BY id")).isEqualTo(copiedTasks);
                 runLiquibase(schema, 0);
                 assertHistory(jdbc);
@@ -60,7 +60,7 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                 runLiquibase(schema, 3);
                 assertThat(jdbc.queryForList("SELECT id, due_date, template_id FROM move_tasks ORDER BY id")).isEqualTo(existingTasks);
                 assertThat(jdbc.queryForList("SELECT column_name FROM information_schema.columns WHERE table_schema = ? AND table_name = 'move_tasks'", String.class, schema)).doesNotContain("due_type", "offset_days");
-                assertHistory(jdbc, 17);
+                assertHistory(jdbc, 18);
                 assertThat(jdbc.queryForObject("SELECT count(*) FROM information_schema.tables WHERE table_schema = ? AND table_name = 'project_participants'", Long.class, schema)).isZero();
                 assertThat(jdbc.queryForList("SELECT * FROM move_projects ORDER BY id")).isEqualTo(existingProjects);
 
@@ -75,7 +75,7 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                 jdbc.update("UPDATE project_events SET event_type = 'PROJECT_RESTORED' WHERE id = ?", archiveEvent);
                 assertThatThrownBy(() -> runLiquibase(schema, 1)).hasRootCauseInstanceOf(SQLException.class)
                         .rootCause().extracting(error -> ((SQLException) error).getSQLState()).isEqualTo("23514");
-                assertHistory(jdbc, 17);
+                assertHistory(jdbc, 18);
                 assertThat(jdbc.queryForObject("SELECT event_type FROM project_events WHERE id = ?", String.class, archiveEvent)).isEqualTo("PROJECT_RESTORED");
                 assertThat(jdbc.queryForObject("SELECT archived_at FROM move_projects WHERE id = ?", java.sql.Timestamp.class, archivedProject)).isNotNull();
                 jdbc.update("DELETE FROM project_events WHERE id = ?", archiveEvent); // Remove only this test fixture before lifecycle rollback.
@@ -136,7 +136,7 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                 assertHistory(jdbc);
                 assertThat(jdbc.queryForList("SELECT id, email FROM users ORDER BY email")).isEqualTo(users);
 
-                runLiquibase(schema, 20);
+                runLiquibase(schema, 21);
                 assertThat(jdbc.queryForList("""
                         SELECT tablename FROM pg_tables
                         WHERE schemaname = ? AND tablename NOT IN ('databasechangelog', 'databasechangeloglock')
@@ -189,7 +189,7 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
     }
 
     private void assertHistory(JdbcTemplate jdbc) {
-        assertHistory(jdbc, 20);
+        assertHistory(jdbc, 21);
     }
 
     private void assertHistory(JdbcTemplate jdbc, int expectedCount) {
@@ -310,6 +310,10 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                 """, item, box);
         assertThat(jdbc.queryForObject("SELECT quantity FROM items WHERE id = ?", Integer.class, item)).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT first_day FROM items WHERE id = ?", Boolean.class, item)).isFalse();
+        assertThat(jdbc.queryForObject("SELECT fragile FROM items WHERE id = ?", Boolean.class, item)).isFalse();
+        assertThat(jdbc.queryForObject("SELECT carry_personally FROM items WHERE id = ?", Boolean.class, item)).isFalse();
+        jdbc.update("UPDATE items SET fragile = true, carry_personally = true WHERE id = ?", item);
+        assertThat(jdbc.queryForObject("SELECT fragile AND carry_personally FROM items WHERE id = ?", Boolean.class, item)).isTrue();
         assertThat(jdbc.queryForObject("SELECT packed_at FROM items WHERE id = ?", java.sql.Timestamp.class, item)).isNull();
         assertThat(jdbc.queryForObject("SELECT unpacked_at FROM items WHERE id = ?", java.sql.Timestamp.class, item)).isNull();
 

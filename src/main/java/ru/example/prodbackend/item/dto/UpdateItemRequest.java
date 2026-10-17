@@ -8,6 +8,10 @@ import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import ru.example.prodbackend.item.entity.ItemFlag;
+import jakarta.validation.constraints.NotNull;
+import java.util.List;
+import java.util.HashSet;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -33,6 +37,20 @@ public class UpdateItemRequest {
 
     @Schema(description = "Отметка распаковки всей записи. Изменяется только в коробке DELIVERED")
     private Boolean unpacked;
+
+    @Size(max = 3)
+    private List<@NotNull ItemFlag> flags;
+
+    @JsonSetter(value = "flags", nulls = Nulls.FAIL)
+    public void setFlags(List<ItemFlag> flags) { this.flags = flags; }
+
+    @JsonIgnore @Schema(hidden = true)
+    @AssertTrue(message = "Flags must not contain duplicates")
+    public boolean isFlagsUnique() { return flags == null || new HashSet<>(flags).size() == flags.size(); }
+
+    @JsonIgnore @Schema(hidden = true)
+    @AssertTrue(message = "firstDay и flags.first_day противоречат друг другу")
+    public boolean isFirstDayConsistent() { return flags == null || firstDay == null || firstDay == flags.contains(ItemFlag.FIRST_DAY); }
 
     @JsonSetter(value = "name", nulls = Nulls.FAIL)
     public void setName(String name) {
@@ -72,6 +90,6 @@ public class UpdateItemRequest {
                 || quantity != null
                 || firstDay != null
                 || packed != null
-                || unpacked != null;
+                || unpacked != null || flags != null;
     }
 }

@@ -61,8 +61,7 @@ public class ItemService {
         BoxEntity box = requireAccessibleBox(userId, projectId, boxId, true);
         requirePacking(box, "добавлять вещи");
 
-        ItemEntity item = ItemEntity.builder().box(box).name(request.getName().strip())
-                .quantity(request.getQuantity()).firstDay(request.getFirstDay()).build();
+        ItemEntity item = newItem(box, request);
 
         return toResponse(itemRepository.saveAndFlush(item));
     }
@@ -77,8 +76,7 @@ public class ItemService {
                 : request.getNames().stream().map(name -> CreateItemRequest.builder().name(name).build()).toList();
 
         List<ItemEntity> items = entries.stream()
-                .map(entry -> ItemEntity.builder().box(box).name(entry.getName().strip())
-                        .quantity(entry.getQuantity()).firstDay(entry.getFirstDay()).build()).toList();
+                .map(entry -> newItem(box, entry)).toList();
 
         return itemRepository.saveAllAndFlush(items).stream().map(this::toResponse).toList();
     }
@@ -96,8 +94,9 @@ public class ItemService {
         if (request.getName() != null) item.setName(request.getName().strip());
         if (request.getLost() != null) item.setLost(request.getLost());
         if (request.getQuantity() != null) item.setQuantity(request.getQuantity());
+        if (request.getFlags() != null) item.replaceFlags(request.getFlags());
         if (request.getFirstDay() != null) item.setFirstDay(request.getFirstDay());
-        if (Boolean.FALSE.equals(request.getFirstDay())) {
+        if ((request.getFirstDay() != null || request.getFlags() != null) && !item.isFirstDay()) {
             checklistRepository.findForUpdateByItemId(itemId).ifPresent(checklist -> checklist.setItem(null));
         }
         item.setPackedAt(packedAt);
@@ -164,6 +163,13 @@ public class ItemService {
                 .toList();
     }
 
+    private ItemEntity newItem(BoxEntity box, CreateItemRequest request) {
+        var item = ItemEntity.builder().box(box).name(request.getName().strip()).quantity(request.getQuantity()).build();
+        item.replaceFlags(request.getFlags());
+        if (request.isFirstDayPresent() || Boolean.TRUE.equals(request.getFirstDay())) item.setFirstDay(request.getFirstDay());
+        return item;
+    }
+
     private void requirePacking(BoxEntity box, String action) {
         if (box.getStatus() != BoxStatus.PACKING) {
             throw new ResourceConflictException("Можно " + action + " только в коробке со статусом PACKING");
@@ -222,7 +228,7 @@ public class ItemService {
                 .packed(item.getPackedAt() != null).packedAt(item.getPackedAt())
                 .unpacked(item.getUnpackedAt() != null).unpackedAt(item.getUnpackedAt())
                 .quantity(item.getQuantity())
-                .firstDay(item.isFirstDay())
+                .firstDay(item.isFirstDay()).flags(item.flags())
                 .projectId(box.getProject().getId())
                 .boxId(box.getId())
                 .boxNumber(box.getNumber())

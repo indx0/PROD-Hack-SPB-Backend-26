@@ -14,8 +14,10 @@ flowchart LR
         Security --> Controller["Контроллеры и DTO"]
         Controller --> Service["Бизнес-сервисы · транзакции"]
         Service --> Repository["JPA-репозитории"]
+        Service --> LlmClient["ML · RestClient"]
     end
     Repository --> DB[("PostgreSQL")]
+    LlmClient --> LlmProxy["Внешний LLM Proxy"]
 ```
 
 ## Стек
@@ -126,6 +128,7 @@ API и совместимость описаны в [контракте срок
 | [move](../src/main/java/ru/example/prodbackend/move), [room](../src/main/java/ru/example/prodbackend/room) | Проекты, участники, проверка доступа, комнаты |
 | [box](../src/main/java/ru/example/prodbackend/box), [item](../src/main/java/ru/example/prodbackend/item) | Коробки, статусы, содержимое, поиск и подсказки |
 | [task](../src/main/java/ru/example/prodbackend/task), [checklist](../src/main/java/ru/example/prodbackend/checklist) | План, шаблоны, первый день |
+| [ml](../src/main/java/ru/example/prodbackend/ml) | Опись одного или нескольких предметов по фотографии через LLM Proxy, без хранения фото |
 | [event](../src/main/java/ru/example/prodbackend/event), [progress](../src/main/java/ru/example/prodbackend/progress) | История действий и сводки |
 | [auth](../src/main/java/ru/example/prodbackend/auth), [user](../src/main/java/ru/example/prodbackend/user) | Вход, токены и профиль |
 | [common](../src/main/java/ru/example/prodbackend/common), [exception](../src/main/java/ru/example/prodbackend/exception) | Пагинация и единый формат ошибок |
@@ -138,3 +141,53 @@ API и совместимость описаны в [контракте срок
 | Как реализованы требования на backend и в мобильном приложении? | [Реализация требований](requirements.md) |
 | Как добавить участников совместного переезда? | [Совместные проекты](shared-projects.md) |
 | Где находятся отчёты и как запустить тесты? | [Тесты и отчёты](../TESTING.md) |
+
+## ML-опись вещей по фото
+
+Оба POST-маршрута находятся под `/api/move-projects/{projectId}/ml`:
+
+| Маршрут | Ответ |
+| --- | --- |
+| `/item-description` | Один главный предмет: `name` и `flags` |
+| `/items-description` | Объект `items` со списком из 1–100 описаний `name` и `flags` |
+
+`ItemDescriptionController` принимает один multipart-файл `photo`.
+`ItemDescriptionService` сначала проверяет владельца через `ProjectAccessService`, затем
+размер и сигнатуру файла через `PhotoValidator`. Проверка доступа завершается до вызова LLM;
+сетевое ожидание проходит вне транзакции БД.
+
+`LlmProxyClient` отделяет сценарии от HTTP-протокола. `HttpLlmProxyClient` на Spring RestClient
+использует отдельные промпты из ресурсов и строгие JSON Schema для одного предмета и списка.
+В LLM Proxy отправляется изображение как base64 data URL. `ItemDescriptionValidator`
+разбирает общий envelope ответа и проверяет названия и метки каждого предмета;
+внутреннее поле модели `item` преобразуется в публичное `name`.
+Некорректный элемент отклоняет весь список. Порядок модели и повторяющиеся названия сохраняются.
+
+Оба сценария используют общий исполнитель: до четырёх одновременных обращений без очереди,
+общий дедлайн по умолчанию 120 секунд и ограничение ответа прокси 64 КиБ.
+Автоматических повторов нет. Ошибки интеграции преобразуются в единый `ErrorResponse`;
+в логи не попадают фото, названия вещей, ключ и тела ответов прокси.
+
+Распознавание не создаёт записей в БД и не хранит фотографии или историю результатов.
+После проверки пользователем выбранные вещи сохраняются существующим `ItemService`.
+Метки принадлежат домену `item`: enum `ItemFlag` представлен в JSON массивом `flags`,
+а в PostgreSQL — колонками `fragile`, `first_day`, `carry_personally`.
+Пакетный ввод `names` сохраняет только названия и оставляет метки пустыми.
+
+Контракты, примеры запросов, ошибки и настройка: [Опись вещей по фотографии](photo-inventory.md).
+
+### Совместимость объединённых веток
+
+`firstDay` и метка `flags: ["first_day"]` обращаются к одному `items.first_day`.
+POST принимает любой вариант; PATCH с flags заменяет весь набор меток, firstDay меняет
+только этот признак. Противоречивые явно заданные значения отклоняются с 422 до записи.
+Снятие признака любым способом отвязывает чек-лист, сохраняя его пункт и выполнение.
+Количество, упаковка, перенос, архив и общий доступ сохраняют прежние проверки.
+ML-предпросмотр использует общий доступ проекта и не держит транзакцию во время запроса LLM.
+
+Параллельные миграции `1.0/0011-add-item-flags` и `1.1/0011-add-item-quantity-first-day`
+объединены через `ADD COLUMN IF NOT EXISTS first_day`. Сохранены авторы, ID и пути;
+каждая миграция принимает только конкретную исходную контрольную сумму V9 через validCheckSum.
+Новые запуски выполняют обе миграции, существующие базы сохраняют свою историю и данные.
+Rollback удаляет общий first_day только когда другая миграция уже отсутствует в истории.
+Отдельные проверки моделируют обновление со старого master и со старой feature.

@@ -19,6 +19,8 @@ public class ItemResponse {
     private String name;
     private int quantity;
     private boolean firstDay;
+
+    private java.util.List<ru.example.prodbackend.item.entity.ItemFlag> flags;
     private boolean lost;
     private boolean packed;
     private Instant packedAt;
