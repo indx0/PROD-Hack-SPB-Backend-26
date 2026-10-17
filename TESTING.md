@@ -77,7 +77,7 @@ mvn clean verify
 Проверки сроков и переноса даты переезда находятся в
 `TaskRescheduleIntegrationTest`: UTC и смещения, выборочный пересчёт, FIXED и выполненные задачи,
 полный отказ при ошибке, повторы, архив, доступ участников и конкурентное редактирование.
-`MoveProjectBootstrapIntegrationTest` проверяет относительные сроки начального плана,
+`MoveProjectBootstrapIntegrationTest` проверяет пустой план без выбора и явное применение шаблонов,
 `LiquibaseMigrationIntegrationTest` — ограничения БД, сохранение дат старых задач и откат миграции.
 
 Только эти интеграционные сценарии (также выполняются unit-тесты):
@@ -85,3 +85,8 @@ mvn clean verify
 ```bash
 mvn -Dit.test=TaskRescheduleIntegrationTest,MoveProjectBootstrapIntegrationTest,LiquibaseMigrationIntegrationTest verify
 ```
+
+`TaskSetIntegrationTest` проверяет личный CRUD, порядок, пагинацию, запрет чужого доступа,
+копирование в RELATIVE-задачи, повторное и конкурентное применение, независимость копий,
+мягкое удаление, атомарность создания с наборами, архив и применение участником общего проекта.
+`DataLoaderIntegrationTest` проверяет явный выбор демо-набора без дублей при повторном запуске.

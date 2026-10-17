@@ -79,7 +79,9 @@ class MoveWorkflowIntegrationTest extends AuthIntegrationTestSupport {
         }
         assertEquals(box.getId(), itemRepository.findById(item.getId()).orElseThrow().getBox().getId());
         assertEquals(bedroom, boxRepository.findById(box.getId()).orElseThrow().getRoom().getId());
-        UUID taskId = taskRepository.findAllByFilters(projectId, null, null, PageRequest.of(0, 1)).getContent().get(0).getId();
+        UUID taskId = UUID.fromString(jsonMapper.readTree(call("POST", "/api/move-projects/" + projectId + "/tasks",
+                Map.of("title", "Собрать вещи", "stage", "BEFORE_MOVE"), token).andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsByteArray()).get("id").asText());
         String task = "/api/move-projects/" + projectId + "/tasks/" + taskId + "/completion";
         call("PATCH", task, Map.of("completed", true), token).andExpect(status().isOk());
         call("PATCH", task, Map.of("completed", true), token).andExpect(status().isOk());

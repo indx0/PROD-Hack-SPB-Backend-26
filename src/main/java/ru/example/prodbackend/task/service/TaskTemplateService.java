@@ -15,7 +15,7 @@ public class TaskTemplateService {
 
     private final TaskTemplateRepository taskTemplateRepository;
 
-    /** Локальный справочник также восстанавливается при создании проекта, если таблица была пустой. */
+    /** Локальный справочник для инициализации каталога и явного наполнения демо. */
     @Transactional
     public List<TaskTemplateEntity> getDefaultTemplates() {
         return List.of(

@@ -19,6 +19,9 @@ public interface MoveTaskRepository extends JpaRepository<MoveTaskEntity, UUID> 
     @EntityGraph(attributePaths = "template")
     List<MoveTaskEntity> findAllByProject_IdAndIdIn(UUID projectId, Collection<UUID> ids);
 
+    @EntityGraph(attributePaths = "template")
+    List<MoveTaskEntity> findAllByTaskSetApplication_IdOrderByTaskSetPositionAscIdAsc(UUID applicationId);
+
     long countByProject_Id(UUID projectId);
 
     long countByProject_IdAndCompletedAtIsNotNull(UUID projectId);

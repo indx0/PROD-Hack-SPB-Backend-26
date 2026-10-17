@@ -17,3 +17,5 @@ Java 17 · Spring Boot · PostgreSQL · JWT.
 | Где находятся отчёты и как запустить тесты? | [Тесты и отчёты](TESTING.md) |
 
 Контракт относительных сроков и переноса даты переезда: [docs/task-deadlines.md](docs/task-deadlines.md).
+
+Личные наборы и добровольный выбор задач при создании переезда: [docs/task-sets.md](docs/task-sets.md).

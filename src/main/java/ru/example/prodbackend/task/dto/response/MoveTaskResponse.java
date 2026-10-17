@@ -31,6 +31,8 @@ public class MoveTaskResponse {
 
     @Schema(description = "Исходный шаблон; null для собственной задачи")
     private UUID templateId;
+    @Schema(description = "Запись применения личного набора; null для обычной задачи или общего шаблона")
+    private UUID taskSetApplicationId;
 
     private Instant createdAt;
     private Instant updatedAt;

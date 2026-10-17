@@ -13,6 +13,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 @Data
 @Builder
@@ -33,6 +34,12 @@ public class CreateMoveProjectRequest {
 
     @Size(max = 1000)
     private String destinationAddress;
+
+    @Builder.Default
+    @Size(max = 100)
+    @JsonSetter(nulls = Nulls.FAIL)
+    @Schema(description = "Добровольный выбор собственных наборов: без поля или [] проект создаётся без задач. Повторные UUID объединяются; недоступный набор откатывает всё создание")
+    private List<@NotNull UUID> taskSetIds = List.of();
 
     @Builder.Default
     @Valid

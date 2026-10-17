@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.*;
 import ru.example.prodbackend.move.entity.MoveProjectEntity;
+import ru.example.prodbackend.taskset.entity.TaskSetApplicationEntity;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -70,6 +71,13 @@ public class MoveTaskEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = true)
     @JoinColumn(name = "template_id", nullable = true)
     private TaskTemplateEntity template;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "task_set_application_id")
+    private TaskSetApplicationEntity taskSetApplication;
+
+    @Column(name = "task_set_position")
+    private Integer taskSetPosition;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

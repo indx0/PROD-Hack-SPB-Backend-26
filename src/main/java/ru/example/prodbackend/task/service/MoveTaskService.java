@@ -218,23 +218,7 @@ public class MoveTaskService {
         return normalized.isBlank() ? null : normalized;
     }
 
-    private MoveTaskResponse toResponse(MoveTaskEntity task) {
-        return MoveTaskResponse.builder()
-                .id(task.getId())
-                .projectId(task.getProject().getId())
-                .title(task.getTitle())
-                .description(task.getDescription())
-                .stage(task.getStage())
-                .dueDate(task.getDueDate())
-                .dueType(task.getDueType()).offsetDays(task.getOffsetDays())
-                .assigneeName(task.getAssigneeName())
-                .completed(task.getCompletedAt() != null)
-                .completedAt(task.getCompletedAt())
-                .templateId(task.getTemplate() == null ? null : task.getTemplate().getId())
-                .createdAt(task.getCreatedAt())
-                .updatedAt(task.getUpdatedAt())
-                .build();
-    }
+    private MoveTaskResponse toResponse(MoveTaskEntity task) { return MoveTaskMapper.toResponse(task); }
 
     private TaskTemplateResponse toTemplateResponse(TaskTemplateEntity template) {
         return TaskTemplateResponse.builder()

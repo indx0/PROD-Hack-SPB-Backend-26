@@ -28,6 +28,8 @@ import ru.example.prodbackend.move.service.MoveProjectService;
 import ru.example.prodbackend.room.service.RoomService;
 import ru.example.prodbackend.room.entity.RoomEntity;
 import ru.example.prodbackend.task.service.MoveTaskService;
+import ru.example.prodbackend.task.service.TaskTemplateService;
+import ru.example.prodbackend.taskset.service.TaskSetService;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -67,6 +69,8 @@ class DataLoaderIntegrationTest extends BaseIntegrationTest {
     private FirstDayChecklistService checklistService;
     @Autowired
     private ItemService itemService;
+    @Autowired private TaskSetService taskSetService;
+    @Autowired private TaskTemplateService taskTemplateService;
 
     @Test
     void loadsDemoMoveForUser1() {
@@ -112,6 +116,9 @@ class DataLoaderIntegrationTest extends BaseIntegrationTest {
                 "select i.firstDay from ItemEntity i where i.name = 'Постельное бельё'", Boolean.class)
                 .getSingleResult()).isTrue();
         assertThat(count("MoveTaskEntity")).isEqualTo(12);
+        assertThat(count("TaskSetEntity")).isEqualTo(1);
+        assertThat(count("TaskSetItemEntity")).isEqualTo(11);
+        assertThat(count("TaskSetApplicationEntity")).isEqualTo(1);
         assertThat(entityManager.createQuery("from MoveTaskEntity", MoveTaskEntity.class).getResultList()).allSatisfy(task -> {
             if (task.getTitle().equals("Отключить интернет")) {
                 assertThat(task.getDueType()).isEqualTo(TaskDueType.FIXED);
@@ -167,7 +174,7 @@ class DataLoaderIntegrationTest extends BaseIntegrationTest {
         loader.run(args);
         entityManager.flush();
         var before = new HashMap<String, List<UUID>>();
-        for (String entity : new String[]{"UserEntity", "RefreshTokenEntity", "MoveProjectEntity", "ProjectParticipantEntity", "RoomEntity", "BoxEntity", "ItemEntity", "MoveTaskEntity", "FirstDayChecklistItemEntity", "ProjectEventEntity"}) {
+        for (String entity : new String[]{"UserEntity", "RefreshTokenEntity", "MoveProjectEntity", "ProjectParticipantEntity", "TaskSetEntity", "TaskSetItemEntity", "TaskSetApplicationEntity", "RoomEntity", "BoxEntity", "ItemEntity", "MoveTaskEntity", "FirstDayChecklistItemEntity", "ProjectEventEntity"}) {
             before.put(entity, entityManager.createQuery("select e.id from " + entity + " e order by e.id", UUID.class).getResultList());
         }
         String password = userRepository.findByEmail("user1").orElseThrow().getPassword();
@@ -196,7 +203,7 @@ class DataLoaderIntegrationTest extends BaseIntegrationTest {
 
     private DataLoader loader() {
         var loader = new DataLoader(itemService, userRepository, passwordEncoder, refreshTokenService, moveProjectRepository,
-                moveProjectService, roomService, boxService, moveTaskService, checklistService);
+                moveProjectService, roomService, boxService, moveTaskService, checklistService, taskSetService, taskTemplateService);
         ReflectionTestUtils.setField(loader, "adminPassword", "test-admin-password");
         ReflectionTestUtils.setField(loader, "user1Password", "test-user-password");
         return loader;

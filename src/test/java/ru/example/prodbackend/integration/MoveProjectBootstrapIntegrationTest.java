@@ -44,24 +44,11 @@ class MoveProjectBootstrapIntegrationTest extends AuthIntegrationTestSupport {
     }
 
     @Test
-    void creationRestoresEmptyCatalogAndCreatesPlanChecklistAndOneEvent() throws Exception {
-        templateRepository.deleteAllInBatch();
+    void creationWithoutSelectionCreatesNoTasksButKeepsChecklistAndEvent() throws Exception {
+        long catalogSize = templateRepository.count();
         UUID projectId = createProject();
-        var tasks = taskRepository.findAllByFilters(projectId, null, null, PageRequest.of(0, 100)).getContent();
-        assertEquals(11, tasks.size());
-        assertEquals(11L, templateRepository.count());
-        // Дата в запросе имеет +03:00: календарная дата UTC — предыдущий день.
-        LocalDate moveDateUtc = LocalDate.parse("2026-10-31");
-        for (var task : tasks) {
-            assertNotNull(task.getTemplate());
-            assertEquals(TaskDueType.RELATIVE, task.getDueType());
-            assertEquals(task.getTemplate().getDueDateOffsetDays(), task.getOffsetDays());
-            assertNull(task.getCompletedAt());
-            assertNull(task.getAssigneeName());
-            assertEquals(moveDateUtc.plusDays(task.getTemplate().getDueDateOffsetDays()), task.getDueDate());
-        }
-        assertEquals(moveDateUtc.minusDays(14), tasks.stream().filter(task -> task.getTitle().equals("Заказать грузчиков")).findFirst().orElseThrow().getDueDate());
-        assertEquals(moveDateUtc, tasks.stream().filter(task -> task.getTitle().equals("Передать ключи")).findFirst().orElseThrow().getDueDate());
+        assertEquals(0L, taskRepository.countByProject_Id(projectId));
+        assertEquals(catalogSize, templateRepository.count());
         var checklist = checklistRepository.findAllByProject_Id(projectId, PageRequest.of(0, 100)).getContent();
         assertEquals(Set.of("Зубные щётки", "Зарядки", "Чайник", "Постельное бельё"), checklist.stream().map(item -> item.getName()).collect(Collectors.toSet()));
         assertEquals(1L, eventRepository.count());
@@ -72,7 +59,12 @@ class MoveProjectBootstrapIntegrationTest extends AuthIntegrationTestSupport {
     @Test
     void changingProjectDateAndReadingAgainNeverReschedulesOrDuplicatesPlan() throws Exception {
         UUID projectId = createProject();
-        UUID taskId = dueDates(projectId).keySet().iterator().next();
+        var template = templateRepository.findAll().get(0);
+        byte[] created = mockMvc.perform(post("/api/move-projects/" + projectId + "/tasks/from-template")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"templateId\":\"" + template.getId() + "\"}"))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsByteArray();
+        UUID taskId = UUID.fromString(jsonMapper.readTree(created).get("id").asText());
         mockMvc.perform(patch("/api/move-projects/" + projectId + "/tasks/" + taskId).header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"dueDate\":\"2026-12-12\"}"))
                 .andExpect(status().isOk());
@@ -85,7 +77,7 @@ class MoveProjectBootstrapIntegrationTest extends AuthIntegrationTestSupport {
         }
         assertEquals(before, dueDates(projectId));
         assertEquals(LocalDate.parse("2026-12-12"), dueDates(projectId).get(taskId));
-        assertEquals(11L, taskRepository.count());
+        assertEquals(1L, taskRepository.count());
         assertEquals(4L, checklistRepository.count());
         assertEquals(1L, eventRepository.count());
     }

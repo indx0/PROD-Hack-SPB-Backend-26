@@ -22,12 +22,9 @@ import ru.example.prodbackend.move.entity.MoveProjectEntity;
 import ru.example.prodbackend.move.repository.MoveProjectRepository;
 import ru.example.prodbackend.user.entity.UserEntity;
 import ru.example.prodbackend.user.repository.UserRepository;
-import ru.example.prodbackend.task.entity.MoveTaskEntity;
 import ru.example.prodbackend.task.repository.MoveTaskRepository;
-import ru.example.prodbackend.task.service.TaskTemplateService;
 import ru.example.prodbackend.task.service.MoveTaskService;
-import ru.example.prodbackend.task.service.TaskDeadline;
-import ru.example.prodbackend.task.entity.TaskDueType;
+import ru.example.prodbackend.taskset.service.TaskSetService;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -42,11 +39,11 @@ public class MoveProjectService {
     private final UserRepository userRepository;
     private final ProjectAccessService projectAccessService;
     private final ProjectEventService projectEventService;
-    private final TaskTemplateService taskTemplateService;
     private final MoveTaskRepository moveTaskRepository;
     private final FirstDayChecklistService checklistService;
     private final ProjectParticipantService participantService;
     private final MoveTaskService moveTaskService;
+    private final TaskSetService taskSetService;
 
     @Transactional
     public MoveProjectResponse createMoveProject(CreateMoveProjectRequest request, UserEntity user) {
@@ -63,10 +60,7 @@ public class MoveProjectService {
 
         MoveProjectEntity savedProject = moveProjectRepository.save(project);
         participantService.addInitialParticipants(savedProject, participants);
-        moveTaskRepository.saveAll(taskTemplateService.getDefaultTemplates().stream().map(template -> MoveTaskEntity.builder()
-                .project(savedProject).template(template).title(template.getTitle()).description(template.getDescription()).stage(template.getStage())
-                .dueType(TaskDueType.RELATIVE).offsetDays(template.getDueDateOffsetDays())
-                .dueDate(TaskDeadline.relative(savedProject.getMoveDate(), template.getDueDateOffsetDays()).date()).build()).toList());
+        taskSetService.applyInitialSets(savedProject, request.getTaskSetIds(), owner.getId());
         checklistService.createDefaults(savedProject);
         projectEventService.record(savedProject, owner, ProjectEventType.PROJECT_CREATED, EventObjectType.PROJECT,
                 savedProject.getId(), "Создан проект переезда «" + savedProject.getName() + "»");

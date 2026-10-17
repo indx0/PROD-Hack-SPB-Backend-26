@@ -126,7 +126,9 @@ class TaskRescheduleIntegrationTest extends AuthIntegrationTestSupport {
             case "foreign" -> {
                 UUID other = UUID.fromString(json(perform(ownerToken, post("/api/move-projects"), Map.of("name", "Другой", "moveDate", ORIGINAL))
                         .andExpect(status().isCreated())).get("id").asText());
-                invalidId = tasks.findAllByFilters(other, null, null, org.springframework.data.domain.PageRequest.of(0, 1)).getContent().get(0).getId();
+                invalidId = task(perform(ownerToken, post("/api/move-projects/" + other + "/tasks"),
+                        Map.of("title", "Чужой проект", "stage", "BEFORE_MOVE", "dueType", "RELATIVE", "offsetDays", 0))
+                        .andExpect(status().isCreated())).getId();
                 expected = 404;
             }
             default -> { invalidId = UUID.randomUUID(); expected = 404; }

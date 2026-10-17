@@ -94,7 +94,7 @@ class ProjectEventIntegrationTest extends AuthIntegrationTestSupport {
             eventRepository.flush();
             assertEquals(1L, moveProjectRepository.count());
             assertEquals(1L, eventRepository.count());
-            assertEquals(11L, taskRepository.count());
+            assertEquals(0L, taskRepository.count());
             assertEquals(4L, checklistRepository.count());
             status.setRollbackOnly();
         });

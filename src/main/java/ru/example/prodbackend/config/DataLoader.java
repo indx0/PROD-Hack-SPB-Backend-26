@@ -33,6 +33,10 @@ import ru.example.prodbackend.task.dto.request.UpdateMoveTaskRequest;
 import ru.example.prodbackend.task.entity.TaskStage;
 import ru.example.prodbackend.task.entity.TaskDueType;
 import ru.example.prodbackend.task.service.MoveTaskService;
+import ru.example.prodbackend.task.service.TaskTemplateService;
+import ru.example.prodbackend.taskset.service.TaskSetService;
+import ru.example.prodbackend.taskset.dto.SaveTaskSetRequest;
+import ru.example.prodbackend.taskset.dto.TaskSetItemRequest;
 import ru.example.prodbackend.user.entity.UserEntity;
 import ru.example.prodbackend.user.entity.UserRole;
 import ru.example.prodbackend.user.repository.UserRepository;
@@ -62,6 +66,8 @@ public class DataLoader implements ApplicationRunner {
     private final BoxService boxService;
     private final MoveTaskService moveTaskService;
     private final FirstDayChecklistService checklistService;
+    private final TaskSetService taskSetService;
+    private final TaskTemplateService taskTemplateService;
 
     @Value("${ADMIN_PASSWORD}")
     private String adminPassword;
@@ -90,10 +96,12 @@ public class DataLoader implements ApplicationRunner {
     private void createDemoProject(UserEntity user) {
         LocalDate moveDate = LocalDate.now(ZoneOffset.UTC).plusDays(14);
         UUID adminId = userRepository.findByEmail("admin").orElseThrow().getId();
+        var demoSet = taskSetService.create(user.getId(), new SaveTaskSetRequest("Базовый план переезда", "Личный набор для демонстрации",
+                taskTemplateService.getDefaultTemplates().stream().map(t -> new TaskSetItemRequest(t.getTitle(), t.getDescription(), t.getStage(), t.getDueDateOffsetDays())).toList()));
         var project = moveProjectService.createMoveProject(CreateMoveProjectRequest.builder().name(DEMO_PROJECT_NAME)
                 .moveDate(moveDate.atStartOfDay(ZoneOffset.UTC).toInstant()).originAddress("Москва, ул. Лесная, д. 10, кв. 15")
                 .destinationAddress("Москва, ул. Садовая, д. 25, кв. 42")
-                .participants(List.of(AddProjectParticipantRequest.builder().userId(adminId).build())).build(), user);
+                .participants(List.of(AddProjectParticipantRequest.builder().userId(adminId).build())).taskSetIds(List.of(demoSet.id())).build(), user);
         UUID projectId = project.getId();
         UUID kitchen = roomService.createRoom(projectId, CreateRoomRequest.builder().name("Кухня").iconKey("kitchen").build(), user.getId()).getId();
         UUID livingRoom = roomService.createRoom(projectId, CreateRoomRequest.builder().name("Гостиная").iconKey("sofa").build(), user.getId()).getId();

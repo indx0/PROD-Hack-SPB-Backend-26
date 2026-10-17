@@ -237,6 +237,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
     }
 
+    @ExceptionHandler(TaskSetNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleTaskSetNotFound(TaskSetNotFoundException exception) {
+        var body = ErrorResponse.builder().code("TASK_SET_NOT_FOUND").message(exception.getMessage()).traceId(UUID.randomUUID()).time(Instant.now()).build();
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
+    }
+
     @ExceptionHandler(TaskTemplateNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleTaskTemplateNotFound(TaskTemplateNotFoundException exception) {
         ErrorResponse body = ErrorResponse.builder()
