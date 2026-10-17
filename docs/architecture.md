@@ -34,7 +34,7 @@ flowchart LR
 | [move](../src/main/java/ru/example/prodbackend/move), [room](../src/main/java/ru/example/prodbackend/room) | Проекты, проверка владельца, комнаты |
 | [box](../src/main/java/ru/example/prodbackend/box), [item](../src/main/java/ru/example/prodbackend/item) | Коробки, статусы, содержимое, поиск и подсказки |
 | [task](../src/main/java/ru/example/prodbackend/task), [checklist](../src/main/java/ru/example/prodbackend/checklist) | План, шаблоны, первый день |
-| [ml](../src/main/java/ru/example/prodbackend/ml) | Опись предмета по фотографии через LLM Proxy, без хранения фото |
+| [ml](../src/main/java/ru/example/prodbackend/ml) | Опись одного или нескольких предметов по фотографии через LLM Proxy, без хранения фото |
 | [event](../src/main/java/ru/example/prodbackend/event), [progress](../src/main/java/ru/example/prodbackend/progress) | История действий и сводки |
 | [auth](../src/main/java/ru/example/prodbackend/auth), [user](../src/main/java/ru/example/prodbackend/user) | Вход, токены и профиль |
 | [common](../src/main/java/ru/example/prodbackend/common), [exception](../src/main/java/ru/example/prodbackend/exception) | Пагинация и единый формат ошибок |
@@ -57,3 +57,7 @@ flowchart LR
 Метки принадлежат домену item и сохраняются обычным ItemService после проверки пользователем.
 
 Контракты и настройки: [Опись предмета по фотографии](photo-inventory.md).
+
+Список вещей доступен через `/ml/items-description`: общий HTTP-клиент выбирает отдельные
+промпт и JSON Schema, а валидатор проверяет до 100 элементов целиком. Оба сценария используют
+общий исполнитель и дедлайн; список сохраняет порядок модели и повторяющиеся названия.

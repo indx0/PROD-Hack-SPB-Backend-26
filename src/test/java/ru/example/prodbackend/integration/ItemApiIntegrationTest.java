@@ -133,6 +133,33 @@ class ItemApiIntegrationTest {
                 .describe(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }
 
+    @Test
+    void listPhotoPreviewPreservesDuplicatesAndDoesNotCreateItems() throws Exception {
+        var fragile = new ru.example.prodbackend.ml.dto.ItemDescriptionResponse("Кружка",
+                List.of(ru.example.prodbackend.item.entity.ItemFlag.FRAGILE));
+        var charger = new ru.example.prodbackend.ml.dto.ItemDescriptionResponse("Зарядка",
+                List.of(ru.example.prodbackend.item.entity.ItemFlag.FIRST_DAY));
+        org.mockito.Mockito.when(llmClient.describeItems(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("image/jpeg")))
+                .thenReturn(new ru.example.prodbackend.ml.dto.ItemsDescriptionResponse(List.of(fragile, fragile, charger)));
+        long before = itemRepository.count();
+        mockMvc.perform(multipart(projectUrl + "/ml/items-description")
+                        .file(new org.springframework.mock.web.MockMultipartFile("photo", "image.txt", "text/plain",
+                                new byte[]{(byte)255, (byte)216, (byte)255}))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items", hasSize(3)))
+                .andExpect(jsonPath("$.items[0].name").value("Кружка"))
+                .andExpect(jsonPath("$.items[1].name").value("Кружка"))
+                .andExpect(jsonPath("$.items[0].flags[0]").value("fragile"))
+                .andExpect(jsonPath("$.items[2].name").value("Зарядка"))
+                .andExpect(jsonPath("$.items[2].flags[0]").value("first_day"))
+                .andExpect(jsonPath("$.items[0].quantity").doesNotExist());
+        assertThat(itemRepository.count()).isEqualTo(before);
+        org.mockito.Mockito.verify(llmClient, org.mockito.Mockito.times(1))
+                .describeItems(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("image/jpeg"));
+        org.mockito.Mockito.verify(llmClient, org.mockito.Mockito.never())
+                .describe(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"{\"flags\":null}", "{\"flags\":[\"unknown\"]}",
             "{\"flags\":[\"fragile\",\"fragile\"]}", "{\"flags\":[null]}", "{\"flags\":[0]}"})
@@ -143,9 +170,10 @@ class ItemApiIntegrationTest {
         assertThat(countSourceItems()).isEqualTo(1);
     }
 
-    @Test
-    void photoEndpointRequiresJwtAndOwnershipAndPhoto() throws Exception {
-        String url = projectUrl + "/ml/item-description";
+    @ParameterizedTest
+    @ValueSource(strings = {"item-description", "items-description"})
+    void photoEndpointRequiresJwtAndOwnershipAndPhoto(String route) throws Exception {
+        String url = projectUrl + "/ml/" + route;
         var photo = new org.springframework.mock.web.MockMultipartFile("photo", new byte[]{1});
         mockMvc.perform(multipart(url).file(photo)).andExpect(status().isUnauthorized());
         mockMvc.perform(multipart(url).file(photo)
@@ -165,7 +193,7 @@ class ItemApiIntegrationTest {
                         "photo", new byte[10 * 1024 * 1024 + 1]))
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().is(413));
-        mockMvc.perform(multipart("/api/move-projects/not-a-uuid/ml/item-description").file(photo)
+        mockMvc.perform(multipart("/api/move-projects/not-a-uuid/ml/" + route).file(photo)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isBadRequest());
         org.mockito.Mockito.verifyNoInteractions(llmClient);
@@ -173,14 +201,22 @@ class ItemApiIntegrationTest {
 
     @ParameterizedTest
     @org.junit.jupiter.params.provider.CsvSource({
-            "422,IMAGE_NOT_RECOGNIZED", "502,LLM_INVALID_RESPONSE", "503,LLM_UNAVAILABLE", "504,LLM_TIMEOUT"})
-    void mapsLlmFailuresToPublicErrorWithoutCreatingItems(int status, String code) throws Exception {
+            "422,IMAGE_NOT_RECOGNIZED,item-description", "502,LLM_INVALID_RESPONSE,item-description",
+            "503,LLM_UNAVAILABLE,item-description", "504,LLM_TIMEOUT,item-description",
+            "422,IMAGE_NOT_RECOGNIZED,items-description", "502,LLM_INVALID_RESPONSE,items-description",
+            "503,LLM_UNAVAILABLE,items-description", "504,LLM_TIMEOUT,items-description"})
+    void mapsLlmFailuresToPublicErrorWithoutCreatingItems(int status, String code, String route) throws Exception {
         var error = new ru.example.prodbackend.ml.exception.MlException(
                 org.springframework.http.HttpStatus.valueOf(status), code, "Safe message");
-        org.mockito.Mockito.when(llmClient.describe(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
-                .thenThrow(error);
+        if (route.equals("items-description")) {
+            org.mockito.Mockito.when(llmClient.describeItems(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                    .thenThrow(error);
+        } else {
+            org.mockito.Mockito.when(llmClient.describe(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                    .thenThrow(error);
+        }
         long before = itemRepository.count();
-        mockMvc.perform(multipart(projectUrl + "/ml/item-description")
+        mockMvc.perform(multipart(projectUrl + "/ml/" + route)
                         .file(new org.springframework.mock.web.MockMultipartFile("photo",
                                 new byte[]{(byte)255, (byte)216, (byte)255}))
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
