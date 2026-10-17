@@ -44,6 +44,12 @@ public class ItemEntity {
     @Column(name = "first_day", nullable = false)
     private boolean firstDay;
 
+    @Column(name = "packed_at")
+    private Instant packedAt;
+
+    @Column(name = "unpacked_at")
+    private Instant unpackedAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

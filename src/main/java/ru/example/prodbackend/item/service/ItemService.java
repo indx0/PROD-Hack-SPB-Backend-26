@@ -7,10 +7,12 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.example.prodbackend.box.entity.BoxEntity;
+import ru.example.prodbackend.box.entity.BoxStatus;
 import ru.example.prodbackend.box.repository.BoxRepository;
 import ru.example.prodbackend.common.dto.PageResponse;
 import ru.example.prodbackend.common.dto.PaginationRequest;
 import ru.example.prodbackend.exception.ItemNotFoundException;
+import ru.example.prodbackend.exception.ResourceConflictException;
 import ru.example.prodbackend.item.dto.CreateItemRequest;
 import ru.example.prodbackend.item.dto.CreateItemsRequest;
 import ru.example.prodbackend.item.dto.ItemBoxSuggestionResponse;
@@ -19,6 +21,8 @@ import ru.example.prodbackend.item.dto.UpdateItemRequest;
 import ru.example.prodbackend.item.entity.ItemEntity;
 import ru.example.prodbackend.item.repository.ItemRepository;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -32,6 +36,11 @@ public class ItemService {
 
     private final ItemRepository itemRepository;
     private final BoxRepository boxRepository;
+
+    public ItemResponse findById(UUID userId, UUID projectId, UUID boxId, UUID itemId) {
+        requireOwnedBox(userId, projectId, boxId, false);
+        return toResponse(requireItem(boxId, itemId));
+    }
 
     public PageResponse<ItemResponse> findAll(UUID userId, UUID projectId, UUID boxId, PaginationRequest pagination) {
         requireOwnedBox(userId, projectId, boxId, false);
@@ -66,12 +75,16 @@ public class ItemService {
 
     @Transactional
     public ItemResponse update(UUID userId, UUID projectId, UUID boxId, UUID itemId, UpdateItemRequest request) {
-        requireOwnedBox(userId, projectId, boxId, true);
+        BoxEntity box = requireOwnedBox(userId, projectId, boxId, true);
         ItemEntity item = requireItem(boxId, itemId);
+        Instant packedAt = updateMark(request.getPacked(), item.getPackedAt(), box.getStatus(), BoxStatus.PACKING, "упаковки");
+        Instant unpackedAt = updateMark(request.getUnpacked(), item.getUnpackedAt(), box.getStatus(), BoxStatus.DELIVERED, "распаковки");
         if (request.getName() != null) item.setName(request.getName().strip());
         if (request.getLost() != null) item.setLost(request.getLost());
         if (request.getQuantity() != null) item.setQuantity(request.getQuantity());
         if (request.getFirstDay() != null) item.setFirstDay(request.getFirstDay());
+        item.setPackedAt(packedAt);
+        item.setUnpackedAt(unpackedAt);
         return toResponse(itemRepository.saveAndFlush(item));
     }
 
@@ -106,6 +119,15 @@ public class ItemService {
                 .toList();
     }
 
+    private Instant updateMark(Boolean requested, Instant current, BoxStatus status, BoxStatus allowed, String mark) {
+        if (requested == null || requested == (current != null)) return current;
+        if (status != allowed) {
+            throw new ResourceConflictException("Изменять отметку " + mark + " можно только в статусе " + allowed);
+        }
+        // PostgreSQL stores microseconds: return the same timestamp before and after reloading.
+        return requested ? Instant.now().truncatedTo(ChronoUnit.MICROS) : null;
+    }
+
     private BoxEntity requireOwnedBox(UUID userId, UUID projectId, UUID boxId, boolean forUpdate) {
         BoxEntity box = (forUpdate ? boxRepository.findForUpdate(boxId, projectId)
                 : boxRepository.findByIdAndProject_Id(boxId, projectId))
@@ -133,6 +155,8 @@ public class ItemService {
                 .id(item.getId())
                 .name(item.getName())
                 .lost(item.isLost())
+                .packed(item.getPackedAt() != null).packedAt(item.getPackedAt())
+                .unpacked(item.getUnpackedAt() != null).unpackedAt(item.getUnpackedAt())
                 .quantity(item.getQuantity())
                 .firstDay(item.isFirstDay())
                 .projectId(box.getProject().getId())

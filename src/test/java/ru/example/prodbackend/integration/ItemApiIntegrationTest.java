@@ -462,7 +462,7 @@ class ItemApiIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"GET, list", "POST, create", "POST, batch", "PATCH, update", "DELETE, delete", "GET, suggestions"})
+    @CsvSource({"GET, list", "GET, detail", "POST, create", "POST, batch", "PATCH, update", "DELETE, delete", "GET, suggestions"})
     void deniesForeignUserForAllResourceOperations(String method, String operation) throws Exception {
         mockMvc.perform(operationRequest(method, operation)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtService.generateToken(stranger)))
@@ -481,7 +481,7 @@ class ItemApiIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"GET, list", "POST, create", "POST, batch", "PATCH, update", "DELETE, delete",
+    @CsvSource({"GET, list", "GET, detail", "POST, create", "POST, batch", "PATCH, update", "DELETE, delete",
             "GET, search", "GET, suggestions"})
     void requiresJwtOnEveryEndpoint(String method, String operation) throws Exception {
         mockMvc.perform(operationRequest(method, operation))
@@ -531,7 +531,7 @@ class ItemApiIntegrationTest {
         String url = switch (operation) {
             case "list", "create" -> collectionUrl;
             case "batch" -> collectionUrl + "/batch";
-            case "update", "delete" -> itemUrl;
+            case "detail", "update", "delete" -> itemUrl;
             case "search" -> projectUrl + "/items?q=зарядка";
             case "suggestions" -> projectUrl + "/items/" + source.getId() + "/suggestions";
             default -> throw new IllegalArgumentException(operation);

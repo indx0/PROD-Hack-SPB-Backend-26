@@ -42,25 +42,39 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
             queryConnection.setSchema(schema);
             JdbcTemplate jdbc = new JdbcTemplate(new SingleConnectionDataSource(queryConnection, true));
             try {
-                runLiquibase(schema, false);
+                runLiquibase(schema, 0);
                 assertTables(jdbc, schema);
                 assertHistory(jdbc);
                 assertConstraints(jdbc);
 
+                // Roll back only the new columns, then upgrade a schema that already has items.
+                var items = jdbc.queryForList("SELECT id, name, quantity, first_day FROM items ORDER BY id");
+                var boxes = jdbc.queryForList("SELECT id, status FROM boxes ORDER BY id");
+                runLiquibase(schema, 1);
+                assertThat(jdbc.queryForList("""
+                        SELECT column_name FROM information_schema.columns
+                        WHERE table_schema = ? AND table_name = 'items'
+                        """, String.class, schema)).doesNotContain("packed_at", "unpacked_at");
+                runLiquibase(schema, 0);
+                assertHistory(jdbc);
+                assertThat(jdbc.queryForList("SELECT id, name, quantity, first_day FROM items ORDER BY id")).isEqualTo(items);
+                assertThat(jdbc.queryForList("SELECT id, status FROM boxes ORDER BY id")).isEqualTo(boxes);
+                assertThat(jdbc.queryForObject("SELECT count(*) FROM items WHERE packed_at IS NOT NULL OR unpacked_at IS NOT NULL", Long.class)).isZero();
+
                 var users = jdbc.queryForList("SELECT id, email FROM users ORDER BY email");
                 assertThat(users).hasSize(2);
-                runLiquibase(schema, false);
+                runLiquibase(schema, 0);
                 assertHistory(jdbc);
                 assertThat(jdbc.queryForList("SELECT id, email FROM users ORDER BY email")).isEqualTo(users);
 
-                runLiquibase(schema, true);
+                runLiquibase(schema, 12);
                 assertThat(jdbc.queryForList("""
                         SELECT tablename FROM pg_tables
                         WHERE schemaname = ? AND tablename NOT IN ('databasechangelog', 'databasechangeloglock')
                         """, String.class, schema)).isEmpty();
                 assertThat(jdbc.queryForObject("SELECT count(*) FROM databasechangelog", Long.class)).isZero();
 
-                runLiquibase(schema, false);
+                runLiquibase(schema, 0);
                 assertTables(jdbc, schema);
                 assertHistory(jdbc);
                 assertThat(jdbc.queryForObject("SELECT count(*) FROM users", Long.class)).isZero();
@@ -72,7 +86,7 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
         }
     }
 
-    private void runLiquibase(String schema, boolean rollback) throws Exception {
+    private void runLiquibase(String schema, int rollbackCount) throws Exception {
         // Each operation uses a fresh instance, just like separate application/CLI launches.
         // Liquibase also caches the up-to-date result globally within the JVM across instances.
         Scope.getCurrentScope().getSingleton(FastCheckService.class).clearCache();
@@ -85,8 +99,8 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
             database.setDefaultSchemaName(schema);
             database.setLiquibaseSchemaName(schema);
             try (Liquibase liquibase = new Liquibase(CHANGELOG, resources, database)) {
-                if (rollback) {
-                    liquibase.rollback(11, new Contexts(), new LabelExpression());
+                if (rollbackCount > 0) {
+                    liquibase.rollback(rollbackCount, new Contexts(), new LabelExpression());
                 } else {
                     liquibase.validate();
                     liquibase.update(new Contexts(), new LabelExpression());
@@ -107,7 +121,7 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
 
     private void assertHistory(JdbcTemplate jdbc) {
         assertThat(jdbc.queryForList("SELECT author FROM databasechangelog", String.class))
-                .hasSize(11).containsOnly("indx0", "timn2020");
+                .hasSize(12).containsOnly("indx0", "timn2020");
     }
 
     private void assertConstraints(JdbcTemplate jdbc) {
@@ -163,6 +177,8 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                 """, item, box);
         assertThat(jdbc.queryForObject("SELECT quantity FROM items WHERE id = ?", Integer.class, item)).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT first_day FROM items WHERE id = ?", Boolean.class, item)).isFalse();
+        assertThat(jdbc.queryForObject("SELECT packed_at FROM items WHERE id = ?", java.sql.Timestamp.class, item)).isNull();
+        assertThat(jdbc.queryForObject("SELECT unpacked_at FROM items WHERE id = ?", java.sql.Timestamp.class, item)).isNull();
 
         jdbc.update("UPDATE items SET quantity = 6, first_day = true WHERE id = ?", item);
         assertThat(jdbc.queryForObject("SELECT quantity FROM items WHERE id = ?", Integer.class, item)).isEqualTo(6);

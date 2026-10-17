@@ -1,5 +1,6 @@
 package ru.example.prodbackend.item.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -19,6 +20,10 @@ public class ItemResponse {
     private int quantity;
     private boolean firstDay;
     private boolean lost;
+    private boolean packed;
+    private Instant packedAt;
+    private boolean unpacked;
+    private Instant unpackedAt;
     private UUID projectId;
     private UUID boxId;
     private int boxNumber;

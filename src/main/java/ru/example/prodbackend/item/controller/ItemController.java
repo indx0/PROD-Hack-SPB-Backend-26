@@ -51,6 +51,16 @@ public class ItemController {
 
     private final ItemService itemService;
 
+    @Operation(summary = "Получение карточки вещи",
+            description = "Возвращает вещь владельца проекта, включая отметки упаковки и распаковки.",
+            responses = @ApiResponse(responseCode = "200", description = "Карточка вещи",
+                    content = @Content(schema = @Schema(implementation = ItemResponse.class))))
+    @GetMapping("/boxes/{boxId}/items/{itemId}")
+    public ResponseEntity<ItemResponse> findById(@Parameter(hidden = true) @AuthenticationPrincipal UserEntity user,
+            @PathVariable UUID projectId, @PathVariable UUID boxId, @PathVariable UUID itemId) {
+        return ResponseEntity.ok(itemService.findById(user.getId(), projectId, boxId, itemId));
+    }
+
     @Operation(summary = "Получение содержимого коробки",
             description = """
                     Возвращает страницу вещей коробки владельца проекта.
@@ -75,6 +85,7 @@ public class ItemController {
                     Явный null для quantity или firstDay запрещён (422).
                     firstDay не создаёт и не удаляет пункты чек-листа.
                     Новая вещь не помечена потерянной. Одинаковые названия допустимы.
+                    Отметки упаковки и распаковки отсутствуют; время задаётся сервером через PATCH.
                     Добавление не изменяет статус коробки и contentsDeferred.
                     """,
             responses = @ApiResponse(responseCode = "201", description = "Вещь добавлена",
@@ -96,6 +107,7 @@ public class ItemController {
                     В каждом списке от 1 до 100 записей. Название обязательно, до 255 символов.
                     В items доступны quantity (по умолчанию 1) и firstDay (по умолчанию false).
                     Для names используются quantity=1 и firstDay=false.
+                    Все новые вещи создаются без отметок упаковки и распаковки.
                     Весь список сохраняется в одной транзакции; при ошибке ничего не добавляется.
                     Пробелы по краям удаляются, повторяющиеся названия сохраняются отдельными вещами.
                     Результат соответствует порядку входного списка.
@@ -112,17 +124,25 @@ public class ItemController {
                 .body(itemService.createBatch(user.getId(), projectId, boxId, request));
     }
 
-    @Operation(summary = "Изменение вещи и отметки потери",
+    @Operation(summary = "Изменение вещи и отметок потери, упаковки и распаковки",
             description = """
-                    Изменяет name, lost, quantity и firstDay в любом сочетании.
+                    Изменяет name, lost, quantity, firstDay, packed и unpacked в любом сочетании.
+                    packed изменяется только в коробке PACKING, unpacked — только в DELIVERED; иначе 409.
+                    true устанавливает серверное время, false очищает. Отметка относится ко всему quantity.
+                    Повтор уже установленного состояния успешен в любом статусе и сохраняет время.
+                    При конфликте ни одно поле запроса не изменяется. Статус коробки автоматически не меняется.
                     quantity — положительное целое. lost=true помечает вещь потерянной.
                     firstDay не создаёт и не удаляет пункты чек-листа.
                     Отсутствующие поля сохраняют значения. Неизвестные поля игнорируются.
                     Запрос без поддерживаемых полей запрещён (422), явный null запрещён (400).
                     Перенос вещи в другую коробку не поддерживается.
                     """,
-            responses = @ApiResponse(responseCode = "200", description = "Вещь обновлена",
-                    content = @Content(schema = @Schema(implementation = ItemResponse.class))))
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Вещь обновлена",
+                            content = @Content(schema = @Schema(implementation = ItemResponse.class))),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: недопустимый статус коробки для изменения отметки",
+                            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+            })
     @PatchMapping("/boxes/{boxId}/items/{itemId}")
     public ResponseEntity<ItemResponse> update(
             @Parameter(hidden = true) @AuthenticationPrincipal UserEntity user,

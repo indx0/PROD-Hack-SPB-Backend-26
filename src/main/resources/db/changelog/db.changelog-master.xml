@@ -15,4 +15,5 @@
     <include file="1.0/2026-10-17-0009-create-first_day_checklist_items.sql" relativeToChangelogFile="true"/>
     <include file="1.0/2026-10-17-0010-create-project_events.sql" relativeToChangelogFile="true"/>
     <include file="1.1/2026-10-17-0011-add-item-quantity-first-day.sql" relativeToChangelogFile="true"/>
+    <include file="1.1/2026-10-17-0012-add-item-packing-marks.sql" relativeToChangelogFile="true"/>
 </databaseChangeLog>
