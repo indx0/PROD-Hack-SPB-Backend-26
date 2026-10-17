@@ -33,7 +33,7 @@ public class RoomService {
 
     @Transactional
     public RoomResponse createRoom(UUID projectId, CreateRoomRequest request, UUID userId) {
-        MoveProjectEntity project = projectAccessService.getOwnedProject(projectId, userId);
+        MoveProjectEntity project = projectAccessService.getAccessibleProjectForUpdate(projectId, userId);
         String name = normalizeName(request.getName());
 
         if (roomRepository.existsByProject_IdAndName(projectId, name)) {
@@ -43,13 +43,14 @@ public class RoomService {
         RoomEntity room = RoomEntity.builder()
                 .project(project)
                 .name(name)
+                .iconKey(request.getIconKey())
                 .build();
 
         return toResponse(roomRepository.saveAndFlush(room));
     }
 
     public PageResponse<RoomResponse> getRooms(UUID projectId, PaginationRequest request, UUID userId) {
-        projectAccessService.getOwnedProject(projectId, userId);
+        projectAccessService.getAccessibleProject(projectId, userId);
 
         PageRequest pageable = PageRequest.of(request.getPage(), request.getSize(), Sort.by("name", "id"));
         Page<RoomEntity> rooms = roomRepository.findAllByProject_Id(projectId, pageable);
@@ -70,6 +71,7 @@ public class RoomService {
 
             room.setName(name);
         }
+        if (request.isIconKeyPresent()) room.setIconKey(request.getIconKey());
 
         return toResponse(roomRepository.saveAndFlush(room));
     }
@@ -87,7 +89,7 @@ public class RoomService {
     }
 
     private RoomEntity getRoomForUpdate(UUID projectId, UUID roomId, UUID userId) {
-        projectAccessService.getOwnedProject(projectId, userId);
+        projectAccessService.getAccessibleProjectForUpdate(projectId, userId);
         return roomRepository.findForUpdate(roomId, projectId)
                 .orElseThrow(() -> new RoomNotFoundException("room not gound"));
     }
@@ -107,6 +109,7 @@ public class RoomService {
                 .id(room.getId())
                 .projectId(room.getProject().getId())
                 .name(room.getName())
+                .iconKey(room.getIconKey())
                 .createdAt(room.getCreatedAt())
                 .updatedAt(room.getUpdatedAt())
                 .build();

@@ -15,4 +15,14 @@
     <include file="1.0/2026-10-17-0009-create-first_day_checklist_items.sql" relativeToChangelogFile="true"/>
     <include file="1.0/2026-10-17-0010-create-project_events.sql" relativeToChangelogFile="true"/>
     <include file="1.0/2026-10-17-0011-add-item-flags.sql" relativeToChangelogFile="true"/>
+    <include file="1.1/2026-10-17-0011-add-item-quantity-first-day.sql" relativeToChangelogFile="true"/>
+    <include file="1.1/2026-10-17-0012-add-item-packing-marks.sql" relativeToChangelogFile="true"/>
+    <include file="1.1/2026-10-17-0013-link-checklist-items.sql" relativeToChangelogFile="true"/>
+    <include file="1.1/2026-10-17-0014-add-box-details.sql" relativeToChangelogFile="true"/>
+    <include file="1.1/2026-10-17-0015-add-room-icon-key.sql" relativeToChangelogFile="true"/>
+    <include file="1.1/2026-10-17-0016-add-box-status-corrections.sql" relativeToChangelogFile="true"/>
+    <include file="1.1/2026-10-17-0017-add-project-archive.sql" relativeToChangelogFile="true"/>
+    <include file="1.1/2026-10-17-0018-create-project-participants.sql" relativeToChangelogFile="true"/>
+    <include file="1.1/2026-10-17-0019-add-task-relative-due-dates.sql" relativeToChangelogFile="true"/>
+    <include file="1.1/2026-10-17-0020-create-task-sets.sql" relativeToChangelogFile="true"/>
 </databaseChangeLog>

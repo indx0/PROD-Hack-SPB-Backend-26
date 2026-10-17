@@ -10,6 +10,8 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import ru.example.prodbackend.item.entity.ItemEntity;
 
+import java.util.Collection;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -17,9 +19,29 @@ import java.util.UUID;
 @Repository
 public interface ItemRepository extends JpaRepository<ItemEntity, UUID> {
 
+    @Query("""
+            select i.box.id from ItemEntity i where i.id = :itemId and i.box.project.id = :projectId
+            and (i.box.project.owner.id = :userId or exists (select m.id from ProjectParticipantEntity m where m.project.id = :projectId and m.user.id = :userId))
+            """)
+    Optional<UUID> findAccessibleBoxId(@Param("itemId") UUID itemId, @Param("projectId") UUID projectId, @Param("userId") UUID userId);
+
+    @Query("""
+            select new ru.example.prodbackend.item.repository.BoxItemCounts(
+                i.box.id, count(i),
+                sum(case when i.packedAt is not null then 1 else 0 end),
+                sum(case when i.unpackedAt is not null then 1 else 0 end))
+            from ItemEntity i where i.box.id in :boxIds group by i.box.id
+            """)
+    List<BoxItemCounts> countByBoxIds(@Param("boxIds") Collection<UUID> boxIds);
+
     @Modifying(flushAutomatically = true)
     @Query("delete from ItemEntity i where i.box.id = :boxId")
     int deleteByBox_Id(@Param("boxId") UUID boxId);
+
+    // Caller holds the box lock shared by all operations that change its contents.
+    @Modifying(flushAutomatically = true)
+    @Query("update ItemEntity i set i.unpackedAt = null, i.updatedAt = :updatedAt where i.box.id = :boxId and i.unpackedAt is not null")
+    int clearUnpackedMarks(@Param("boxId") UUID boxId, @Param("updatedAt") Instant updatedAt);
 
     @EntityGraph(attributePaths = {"box", "box.room", "box.project"})
     Page<ItemEntity> findAllByBox_Id(UUID boxId, Pageable pageable);
@@ -31,32 +53,32 @@ public interface ItemRepository extends JpaRepository<ItemEntity, UUID> {
     @Query("""
             select i from ItemEntity i
             where i.id = :itemId and i.box.project.id = :projectId
-              and i.box.project.owner.id = :ownerId
+              and (i.box.project.owner.id = :userId or exists (select m.id from ProjectParticipantEntity m where m.project.id = :projectId and m.user.id = :userId))
             """)
-    Optional<ItemEntity> findByIdAndBoxProject_IdAndBoxProjectOwnerId(
+    Optional<ItemEntity> findAccessibleById(
             @Param("itemId") UUID itemId,
             @Param("projectId") UUID projectId,
-            @Param("ownerId") UUID ownerId
+            @Param("userId") UUID userId
     );
 
     @EntityGraph(attributePaths = {"box", "box.room", "box.project"})
     @Query(value = """
             select i from ItemEntity i
             where i.box.project.id = :projectId
-              and i.box.project.owner.id = :ownerId
+              and (i.box.project.owner.id = :userId or exists (select m.id from ProjectParticipantEntity m where m.project.id = :projectId and m.user.id = :userId))
               and lower(i.name) like :pattern escape '!'
               and (:lost is null or i.lost = :lost)
             order by lower(i.name), i.id
             """, countQuery = """
             select count(i) from ItemEntity i
             where i.box.project.id = :projectId
-              and i.box.project.owner.id = :ownerId
+              and (i.box.project.owner.id = :userId or exists (select m.id from ProjectParticipantEntity m where m.project.id = :projectId and m.user.id = :userId))
               and lower(i.name) like :pattern escape '!'
               and (:lost is null or i.lost = :lost)
             """)
     Page<ItemEntity> search(
             @Param("projectId") UUID projectId,
-            @Param("ownerId") UUID ownerId,
+            @Param("userId") UUID userId,
             @Param("pattern") String pattern,
             @Param("lost") Boolean lost,
             Pageable pageable
@@ -65,12 +87,12 @@ public interface ItemRepository extends JpaRepository<ItemEntity, UUID> {
     @Query("""
             select distinct i.box.id from ItemEntity i
             where i.box.project.id = :projectId
-              and i.box.project.owner.id = :ownerId
+              and (i.box.project.owner.id = :userId or exists (select m.id from ProjectParticipantEntity m where m.project.id = :projectId and m.user.id = :userId))
               and lower(i.name) like :pattern escape '!'
             """)
     List<UUID> findMatchingBoxIds(
             @Param("projectId") UUID projectId,
-            @Param("ownerId") UUID ownerId,
+            @Param("userId") UUID userId,
             @Param("pattern") String pattern
     );
 }

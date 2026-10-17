@@ -16,13 +16,20 @@ import ru.example.prodbackend.box.entity.BoxStatus;
 import ru.example.prodbackend.config.DataLoader;
 import ru.example.prodbackend.config.TestcontainersConfig;
 import ru.example.prodbackend.move.entity.MoveProjectEntity;
+import ru.example.prodbackend.item.entity.ItemEntity;
+import ru.example.prodbackend.item.service.ItemService;
+import ru.example.prodbackend.checklist.entity.FirstDayChecklistItemEntity;
 import ru.example.prodbackend.task.entity.MoveTaskEntity;
+import ru.example.prodbackend.task.entity.TaskDueType;
 import ru.example.prodbackend.user.repository.UserRepository;
 import ru.example.prodbackend.box.service.BoxService;
 import ru.example.prodbackend.checklist.service.FirstDayChecklistService;
 import ru.example.prodbackend.move.service.MoveProjectService;
 import ru.example.prodbackend.room.service.RoomService;
+import ru.example.prodbackend.room.entity.RoomEntity;
 import ru.example.prodbackend.task.service.MoveTaskService;
+import ru.example.prodbackend.task.service.TaskTemplateService;
+import ru.example.prodbackend.taskset.service.TaskSetService;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -60,6 +67,10 @@ class DataLoaderIntegrationTest extends BaseIntegrationTest {
     private MoveTaskService moveTaskService;
     @Autowired
     private FirstDayChecklistService checklistService;
+    @Autowired
+    private ItemService itemService;
+    @Autowired private TaskSetService taskSetService;
+    @Autowired private TaskTemplateService taskTemplateService;
 
     @Test
     void loadsDemoMoveForUser1() {
@@ -74,6 +85,7 @@ class DataLoaderIntegrationTest extends BaseIntegrationTest {
         MoveProjectEntity project = entityManager.createQuery("from MoveProjectEntity", MoveProjectEntity.class)
                 .getSingleResult();
         assertThat(project.getOwner().getEmail()).isEqualTo("user1");
+        assertThat(entityManager.createQuery("select p.user.email from ProjectParticipantEntity p", String.class).getResultList()).containsExactly("admin");
         LocalDate moveDate = project.getMoveDate().atOffset(ZoneOffset.UTC).toLocalDate();
         assertThat(moveDate).isBetween(beforeLoad.plusDays(14), afterLoad.plusDays(14));
         assertThat(project.getMoveDate().atOffset(ZoneOffset.UTC).toLocalTime()).isEqualTo(LocalTime.MIDNIGHT);
@@ -82,15 +94,65 @@ class DataLoaderIntegrationTest extends BaseIntegrationTest {
                 "select count(t) from RefreshTokenEntity t group by t.user.id", Long.class).getResultList())
                 .containsExactlyInAnyOrder(1L, 1L);
         assertThat(count("RoomEntity")).isEqualTo(4);
+        assertThat(entityManager.createQuery("from RoomEntity", RoomEntity.class).getResultList()).allSatisfy(room -> {
+            String icon = switch (room.getName()) {
+                case "Кухня" -> "kitchen";
+                case "Гостиная" -> "sofa";
+                case "Спальня" -> "bed";
+                case "Ванная" -> "bath";
+                default -> throw new AssertionError("Неожиданная демо-комната: " + room.getName());
+            };
+            assertThat(room.getIconKey()).isEqualTo(icon);
+        });
         assertThat(count("ItemEntity")).isEqualTo(12);
+        assertThat(entityManager.createQuery("from ItemEntity", ItemEntity.class).getResultList()).allSatisfy(item -> {
+            if (item.getBox().getStatus() != BoxStatus.PACKING) assertThat(item.getPackedAt()).isNotNull();
+            if (item.getBox().getStatus() == BoxStatus.UNPACKED) assertThat(item.getUnpackedAt()).isNotNull();
+        });
+        assertThat(entityManager.createQuery(
+                "select i.quantity from ItemEntity i where i.name = 'Тарелки'", Integer.class)
+                .getSingleResult()).isEqualTo(6);
+        assertThat(entityManager.createQuery(
+                "select i.firstDay from ItemEntity i where i.name = 'Постельное бельё'", Boolean.class)
+                .getSingleResult()).isTrue();
         assertThat(count("MoveTaskEntity")).isEqualTo(12);
+        assertThat(count("TaskSetEntity")).isEqualTo(1);
+        assertThat(count("TaskSetItemEntity")).isEqualTo(11);
+        assertThat(count("TaskSetApplicationEntity")).isEqualTo(1);
+        assertThat(entityManager.createQuery("from MoveTaskEntity", MoveTaskEntity.class).getResultList()).allSatisfy(task -> {
+            if (task.getTitle().equals("Отключить интернет")) {
+                assertThat(task.getDueType()).isEqualTo(TaskDueType.FIXED);
+                assertThat(task.getOffsetDays()).isNull();
+            } else {
+                assertThat(task.getDueType()).isEqualTo(TaskDueType.RELATIVE);
+                assertThat(task.getOffsetDays()).isNotNull();
+                assertThat(task.getDueDate()).isEqualTo(moveDate.plusDays(task.getOffsetDays()));
+            }
+        });
         assertThat(count("FirstDayChecklistItemEntity")).isEqualTo(6);
+        var linked = entityManager.createQuery("select c from FirstDayChecklistItemEntity c where c.item is not null", FirstDayChecklistItemEntity.class).getResultList();
+        assertThat(linked).singleElement().satisfies(point -> {
+            assertThat(point.getName()).isEqualTo("Постельное бельё");
+            assertThat(point.getItem().getName()).isEqualTo("Постельное бельё");
+            assertThat(point.getItem().isFirstDay()).isTrue();
+        });
+        assertThat(entityManager.createQuery("select count(c) from FirstDayChecklistItemEntity c where c.item is null", Long.class).getSingleResult()).isEqualTo(5);
         assertThat(count("ProjectEventEntity")).isEqualTo(18);
         assertThat(entityManager.createQuery("from BoxEntity", BoxEntity.class).getResultList())
                 .hasSize(5)
                 .allSatisfy(box -> {
                     assertThat(box.getProject().getId()).isEqualTo(project.getId());
                     assertThat(box.getRoom().getProject().getId()).isEqualTo(project.getId());
+                    assertThat(box.isFragile()).isEqualTo(box.getNumber() == 2);
+                    assertThat(box.isFirstDay()).isEqualTo(box.getNumber() == 3);
+                    assertThat(box.isCarryWithMe()).isEqualTo(box.getNumber() == 5);
+                    String title = switch (box.getNumber()) {
+                        case 2 -> "Посуда для кухни";
+                        case 3 -> "Коробка первого дня";
+                        case 5 -> "Везу с собой";
+                        default -> "";
+                    };
+                    assertThat(box.getTitle()).isEqualTo(title);
                 })
                 .extracting(BoxEntity::getStatus).containsExactlyInAnyOrder(BoxStatus.values());
         assertThat(entityManager.createQuery("from BoxEntity", BoxEntity.class).getResultList())
@@ -112,21 +174,36 @@ class DataLoaderIntegrationTest extends BaseIntegrationTest {
         loader.run(args);
         entityManager.flush();
         var before = new HashMap<String, List<UUID>>();
-        for (String entity : new String[]{"UserEntity", "RefreshTokenEntity", "MoveProjectEntity", "RoomEntity", "BoxEntity", "ItemEntity", "MoveTaskEntity", "FirstDayChecklistItemEntity", "ProjectEventEntity"}) {
+        for (String entity : new String[]{"UserEntity", "RefreshTokenEntity", "MoveProjectEntity", "ProjectParticipantEntity", "TaskSetEntity", "TaskSetItemEntity", "TaskSetApplicationEntity", "RoomEntity", "BoxEntity", "ItemEntity", "MoveTaskEntity", "FirstDayChecklistItemEntity", "ProjectEventEntity"}) {
             before.put(entity, entityManager.createQuery("select e.id from " + entity + " e order by e.id", UUID.class).getResultList());
         }
         String password = userRepository.findByEmail("user1").orElseThrow().getPassword();
+        var existingBox = entityManager.createQuery("from BoxEntity b where b.number = 2", BoxEntity.class).getSingleResult();
+        existingBox.setTitle("Моя подпись");
+        existingBox.setFragile(false);
+        existingBox.setFirstDay(true);
+        existingBox.setCarryWithMe(true);
+        UUID existingBoxId = existingBox.getId();
+        var existingRoom = existingBox.getRoom();
+        existingRoom.setIconKey("heart");
+        UUID existingRoomId = existingRoom.getId();
         ReflectionTestUtils.setField(loader, "user1Password", "new-password-must-not-overwrite-user");
         loader.run(args);
         entityManager.flush();
         entityManager.clear();
         before.forEach((entity, ids) -> assertThat(entityManager.createQuery("select e.id from " + entity + " e order by e.id", UUID.class).getResultList()).isEqualTo(ids));
         assertThat(userRepository.findByEmail("user1").orElseThrow().getPassword()).isEqualTo(password);
+        var preserved = entityManager.find(BoxEntity.class, existingBoxId);
+        assertThat(preserved.getTitle()).isEqualTo("Моя подпись");
+        assertThat(preserved.isFragile()).isFalse();
+        assertThat(preserved.isFirstDay()).isTrue();
+        assertThat(preserved.isCarryWithMe()).isTrue();
+        assertThat(entityManager.find(RoomEntity.class, existingRoomId).getIconKey()).isEqualTo("heart");
     }
 
     private DataLoader loader() {
-        var loader = new DataLoader(entityManager, userRepository, passwordEncoder, refreshTokenService, moveProjectRepository,
-                moveProjectService, roomService, boxService, moveTaskService, checklistService);
+        var loader = new DataLoader(itemService, userRepository, passwordEncoder, refreshTokenService, moveProjectRepository,
+                moveProjectService, roomService, boxService, moveTaskService, checklistService, taskSetService, taskTemplateService);
         ReflectionTestUtils.setField(loader, "adminPassword", "test-admin-password");
         ReflectionTestUtils.setField(loader, "user1Password", "test-user-password");
         return loader;

@@ -1,0 +1,82 @@
+#swagger-autumn-toggle {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    z-index: 100;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 46px;
+    padding: 10px 16px;
+    border: 1px solid #dbc8b7;
+    border-radius: 24px;
+    background: #fffaf4;
+    color: #65422d;
+    box-shadow: 0 4px 20px #4b2d171a;
+    font: 600 14px/1.2 system-ui, sans-serif;
+    cursor: pointer;
+}
+#swagger-autumn-toggle:hover { background: #f7ebdc; border-color: #ba855b; }
+#swagger-autumn-toggle:focus-visible { outline: 3px solid #b76b32; outline-offset: 4px; }
+#swagger-autumn-toggle > svg { width: 24px; height: 24px; fill: #bd793d; }
+.autumn-toggle-light { width: 7px; height: 7px; border-radius: 50%; background: #c5b8ab; }
+#swagger-autumn-toggle[aria-pressed="true"] { background: #f8e6cf; border-color: #ba855b; }
+#swagger-autumn-toggle[aria-pressed="true"] .autumn-toggle-light { background: #a55a28; box-shadow: 0 0 0 3px #a55a2814; }
+
+body.swagger-autumn { background: #fffaf4; }
+.swagger-autumn .swagger-ui .topbar { background: #392c25; }
+.swagger-autumn .swagger-ui .information-container {
+    background: radial-gradient(ellipse at 90% 10%, #efc78824, transparent 60%);
+}
+.swagger-autumn .swagger-ui .info .title { color: #533b2b; }
+.swagger-autumn .swagger-ui .scheme-container { background: #fffcf7; box-shadow: 0 1px 4px #6845281a; }
+
+.swagger-autumn-leaves {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    overflow: hidden;
+    pointer-events: none;
+    user-select: none;
+    contain: strict;
+}
+.swagger-autumn-leaf {
+    position: absolute;
+    top: -70px;
+    left: var(--leaf-x);
+    width: var(--leaf-size);
+    height: var(--leaf-size);
+    opacity: 0;
+    animation: swagger-leaf-fall var(--leaf-duration) var(--leaf-delay) linear infinite;
+}
+.swagger-autumn-leaf > svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    fill: currentColor;
+    animation: swagger-leaf-sway var(--leaf-sway) ease-in-out infinite alternate;
+}
+.swagger-autumn-leaves.is-paused .swagger-autumn-leaf,
+.swagger-autumn-leaves.is-paused .swagger-autumn-leaf > svg { animation-play-state: paused; }
+@keyframes swagger-leaf-fall {
+    0% { transform: translate3d(0, -30px, 0) rotate(-30deg); opacity: 0; }
+    12% { opacity: .3; }
+    85% { opacity: .22; }
+    100% { transform: translate3d(var(--leaf-drift), calc(100vh + 150px), 0) rotate(300deg); opacity: 0; }
+}
+@keyframes swagger-leaf-sway {
+    from { transform: translateX(-12px) rotate(-25deg); }
+    to { transform: translateX(12px) rotate(25deg); }
+}
+@media (max-width: 640px) {
+    #swagger-autumn-toggle { right: 14px; bottom: 14px; padding: 10px 14px; }
+    .swagger-autumn-leaf { left: calc(var(--leaf-x) * 1.8); }
+    .swagger-autumn-leaf:nth-child(n+11) { display: none; }
+    .swagger-ui .opblock-tag { display: block; position: relative; padding-right: 42px; }
+    .swagger-ui .opblock-tag small { display: block; margin-top: 8px; padding: 0; line-height: 1.5; }
+    .swagger-ui .opblock-tag > button { position: absolute; top: 12px; right: 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .swagger-autumn-leaves { display: none; }
+    .swagger-autumn-leaf, .swagger-autumn-leaf > svg { animation: none; }
+}

@@ -37,7 +37,7 @@ class UnpackingInventoryServiceTest {
         assertThat(snapshot.get(0).name()).isEqualTo("Кружка");
         assertThatThrownBy(snapshot::clear).isInstanceOf(UnsupportedOperationException.class);
         var order = inOrder(access, boxes, items);
-        order.verify(access).getOwnedProject(project, user);
+        order.verify(access).getAccessibleProject(project, user);
         order.verify(boxes).findByIdAndProject_Id(box, project);
         order.verify(items).findAllByBox_Id(eq(box), any(Pageable.class));
     }

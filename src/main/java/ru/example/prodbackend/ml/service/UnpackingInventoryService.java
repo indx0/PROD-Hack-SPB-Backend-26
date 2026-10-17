@@ -25,7 +25,7 @@ public class UnpackingInventoryService {
 
     @Transactional(readOnly = true)
     public List<InventoryItem> snapshot(UUID userId, UUID projectId, UUID boxId) {
-        access.getOwnedProject(projectId, userId);
+        access.getAccessibleProject(projectId, userId);
         boxes.findByIdAndProject_Id(boxId, projectId).orElseThrow(BoxNotFoundException::new);
         var page = items.findAllByBox_Id(boxId, PageRequest.of(0,
                 ItemDescriptionValidator.MAX_ITEMS + 1, Sort.by("createdAt", "id")));

@@ -55,7 +55,9 @@ public class SecurityConfig {
                                 "/v3/api-docs/**",
                                 "/v3/api-docs.yaml",
                                 "/swagger-resources/**",
-                                "/js/openapi-to-markdown.js"
+                                "/js/openapi-to-markdown.js",
+                                "/js/swagger-autumn.js",
+                                "/css/swagger-autumn.css"
                         ).permitAll()
 
                         //auth

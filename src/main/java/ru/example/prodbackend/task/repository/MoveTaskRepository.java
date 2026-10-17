@@ -9,9 +9,18 @@ import ru.example.prodbackend.task.entity.MoveTaskEntity;
 import ru.example.prodbackend.task.entity.TaskStage;
 
 import java.util.Optional;
+import java.util.List;
+import java.util.Collection;
 import java.util.UUID;
 
 public interface MoveTaskRepository extends JpaRepository<MoveTaskEntity, UUID> {
+
+    // Все изменения задач сначала блокируют проект, в том числе перенос сроков.
+    @EntityGraph(attributePaths = "template")
+    List<MoveTaskEntity> findAllByProject_IdAndIdIn(UUID projectId, Collection<UUID> ids);
+
+    @EntityGraph(attributePaths = "template")
+    List<MoveTaskEntity> findAllByTaskSetApplication_IdOrderByTaskSetPositionAscIdAsc(UUID applicationId);
 
     long countByProject_Id(UUID projectId);
 

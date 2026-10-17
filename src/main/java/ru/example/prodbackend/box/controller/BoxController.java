@@ -21,6 +21,7 @@ import ru.example.prodbackend.box.dto.BoxResponse;
 import ru.example.prodbackend.box.dto.BoxSummaryResponse;
 import ru.example.prodbackend.box.dto.ChangeBoxStatusRequest;
 import ru.example.prodbackend.box.dto.CreateBoxRequest;
+import ru.example.prodbackend.box.dto.CorrectBoxStatusRequest;
 import ru.example.prodbackend.box.dto.UpdateBoxRequest;
 import ru.example.prodbackend.box.service.BoxService;
 import ru.example.prodbackend.common.dto.PageResponse;
@@ -51,14 +52,17 @@ public class BoxController {
                     Создаёт коробку с положительным номером, уникальным внутри проекта,
                     комнатой назначения и начальным статусом PACKING.
                     contentsDeferred позволяет отложить заполнение содержимого.
-                    Комната должна принадлежать этому проекту. Доступ разрешён только владельцу проекта.
+                    title — подпись до 255 символов с удалением пробелов по краям, по умолчанию пустая строка.
+                    fragile, firstDay и carryWithMe по умолчанию false; явный null для новых полей запрещён.
+                    firstDay коробки не меняет вещи и чек-лист, carryWithMe не меняет последовательность статусов.
+                    Комната должна принадлежать этому проекту. Доступ разрешён любому участнику проекта.
                     Событие BOX_CREATED сохраняется вместе с коробкой в одной транзакции.
                     """,
             responses = {
                     @ApiResponse(responseCode = "201", description = "Коробка создана; Location содержит её адрес",
                             content = @Content(schema = @Schema(implementation = BoxResponse.class))),
                     @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не найден или недоступен; ROOM_NOT_FOUND: комнаты нет в этом проекте", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: номер уже занят другой коробкой проекта", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: номер уже занят другой коробкой проекта; для изменений — переезд в архиве, сначала восстановите его", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "422", description = "Ошибка валидации тела запроса",
                             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             }
@@ -82,6 +86,7 @@ public class BoxController {
             summary = "Получение списка коробок",
             description = """
                     Возвращает страницу коробок проекта. Фильтры объединяются через AND.
+                    fragile, firstDay и carryWithMe фильтруют по точному true/false; отсутствие параметра не ограничивает выборку.
                     Поиск по номеру использует точное совпадение; отсутствие результата означает пустую страницу.
                     page начинается с 0, size — от 1 до 100, по умолчанию page=0 и size=20.
                     Сортировка фиксирована: number ASC, id ASC. Пользовательская сортировка не поддерживается.
@@ -89,7 +94,7 @@ public class BoxController {
                     """,
             responses = {
                     @ApiResponse(responseCode = "200", description = "Страница коробок проекта"),
-                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не существует или принадлежит другому пользователю", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не существует или недоступен текущему пользователю", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: некорректные фильтры или параметры пагинации; page >= 0, size от 1 до 100, number > 0; подробности в fieldErrors", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             }
     )
@@ -127,8 +132,10 @@ public class BoxController {
     @Operation(
             summary = "Редактирование коробки",
             description = """
-                    Изменяет номер, комнату назначения и признак contentsDeferred. Отсутствующие поля сохраняют значения.
-                    Пустой запрос, явный null и неизвестные поля запрещены.
+                    Изменяет номер, комнату назначения, contentsDeferred, title, fragile, firstDay и carryWithMe.
+                    Отсутствующие поля сохраняют значения; false снимает отметку, title="" очищает подпись.
+                    Подпись и особенности доступны для редактирования в любом статусе, независимо от вещей и чек-листа.
+                    Пустой запрос и явный null запрещены; неизвестные поля игнорируются.
                     Статус изменяется отдельным запросом.
                     Новая комната должна принадлежать тому же проекту. Содержимое коробки сохраняется.
                     Передача идентификатора текущей комнаты допустима.
@@ -137,7 +144,7 @@ public class BoxController {
                     @ApiResponse(responseCode = "200", description = "Коробка обновлена",
                             content = @Content(schema = @Schema(implementation = BoxResponse.class))),
                     @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не найден или недоступен; BOX_NOT_FOUND: коробки нет в этом проекте; ROOM_NOT_FOUND: комнаты нет в этом проекте", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: номер уже занят другой коробкой проекта", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: номер уже занят другой коробкой проекта; для изменений — переезд в архиве, сначала восстановите его", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: ошибка валидации; подробности в fieldErrors", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             }
     )
@@ -155,15 +162,19 @@ public class BoxController {
             summary = "Изменение статуса коробки",
             description = """
                     Разрешён следующий шаг: PACKING → PACKED → LOADED → DELIVERED → UNPACKED.
+                    Для PACKED нужна непустая коробка и packedAt у каждой вещи; для UNPACKED — unpackedAt у каждой вещи.
+                    Проверяются все записи в БД, независимо от пагинации. lost не исключает вещь из проверки.
+                    Ответ содержит totalItems, packedItems, unpackedItems и готовность с учётом текущего статуса.
                     Повтор текущего статуса успешен и не изменяет updatedAt.
                     Пропуск этапа и возврат назад запрещены.
+                    Для исправления ошибочного статуса используйте отдельный POST /{boxId}/status/correction.
                     Событие BOX_STATUS_CHANGED сохраняется в той же транзакции. Повтор статуса не создаёт событие.
                     """,
             responses = {
                     @ApiResponse(responseCode = "200", description = "Коробка с актуальным статусом",
                             content = @Content(schema = @Schema(implementation = BoxResponse.class))),
                     @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не найден или недоступен; BOX_NOT_FOUND: коробки нет в этом проекте", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: недопустимый переход статуса", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: недопустимый переход, пустая коробка или не все вещи отмечены; для изменений — переезд в архиве, сначала восстановите его", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "422", description = "Статус обязателен",
                             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             }
@@ -178,14 +189,42 @@ public class BoxController {
         return ResponseEntity.ok(boxService.changeStatus(user.getId(), projectId, boxId, request.getStatus()));
     }
 
+    @PostMapping("/{boxId}/status/correction")
+    @Operation(summary = "Исправить ошибочный статус коробки",
+            description = """
+                    Возвращает коробку на любой более ранний этап. Требует confirmed=true и expectedStatus,
+                    который пользователь видел перед подтверждением. Несовпадение ожидаемого статуса — 409.
+                    Если targetStatus уже установлен, ответ успешен без изменений времени, вещей и журнала,
+                    даже если expectedStatus устарел. Подтверждение и обязательные поля нужны и для повтора.
+                    packedAt всегда сохраняется. Для PACKING, PACKED и LOADED очищаются unpackedAt всех вещей.
+                    UNPACKED → DELIVERED сохраняет unpackedAt; ошибочные отметки можно снять отдельным PATCH вещи.
+                    Для PACKED и LOADED коробка должна быть непустой, все вещи должны иметь packedAt, включая lost.
+                    Названия, количество, lost, firstDay и связи с чек-листом сохраняются. В PACKING снова доступно изменение состава.
+                    Коррекция вперёд запрещена. BOX_STATUS_CORRECTED, previousStatus и newStatus записываются вместе с изменением.
+                    Клиент должен показать эти последствия перед подтверждением.
+                    """,
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Актуальная коробка или успешный повтор", content = @Content(schema = @Schema(implementation = BoxResponse.class))),
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект недоступен; BOX_NOT_FOUND: коробки нет в этом проекте", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: статус изменился, направление вперёд или содержимое не готово; для изменений — переезд в архиве, сначала восстановите его", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: обязательные поля отсутствуют или confirmed не true", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+            })
+    public ResponseEntity<BoxResponse> correctStatus(
+            @Parameter(hidden = true) @AuthenticationPrincipal UserEntity user,
+            @PathVariable UUID projectId, @PathVariable UUID boxId,
+            @Valid @RequestBody CorrectBoxStatusRequest request) {
+        return ResponseEntity.ok(boxService.correctStatus(user.getId(), projectId, boxId, request));
+    }
+
     @Operation(
             summary = "Удаление коробки",
             description = """
                     Удаляет коробку вместе с содержимым. Подтверждение выполняется на клиенте.
-                    Вещи и коробка удаляются в одной транзакции после проверки владельца проекта.
+                    Вещи и коробка удаляются в одной транзакции после проверки участия в проекте.
                     """,
             responses = {
                     @ApiResponse(responseCode = "204", description = "Коробка удалена", content = @Content),
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: переезд в архиве; сначала восстановите его", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не найден или недоступен; BOX_NOT_FOUND: коробки нет в этом проекте", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             }
     )
@@ -210,7 +249,7 @@ public class BoxController {
             responses = {
                     @ApiResponse(responseCode = "200", description = "Статистика коробок проекта",
                             content = @Content(schema = @Schema(implementation = BoxSummaryResponse.class))),
-                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не существует или принадлежит другому пользователю", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не существует или недоступен текущему пользователю", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             }
     )
     @GetMapping("/summary")

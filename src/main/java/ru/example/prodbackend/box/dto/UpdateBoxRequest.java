@@ -6,6 +6,7 @@ import com.fasterxml.jackson.annotation.Nulls;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -25,6 +26,28 @@ public class UpdateBoxRequest {
     @Schema(description = "Признак отложенного заполнения содержимого")
     private Boolean contentsDeferred;
 
+    @Size(max = 255)
+    @Schema(description = "Подпись до 255 символов; пробелы по краям удаляются, пустая строка очищает подпись; null запрещён")
+    private String title;
+    @Schema(description = "Хрупкое содержимое; false снимает отметку, null запрещён")
+    private Boolean fragile;
+    @Schema(description = "Коробка первого дня; false снимает отметку, вещи и чек-лист не меняются; null запрещён")
+    private Boolean firstDay;
+    @Schema(description = "Везу с собой; false снимает отметку, null запрещён")
+    private Boolean carryWithMe;
+
+    @JsonSetter(value = "title", nulls = Nulls.FAIL)
+    public void setTitle(String title) { this.title = title; }
+
+    @JsonSetter(value = "fragile", nulls = Nulls.FAIL)
+    public void setFragile(Boolean fragile) { this.fragile = fragile; }
+
+    @JsonSetter(value = "firstDay", nulls = Nulls.FAIL)
+    public void setFirstDay(Boolean firstDay) { this.firstDay = firstDay; }
+
+    @JsonSetter(value = "carryWithMe", nulls = Nulls.FAIL)
+    public void setCarryWithMe(Boolean carryWithMe) { this.carryWithMe = carryWithMe; }
+
     @JsonSetter(value = "number", nulls = Nulls.FAIL)
     public void setNumber(Integer number) {
         this.number = number;
@@ -43,9 +66,8 @@ public class UpdateBoxRequest {
     @JsonIgnore
     @AssertTrue(message = "Specify at least one field to update")
     public boolean isUpdatePresent() {
-        return number != null
-                || roomId != null
-                || contentsDeferred != null;
+        return number != null || roomId != null || contentsDeferred != null
+                || title != null || fragile != null || firstDay != null || carryWithMe != null;
     }
 
 }

@@ -49,6 +49,9 @@ public interface BoxRepository extends JpaRepository<BoxEntity, UUID> {
                       and (:roomId is null or b.room.id = :roomId)
                       and (:status is null or b.status = :status)
                       and (:contentsDeferred is null or b.contentsDeferred = :contentsDeferred)
+                      and (:fragile is null or b.fragile = :fragile)
+                      and (:firstDay is null or b.firstDay = :firstDay)
+                      and (:carryWithMe is null or b.carryWithMe = :carryWithMe)
                     """,
             countQuery = """
                     select count(b)
@@ -58,6 +61,9 @@ public interface BoxRepository extends JpaRepository<BoxEntity, UUID> {
                       and (:roomId is null or b.room.id = :roomId)
                       and (:status is null or b.status = :status)
                       and (:contentsDeferred is null or b.contentsDeferred = :contentsDeferred)
+                      and (:fragile is null or b.fragile = :fragile)
+                      and (:firstDay is null or b.firstDay = :firstDay)
+                      and (:carryWithMe is null or b.carryWithMe = :carryWithMe)
                     """
     )
     Page<BoxEntity> findAllByFilters(
@@ -66,6 +72,9 @@ public interface BoxRepository extends JpaRepository<BoxEntity, UUID> {
             @Param("roomId") UUID roomId,
             @Param("status") BoxStatus status,
             @Param("contentsDeferred") Boolean contentsDeferred,
+            @Param("fragile") Boolean fragile,
+            @Param("firstDay") Boolean firstDay,
+            @Param("carryWithMe") Boolean carryWithMe,
             Pageable pageable
     );
 
@@ -75,7 +84,8 @@ public interface BoxRepository extends JpaRepository<BoxEntity, UUID> {
     @EntityGraph(attributePaths = "room")
     @Query("""
             select b from BoxEntity b
-            where b.project.id = :projectId and b.project.owner.id = :ownerId
+            where b.project.id = :projectId
+              and (b.project.owner.id = :userId or exists (select m.id from ProjectParticipantEntity m where m.project.id = :projectId and m.user.id = :userId))
               and b.status <> BoxStatus.UNPACKED
               and (b.id in :matchingBoxIds or b.room.id = :roomId)
             order by case when b.id in :matchingBoxIds then 1 else 0 end desc,
@@ -84,7 +94,7 @@ public interface BoxRepository extends JpaRepository<BoxEntity, UUID> {
             """)
     List<BoxEntity> findSuggestions(
             @Param("projectId") UUID projectId,
-            @Param("ownerId") UUID ownerId,
+            @Param("userId") UUID userId,
             @Param("roomId") UUID roomId,
             @Param("matchingBoxIds") Collection<UUID> matchingBoxIds,
             Pageable pageable

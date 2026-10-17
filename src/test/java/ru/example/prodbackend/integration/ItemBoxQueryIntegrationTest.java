@@ -12,6 +12,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 import ru.example.prodbackend.box.entity.BoxEntity;
+import ru.example.prodbackend.box.dto.BoxFilter;
 import ru.example.prodbackend.box.entity.BoxStatus;
 import ru.example.prodbackend.box.repository.BoxRepository;
 import ru.example.prodbackend.box.service.BoxService;
@@ -24,6 +25,8 @@ import ru.example.prodbackend.item.dto.CreateItemsRequest;
 import ru.example.prodbackend.item.dto.ItemResponse;
 import ru.example.prodbackend.item.entity.ItemEntity;
 import ru.example.prodbackend.item.service.ItemService;
+import ru.example.prodbackend.checklist.entity.FirstDayChecklistItemEntity;
+import ru.example.prodbackend.checklist.service.FirstDayChecklistService;
 import ru.example.prodbackend.move.entity.MoveProjectEntity;
 import ru.example.prodbackend.room.entity.RoomEntity;
 import ru.example.prodbackend.user.entity.UserEntity;
@@ -45,6 +48,7 @@ class ItemBoxQueryIntegrationTest {
     @Autowired private BoxService boxService;
     @Autowired private ItemService itemService;
     @Autowired private BoxRepository boxRepository;
+    @Autowired private FirstDayChecklistService checklistService;
     @Autowired private JdbcCapture jdbcCapture;
 
     private UserEntity owner;
@@ -209,6 +213,42 @@ class ItemBoxQueryIntegrationTest {
     }
 
     @Test
+    void boxPageCountsAllContentsWithOneGroupedQueryWithoutLoadingItems() {
+        for (int number = 1; number <= 6; number++) {
+            BoxEntity box = box(kitchen, number, BoxStatus.PACKING, false);
+            if (number == 4) continue;
+            item(box, "Тарелки").setQuantity(6);
+            item(box, "Кружки").setPackedAt(Instant.now());
+            item(box, "Книги");
+        }
+        flushAndClear();
+        var statistics = entityManager.getEntityManagerFactory().unwrap(SessionFactory.class).getStatistics();
+        statistics.clear();
+        PaginationRequest pagination = new PaginationRequest();
+        pagination.setSize(4);
+        jdbcCapture.start();
+        var page = boxService.findAll(owner.getId(), project.getId(), new BoxFilter(), pagination);
+        var executions = jdbcCapture.stop();
+        assertThat(page.getTotalElements()).isEqualTo(6);
+        assertThat(page.getContent()).hasSize(4);
+        assertThat(page.getContent().subList(0, 3)).allSatisfy(box -> {
+            assertThat(box.getTotalItems()).isEqualTo(3);
+            assertThat(box.getPackedItems()).isEqualTo(1);
+            assertThat(box.getUnpackedItems()).isZero();
+            assertThat(box.isReadyToPack()).isFalse();
+        });
+        assertThat(page.getContent().get(3).getTotalItems()).isZero();
+        assertThat(page.getContent().get(3).isReadyToPack()).isFalse();
+        assertThat(executions.stream().filter(e -> e.sql().contains("from items"))).singleElement()
+                .satisfies(query -> assertThat(query.sql()).contains("group by", " in ("));
+        assertThat(statistics.getEntityStatistics(ItemEntity.class.getName()).getLoadCount()).isZero();
+        pagination.setPage(10);
+        jdbcCapture.start();
+        assertThat(boxService.findAll(owner.getId(), project.getId(), new BoxFilter(), pagination).getContent()).isEmpty();
+        assertThat(jdbcCapture.stop()).noneMatch(e -> e.sql().contains("from items"));
+    }
+
+    @Test
     void summaryOfEmptyProjectReturnsZeroCountsAndNoRooms() {
         flushAndClear();
 
@@ -219,6 +259,36 @@ class ItemBoxQueryIntegrationTest {
         assertThat(summary.getCountsByStatus()).hasSize(BoxStatus.values().length);
         assertThat(summary.getCountsByStatus().values()).containsOnly(0L);
         assertThat(summary.getRooms()).isEmpty();
+    }
+
+    @Test
+    void checklistPageFetchesCurrentLinkedItemsBoxesAndRoomsWithoutNPlusOne() {
+        for (int number = 1; number <= 6; number++) {
+            var point = FirstDayChecklistItemEntity.builder().project(project).name("Первый день " + number).build();
+            if (number != 1) {
+                ItemEntity linked = item(box(kitchen, number, BoxStatus.PACKING, false), "Вещь " + number);
+                linked.setFirstDay(true);
+                point.setItem(linked);
+            }
+            entityManager.persist(point);
+        }
+        flushAndClear();
+        PaginationRequest pagination = new PaginationRequest();
+        pagination.setSize(4);
+        jdbcCapture.start();
+        var result = checklistService.findAll(project.getId(), pagination, owner.getId());
+        var executions = jdbcCapture.stop();
+        assertThat(result.getTotalElements()).isEqualTo(6);
+        assertThat(result.getContent()).hasSize(4);
+        assertThat(result.getContent().get(0).getItemId()).isNull();
+        assertThat(result.getContent().subList(1, 4)).allSatisfy(point -> {
+            assertThat(point.getItemId()).isNotNull();
+            assertThat(point.getItemName()).startsWith("Вещь ");
+            assertThat(point.getBoxId()).isNotNull();
+            assertThat(point.getRoomName()).isEqualTo("Кухня");
+        });
+        assertThat(executions).hasSize(3);
+        assertThat(executions).noneMatch(e -> e.sql().contains("from items") || e.sql().contains("from boxes") || e.sql().contains("from rooms"));
     }
 
     private RoomEntity room(String name) {
