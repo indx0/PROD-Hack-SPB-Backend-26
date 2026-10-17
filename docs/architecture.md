@@ -26,6 +26,7 @@ flowchart LR
 - PostgreSQL / JPA / Liquibase
 - Spring Security / JWT access + refresh
 - Springdoc / Swagger
+- Spring Boot Actuator / Micrometer / Prometheus registry; сбор метрик Sage
 
 Схема БД обновляется SQL-миграциями Liquibase. Hibernate проверяет её соответствие сущностям через `ddl-auto=validate`.
 
@@ -39,7 +40,9 @@ flowchart LR
 | [ml](../src/main/java/ru/example/prodbackend/ml) | Опись одного или нескольких предметов по фотографии через LLM Proxy, без хранения фото |
 | [event](../src/main/java/ru/example/prodbackend/event), [progress](../src/main/java/ru/example/prodbackend/progress) | История действий и сводки |
 | [auth](../src/main/java/ru/example/prodbackend/auth), [user](../src/main/java/ru/example/prodbackend/user) | Вход, токены и профиль |
+| [observability](../src/main/java/ru/example/prodbackend/observability) | Отдельная авторизация endpoint метрик, HTTP-логи и идентификатор запроса |
 | [common](../src/main/java/ru/example/prodbackend/common), [exception](../src/main/java/ru/example/prodbackend/exception) | Пагинация и единый формат ошибок |
+
 
 ## Что прочитать дальше
 
