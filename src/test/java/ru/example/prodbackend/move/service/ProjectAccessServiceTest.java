@@ -52,4 +52,28 @@ class ProjectAccessServiceTest {
         verify(repository).findAccessibleById(projectId, userId);
         verifyNoMoreInteractions(repository);
     }
+
+    @Test
+    void rechecksAccessAfterLockingBecauseMembershipMayHaveBeenRevokedWhileWaiting() {
+        UUID projectId = UUID.randomUUID(), userId = UUID.randomUUID();
+        var project = MoveProjectEntity.builder().id(projectId).build();
+        when(repository.findForUpdate(projectId, userId)).thenReturn(Optional.of(project));
+        when(repository.hasAccess(projectId, userId)).thenReturn(false);
+
+        assertThrows(MoveProjectNotFoundException.class, () -> service.lockAccessibleProject(projectId, userId));
+        var order = inOrder(repository);
+        order.verify(repository).findForUpdate(projectId, userId);
+        order.verify(repository).hasAccess(projectId, userId);
+    }
+
+    @Test
+    void returnsLockedProjectWhenMembershipIsStillPresent() {
+        UUID projectId = UUID.randomUUID(), userId = UUID.randomUUID();
+        var project = MoveProjectEntity.builder().id(projectId).build();
+        when(repository.findForUpdate(projectId, userId)).thenReturn(Optional.of(project));
+        when(repository.hasAccess(projectId, userId)).thenReturn(true);
+
+        assertSame(project, service.lockAccessibleProject(projectId, userId));
+    }
+
 }

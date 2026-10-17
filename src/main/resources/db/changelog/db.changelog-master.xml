@@ -26,4 +26,5 @@
     <include file="1.1/2026-10-17-0019-add-task-relative-due-dates.sql" relativeToChangelogFile="true"/>
     <include file="1.1/2026-10-17-0020-create-task-sets.sql" relativeToChangelogFile="true"/>
     <include file="1.1/2026-10-17-0021-add-personal-task-templates.sql" relativeToChangelogFile="true"/>
+    <include file="1.1/2026-10-17-0022-add-task-assignee.sql" relativeToChangelogFile="true"/>
 </databaseChangeLog>

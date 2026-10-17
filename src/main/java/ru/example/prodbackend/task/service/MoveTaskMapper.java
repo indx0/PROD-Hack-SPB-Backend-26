@@ -2,6 +2,9 @@ package ru.example.prodbackend.task.service;
 
 import ru.example.prodbackend.task.dto.response.MoveTaskResponse;
 import ru.example.prodbackend.task.entity.MoveTaskEntity;
+import ru.example.prodbackend.user.entity.UserEntity;
+import java.util.stream.Stream;
+import java.util.stream.Collectors;
 
 public final class MoveTaskMapper {
     private MoveTaskMapper() { }
@@ -14,7 +17,8 @@ public final class MoveTaskMapper {
                 .stage(task.getStage())
                 .dueDate(task.getDueDate())
                 .dueType(task.getDueType()).offsetDays(task.getOffsetDays())
-                .assigneeName(task.getAssigneeName())
+                .assigneeId(task.getAssignee() == null ? null : task.getAssignee().getId())
+                .assigneeName(task.getAssignee() == null ? task.getAssigneeName() : displayName(task.getAssignee()))
                 .completed(task.getCompletedAt() != null)
                 .completedAt(task.getCompletedAt())
                 .templateId(task.getTemplate() == null ? null : task.getTemplate().getId())
@@ -24,4 +28,9 @@ public final class MoveTaskMapper {
                 .build();
     }
 
+    private static String displayName(UserEntity user) {
+        var name = Stream.of(user.getFirstName(), user.getLastName()).filter(value -> value != null && !value.isBlank())
+                .map(String::strip).collect(Collectors.joining(" "));
+        return name.isEmpty() ? user.getEmail() : name;
+    }
 }

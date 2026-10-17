@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
+import java.util.UUID;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import ru.example.prodbackend.task.entity.TaskDueType;
@@ -36,7 +37,21 @@ public class UpdateMoveTaskRequest {
     @JsonSetter(value = "offsetDays", nulls = Nulls.FAIL)
     public void setOffsetDays(Integer offsetDays) { this.offsetDays = offsetDays; }
 
-    @Schema(description = "Новый ответственный; отсутствие сохраняет значение, null очищает")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @Schema(description = "UUID аккаунта участника этого переезда, включая создателя. Имеет приоритет над assigneeName; явный null снимает назначение. Отсутствие в PATCH сохраняет назначение")
+    private UUID assigneeId;
+
+    @JsonIgnore
+    @Schema(hidden = true)
+    private boolean assigneeIdPresent;
+
+    @JsonSetter(value = "assigneeId", nulls = Nulls.SET)
+    public void setAssigneeId(UUID assigneeId) {
+        this.assigneeId = assigneeId;
+        this.assigneeIdPresent = true;
+    }
+
+    @Schema(description = "Свободное имя ответственного: без assigneeId снимает связь с аккаунтом; null очищает назначение, отсутствие сохраняет")
     @Size(max = 255)
     private String assigneeName;
 
@@ -84,7 +99,7 @@ public class UpdateMoveTaskRequest {
     @Schema(hidden = true)
     @AssertTrue(message = "Укажите хотя бы одно поле для изменения")
     public boolean isUpdatePresent() {
-        return title != null || stage != null || descriptionPresent || dueDatePresent || assigneeNamePresent || dueType != null || offsetDays != null;
+        return title != null || stage != null || descriptionPresent || dueDatePresent || assigneeNamePresent || assigneeIdPresent || dueType != null || offsetDays != null;
     }
 
     @JsonAnySetter

@@ -213,3 +213,19 @@ Unit-тесты и интеграционные проверки авториз�
 `MergedItemFlagsIntegrationTest` — совместимость flags/firstDay, откат противоречивых запросов,
 batch и отвязка чек-листа; `MergedMigrationHistoryIntegrationTest` — обновление обеих прежних
 историй Liquibase без сброса контрольных сумм и без потери данных.
+
+## Назначения по UUID и отзыв доступа
+
+`TaskAssignmentIntegrationTest` проверяет одинаковые имена, профиль и повторный вход,
+совместимость свободных имён, снятие и приоритет назначения, шаблоны и перенос сроков,
+атомарность отказа, отзыв доступа и самовыход, архив, сохранность данных, две сессии,
+повторное добавление и отсутствие запросов к профилю на каждую задачу списка.
+Конкурентные проверки дожидаются реальной блокировки в PostgreSQL: запись удаляемого
+участника и назначение после удаления отклоняются; назначение перед удалением очищается.
+`ProjectAccessServiceTest` также проверяет повторную проверку доступа после блокировки.
+Миграционные тесты проверяют сохранение свободных имён и прежних контрольных сумм.
+
+```bash
+./mvnw test
+./mvnw -Dit.test=TaskAssignmentIntegrationTest,SharedProjectIntegrationTest,MoveTaskIntegrationTest,LiquibaseMigrationIntegrationTest,MergedMigrationHistoryIntegrationTest,OpenApiDocumentationIntegrationTest verify
+```
