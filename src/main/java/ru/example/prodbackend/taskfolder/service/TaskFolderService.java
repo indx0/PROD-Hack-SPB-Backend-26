@@ -5,6 +5,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
+import ru.example.prodbackend.move.entity.MoveProjectEntity;
 import ru.example.prodbackend.common.dto.PageResponse;
 import ru.example.prodbackend.common.dto.PaginationRequest;
 import ru.example.prodbackend.exception.*;
@@ -46,6 +48,23 @@ public class TaskFolderService {
             throw new ResourceConflictException("UUID папки уже занят или папка изменена после создания");
         }
         return new CreateResult(toResponse(folder), created);
+    }
+
+    /** Only for a new project within its creation transaction; UUID duplicates are validated by the caller. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void createInitialFolders(MoveProjectEntity project, List<CreateTaskFolderRequest> requests) {
+        if (requests.isEmpty()) return;
+        folders.flush(); // Persist the project and its participants before the native inserts.
+        for (int i = 0; i < requests.size(); i++) {
+            var request = requests.get(i);
+            String prefix = "folders[" + i + "].";
+            if (request.id() == null) throw new RequestValidationException(prefix + "id", "UUID папки обязателен");
+            var name = normalizeName(request.name(), prefix + "name");
+            var color = validateColor(request.colorKey(), prefix + "colorKey");
+            if (folders.insertIfAbsent(request.id(), project.getId(), name, color, Instant.now().truncatedTo(ChronoUnit.MICROS)) != 1) {
+                throw new ResourceConflictException("UUID создаваемой папки уже занят");
+            }
+        }
     }
 
     public PageResponse<TaskFolderResponse> findAll(UUID projectId, PaginationRequest pagination, UUID userId) {
@@ -92,16 +111,24 @@ public class TaskFolderService {
     }
 
     private String normalizeName(String name) {
+        return normalizeName(name, "name");
+    }
+
+    private String normalizeName(String name, String field) {
         var normalized = name == null ? "" : name.strip();
         if (normalized.isBlank() || normalized.codePointCount(0, normalized.length()) > 80) {
-            throw new RequestValidationException("name", "Название папки должно содержать от 1 до 80 символов после удаления пробелов по краям");
+            throw new RequestValidationException(field, "Название папки должно содержать от 1 до 80 символов после удаления пробелов по краям");
         }
         return normalized;
     }
 
     private String validateColor(String color) {
+        return validateColor(color, "colorKey");
+    }
+
+    private String validateColor(String color, String field) {
         if (color == null || !COLORS.contains(color)) {
-            throw new RequestValidationException("colorKey", "Допустимые цвета: mint, cyan, coral, sand, lilac, forest");
+            throw new RequestValidationException(field, "Допустимые цвета: mint, cyan, coral, sand, lilac, forest");
         }
         return color;
     }

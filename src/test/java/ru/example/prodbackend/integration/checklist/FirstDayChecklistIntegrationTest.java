@@ -12,9 +12,11 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.ResultActions;
 import ru.example.prodbackend.checklist.dto.response.ChecklistItemResponse;
 import ru.example.prodbackend.checklist.repository.FirstDayChecklistRepository;
+import ru.example.prodbackend.checklist.entity.FirstDayChecklistItemEntity;
 import ru.example.prodbackend.move.dto.response.MoveProjectResponse;
 
 import java.util.Map;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -38,7 +40,7 @@ class FirstDayChecklistIntegrationTest extends AuthIntegrationTestSupport {
     }
 
     @Test
-    void startsWithFourDefaultsSupportsCreationAndSharedPagination() throws Exception {
+    void existingLegacyFixturesSupportCreationAndSharedPagination() throws Exception {
         var defaults = checklistRepository.findAllByProject_Id(projectId, PageRequest.of(0, 100)).getContent();
         assertEquals(Set.of("Зубные щётки", "Зарядки", "Чайник", "Постельное бельё"), defaults.stream().map(item -> item.getName()).collect(Collectors.toSet()));
         assertTrue(defaults.stream().allMatch(item -> item.getCompletedAt() == null));
@@ -137,7 +139,12 @@ class FirstDayChecklistIntegrationTest extends AuthIntegrationTestSupport {
         byte[] body = mockMvc.perform(post("/api/move-projects").header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"Чек-лист\",\"moveDate\":\"2026-11-01T09:00:00Z\"}"))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsByteArray();
-        return jsonMapper.readValue(body, MoveProjectResponse.class).getId();
+        UUID id = jsonMapper.readValue(body, MoveProjectResponse.class).getId();
+        // Existing legacy records remain supported until the separate retirement/backfill task.
+        var project = moveProjectRepository.getReferenceById(id);
+        checklistRepository.saveAllAndFlush(List.of("Зубные щётки", "Зарядки", "Чайник", "Постельное бельё").stream()
+                .map(name -> FirstDayChecklistItemEntity.builder().project(project).name(name).build()).toList());
+        return id;
     }
 
     private ResultActions call(String method, UUID project, String suffix, String body, String accessToken) throws Exception {

@@ -4,7 +4,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import ru.example.prodbackend.checklist.dto.request.CreateChecklistItemRequest;
 import ru.example.prodbackend.checklist.dto.request.UpdateChecklistItemRequest;
@@ -20,11 +19,9 @@ import ru.example.prodbackend.exception.ResourceConflictException;
 import ru.example.prodbackend.box.repository.BoxRepository;
 import ru.example.prodbackend.item.entity.ItemEntity;
 import ru.example.prodbackend.item.repository.ItemRepository;
-import ru.example.prodbackend.move.entity.MoveProjectEntity;
 import ru.example.prodbackend.move.service.ProjectAccessService;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -92,13 +89,6 @@ public class FirstDayChecklistService {
         var item = requireItem(projectId, itemId, userId);
         checklistRepository.delete(item);
         checklistRepository.flush();
-    }
-
-    /** Только для нового проекта и в его транзакции создания. */
-    @Transactional(propagation = Propagation.MANDATORY)
-    public void createDefaults(MoveProjectEntity project) {
-        checklistRepository.saveAll(List.of("Зубные щётки", "Зарядки", "Чайник", "Постельное бельё").stream()
-                .map(name -> FirstDayChecklistItemEntity.builder().project(project).name(name).build()).toList());
     }
 
     private FirstDayChecklistItemEntity requireItem(UUID projectId, UUID itemId, UUID userId) {

@@ -22,6 +22,7 @@ import ru.example.prodbackend.item.repository.ItemRepository;
 import ru.example.prodbackend.taskfolder.entity.TaskFolderEntity;
 import ru.example.prodbackend.taskfolder.repository.TaskFolderRepository;
 import ru.example.prodbackend.move.service.ProjectAccessService;
+import ru.example.prodbackend.move.entity.MoveProjectEntity;
 import ru.example.prodbackend.task.dto.request.*;
 import ru.example.prodbackend.task.dto.response.MoveTaskResponse;
 import ru.example.prodbackend.task.dto.response.TaskTemplateResponse;
@@ -59,6 +60,15 @@ public class MoveTaskService {
                 .totalTasks(moveTaskRepository.countByProject_Id(projectId))
                 .completedTasks(moveTaskRepository.countByProject_IdAndCompletedAtIsNotNull(projectId))
                 .build();
+    }
+
+    /** Deprecated project-create flag: ordinary tasks only, never legacy checklist records. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void createInitialFirstDayTasks(MoveProjectEntity project, UUID folderId) {
+        var folder = resolveFolder(project.getId(), folderId);
+        moveTaskRepository.saveAllAndFlush(List.of("Зубные щётки", "Зарядки", "Чайник", "Постельное бельё").stream()
+                .map(title -> MoveTaskEntity.builder().project(project).folder(folder).title(title)
+                        .stage(TaskStage.BEFORE_MOVE).dueType(TaskDueType.FIXED).build()).toList());
     }
 
     @Transactional

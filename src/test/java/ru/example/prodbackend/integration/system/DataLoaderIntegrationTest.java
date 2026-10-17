@@ -124,14 +124,10 @@ class DataLoaderIntegrationTest extends BaseIntegrationTest {
                 assertThat(task.getDueDate()).isEqualTo(moveDate.plusDays(task.getOffsetDays()));
             }
         });
-        assertThat(count("FirstDayChecklistItemEntity")).isEqualTo(6);
+        assertThat(count("FirstDayChecklistItemEntity")).isEqualTo(2);
         var linked = entityManager.createQuery("select c from FirstDayChecklistItemEntity c where c.item is not null", FirstDayChecklistItemEntity.class).getResultList();
-        assertThat(linked).singleElement().satisfies(point -> {
-            assertThat(point.getName()).isEqualTo("Постельное бельё");
-            assertThat(point.getItem().getName()).isEqualTo("Постельное бельё");
-            assertThat(point.getItem().isFirstDay()).isTrue();
-        });
-        assertThat(entityManager.createQuery("select count(c) from FirstDayChecklistItemEntity c where c.item is null", Long.class).getSingleResult()).isEqualTo(5);
+        assertThat(linked).isEmpty();
+        assertThat(entityManager.createQuery("select count(c) from FirstDayChecklistItemEntity c where c.item is null", Long.class).getSingleResult()).isEqualTo(2);
         assertThat(count("ProjectEventEntity")).isEqualTo(18);
         assertThat(entityManager.createQuery("from BoxEntity", BoxEntity.class).getResultList())
                 .hasSize(5)
@@ -157,7 +153,7 @@ class DataLoaderIntegrationTest extends BaseIntegrationTest {
         assertTaskDueDate("Подключить интернет", moveDate.plusDays(1));
         assertTaskDueDate("Упаковать кухню", moveDate.minusDays(2));
         assertThat(entityManager.createQuery("select count(t) from MoveTaskEntity t where t.completedAt is not null", Long.class).getSingleResult()).isEqualTo(2);
-        assertThat(entityManager.createQuery("select count(i) from FirstDayChecklistItemEntity i where i.completedAt is not null", Long.class).getSingleResult()).isEqualTo(2);
+        assertThat(entityManager.createQuery("select count(i) from FirstDayChecklistItemEntity i where i.completedAt is not null", Long.class).getSingleResult()).isEqualTo(1);
         assertThat(entityManager.createQuery("select count(e) from ProjectEventEntity e where e.eventType = ru.example.prodbackend.event.entity.ProjectEventType.PROJECT_CREATED", Long.class).getSingleResult()).isEqualTo(1);
         assertThat(passwordEncoder.matches("test-user-password", userRepository.findByEmail("user1").orElseThrow().getPassword())).isTrue();
     }

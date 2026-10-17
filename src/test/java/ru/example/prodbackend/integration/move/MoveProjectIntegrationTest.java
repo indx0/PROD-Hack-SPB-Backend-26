@@ -154,7 +154,7 @@ class MoveProjectIntegrationTest extends AuthIntegrationTestSupport {
                         .setParameter("id", removed.getId()).getSingleResult(), entity);
                 long expected = switch (entity) {
                     case "MoveTaskEntity" -> 1L;
-                    case "FirstDayChecklistItemEntity" -> 5L;
+                    case "FirstDayChecklistItemEntity" -> 1L;
                     default -> 1L;
                 };
                 assertEquals(expected, entityManager.createQuery("select count(e) from " + entity + " e where e.project.id = :id", Long.class)

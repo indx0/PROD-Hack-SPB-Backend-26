@@ -39,13 +39,33 @@ public class MoveProjectController {
 
     @PostMapping
     @Operation(summary = "Создать проект переезда",
-            description = "Создаёт проект и выбранное наполнение одной транзакцией. includeFirstDayChecklist=false оставляет чек-лист пустым; true или отсутствие поля добавляет четыре стандартных пункта; null — 422. Чтение проекта или чек-листа не добавляет пункты повторно. Задачи добровольны: без taskSetIds или с [] задачи не добавляются. taskSetIds содержит до 100 UUID собственных активных наборов; повторы объединяются. Наборы применяются целиком, недоступный набор откатывает создание проекта, участников, задач и чек-листа. Общие шаблоны применяются отдельно через from-template. Необязательный participants содержит до 100 записей с userId или email существующих аккаунтов; они получают равные права сразу, без подтверждения. Повторы пользователей не создают дубли, создатель уже имеет доступ. Если хотя бы один пользователь не найден, создание целиком откатывается. Сроки задач вычисляются относительно даты переезда в UTC. Адреса необязательны; дата — ISO 8601 с часовым поясом. PROJECT_CREATED записывается один раз. Последующая смена даты проекта не меняет сроки задач.",
+            description = """
+                    Создаёт проект, участников, папки и все выбранные задачи одной транзакцией. Ошибка любого элемента откатывает всё.
+                    folders и taskSetApplications необязательны, по умолчанию [], максимум по 100 элементов; null запрещён.
+                    Папки сохраняют собственные имена и цвета, могут быть пустыми. Повтор UUID в folders — 422;
+                    UUID, уже занятый существующей папкой, — 409. Ненулевой folderId применения обязан указывать на папку
+                    из folders этого же запроса; чужая или не объявленная папка — 422. Отсутствие/null folderId — без папки.
+                    taskSetApplications выбирает собственные активные шаблоны; повтор taskSetId — 422.
+                    Старое taskSetIds сохраняется: до 100 UUID, повторы объединяются, задачи создаются без папки.
+                    Одновременно непустые taskSetIds и taskSetApplications запрещены — 422 с ошибкой выбора шаблонов.
+                    Без выбора папок/шаблонов проект пустой: скрытый чек-лист и задачи не создаются.
+                    includeFirstDayChecklist по умолчанию false. Явный deprecated true создаёт четыре обычные задачи
+                    BEFORE_MOVE/FIXED без срока и ответственного в отдельной обычной папке «Личные задачи», mint;
+                    новых legacy-записей нет. null — 422; новый клиент отправляет false. item.firstDay в описи не меняется.
+                    GET tasks и task-folders сразу после 201 возвращают полный сохранённый план; чтение не создаёт данные.
+                    Общие готовые задачи применяются отдельно через from-template. Сроки выбранных шаблонов рассчитываются
+                    от даты переезда в UTC. Адреса необязательны; дата — ISO 8601 с часовым поясом.
+                    participants содержит до 100 существующих аккаунтов по userId или email; они получают равные права сразу.
+                    Повторы участников объединяются, создатель уже имеет доступ. Недоступный аккаунт или шаблон откатывает весь запрос.
+                    PROJECT_CREATED записывается один раз. Последующая смена даты проекта не меняет сроки задач.
+                    """,
             responses = {
                     @ApiResponse(responseCode = "201", description = "Проект создан", content = @Content(mediaType = "application/json", schema = @Schema(implementation = MoveProjectResponse.class))),
                     @ApiResponse(responseCode = "400", description = "INVALID_REQUEST_BODY: Тело отсутствует, содержит некорректный JSON или недопустимый формат поля", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "401", description = "UNAUTHORIZED: Токен доступа отсутствует, недействителен или истёк", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "404", description = "NOT_FOUND: Текущий пользователь или добавляемый участник не найден; TASK_SET_NOT_FOUND: Выбранный собственный набор недоступен", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: Название пустое или длиннее 255 символов, дата отсутствует либо адрес длиннее 1000 символов; подробности в fieldErrors", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
+                    @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: UUID создаваемой папки уже занят", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: Некорректные поля, лимит массива, повтор UUID папки/шаблона, не объявленная папка или одновременный выбор двумя способами; подробности в fieldErrors", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
             })
     public ResponseEntity<MoveProjectResponse> createMoveProject(
             @Valid @RequestBody CreateMoveProjectRequest request,

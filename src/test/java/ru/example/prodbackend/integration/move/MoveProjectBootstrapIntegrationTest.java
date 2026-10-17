@@ -48,13 +48,13 @@ class MoveProjectBootstrapIntegrationTest extends AuthIntegrationTestSupport {
     }
 
     @Test
-    void creationWithoutSelectionCreatesNoTasksButKeepsChecklistAndEvent() throws Exception {
+    void creationWithoutSelectionCreatesNoTasksOrChecklistButKeepsEvent() throws Exception {
         long catalogSize = templateRepository.count();
         UUID projectId = createProject();
         assertEquals(0L, taskRepository.countByProject_Id(projectId));
         assertEquals(catalogSize, templateRepository.count());
         var checklist = checklistRepository.findAllByProject_Id(projectId, PageRequest.of(0, 100)).getContent();
-        assertEquals(Set.of("Зубные щётки", "Зарядки", "Чайник", "Постельное бельё"), checklist.stream().map(item -> item.getName()).collect(Collectors.toSet()));
+        assertTrue(checklist.isEmpty());
         assertEquals(1L, eventRepository.count());
         assertEquals(ProjectEventType.PROJECT_CREATED, eventRepository.findAll().get(0).getEventType());
         assertEquals(projectId, eventRepository.findAll().get(0).getObjectId());
@@ -71,10 +71,14 @@ class MoveProjectBootstrapIntegrationTest extends AuthIntegrationTestSupport {
         for (int i = 0; i < 2; i++) {
             mockMvc.perform(get("/api/move-projects/" + id).header(HttpHeaders.AUTHORIZATION, "Bearer " + anotherDevice)).andExpect(status().isOk());
             mockMvc.perform(get("/api/move-projects/" + id + "/first-day-checklist").header(HttpHeaders.AUTHORIZATION, "Bearer " + anotherDevice))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(0));
+            mockMvc.perform(get("/api/move-projects/" + id + "/tasks").header(HttpHeaders.AUTHORIZATION, "Bearer " + anotherDevice))
                     .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(include ? 4 : 0));
+            mockMvc.perform(get("/api/move-projects/" + id + "/task-folders").header(HttpHeaders.AUTHORIZATION, "Bearer " + anotherDevice))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(include ? 1 : 0));
         }
-        assertEquals(include ? 4 : 0, checklistRepository.count());
-        assertEquals(0, taskRepository.count());
+        assertEquals(0, checklistRepository.count());
+        assertEquals(include ? 4 : 0, taskRepository.count());
         assertEquals(1, eventRepository.count());
     }
 
@@ -110,7 +114,7 @@ class MoveProjectBootstrapIntegrationTest extends AuthIntegrationTestSupport {
         assertEquals(before, dueDates(projectId));
         assertEquals(LocalDate.parse("2026-12-12"), dueDates(projectId).get(taskId));
         assertEquals(1L, taskRepository.count());
-        assertEquals(4L, checklistRepository.count());
+        assertEquals(0L, checklistRepository.count());
         assertEquals(1L, eventRepository.count());
     }
 

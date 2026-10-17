@@ -28,6 +28,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 import java.util.Objects;
+import java.util.Comparator;
 
 @Service
 @RequiredArgsConstructor
@@ -91,6 +92,13 @@ public class TaskSetService {
     @Transactional(propagation = Propagation.MANDATORY)
     public void applyInitialSets(MoveProjectEntity project, List<UUID> setIds, UUID userId) {
         for (UUID setId : setIds.stream().distinct().sorted().toList()) applyLocked(project, setId, userId, null, false);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void applyInitialApplications(MoveProjectEntity project, List<InitialTaskSetApplicationRequest> requests, UUID userId) {
+        for (var request : requests.stream().sorted(Comparator.comparing(InitialTaskSetApplicationRequest::taskSetId)).toList()) {
+            applyLocked(project, request.taskSetId(), userId, request.folderId(), true);
+        }
     }
 
     private TaskSetApplicationEntity applyLocked(MoveProjectEntity project, UUID setId, UUID userId, UUID folderId, boolean folderIdPresent) {
