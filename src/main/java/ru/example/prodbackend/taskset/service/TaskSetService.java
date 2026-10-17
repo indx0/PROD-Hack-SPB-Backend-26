@@ -14,6 +14,7 @@ import ru.example.prodbackend.exception.TaskSetAlreadyAppliedException;
 import ru.example.prodbackend.move.entity.MoveProjectEntity;
 import ru.example.prodbackend.move.service.ProjectAccessService;
 import ru.example.prodbackend.task.entity.MoveTaskEntity;
+import ru.example.prodbackend.task.dto.response.MoveTaskResponse;
 import ru.example.prodbackend.task.repository.MoveTaskRepository;
 import ru.example.prodbackend.task.service.MoveTaskMapper;
 import ru.example.prodbackend.task.service.TaskDeadline;
@@ -29,6 +30,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.Objects;
 import java.util.Comparator;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -88,6 +90,18 @@ public class TaskSetService {
                 request == null ? null : request.getFolderId(), request != null && request.isFolderIdPresent()));
     }
 
+    public PageResponse<TaskSetApplicationResponse> findApplications(UUID userId, UUID projectId, PaginationRequest pagination) {
+        projectAccess.getAccessibleProject(projectId, userId);
+        var pageable = PageRequest.of(pagination.getPage(), pagination.getSize(), Sort.by("appliedAt", "id"));
+        var page = applications.findAllByProject_Id(projectId, pageable);
+        List<MoveTaskEntity> copiedTasks = page.isEmpty() ? List.of()
+                : tasks.findAllByTaskSetApplication_IdInOrderByTaskSetPositionAscIdAsc(page.map(TaskSetApplicationEntity::getId).getContent());
+        var copied = copiedTasks.stream().collect(Collectors.groupingBy(task -> task.getTaskSetApplication().getId(),
+                Collectors.mapping(MoveTaskMapper::toResponse, Collectors.toList())));
+        return PageResponse.from(page.map(application -> toApplicationResponse(application,
+                copied.getOrDefault(application.getId(), List.of()))));
+    }
+
     /** Только при создании проекта в уже открытой транзакции. Порядок: проект → наборы по UUID. */
     @Transactional(propagation = Propagation.MANDATORY)
     public void applyInitialSets(MoveProjectEntity project, List<UUID> setIds, UUID userId) {
@@ -128,6 +142,10 @@ public class TaskSetService {
 
     private TaskSetApplicationResponse toApplicationResponse(TaskSetApplicationEntity application) {
         var copied = tasks.findAllByTaskSetApplication_IdOrderByTaskSetPositionAscIdAsc(application.getId()).stream().map(MoveTaskMapper::toResponse).toList();
+        return toApplicationResponse(application, copied);
+    }
+
+    private TaskSetApplicationResponse toApplicationResponse(TaskSetApplicationEntity application, List<MoveTaskResponse> copied) {
         return new TaskSetApplicationResponse(application.getId(), application.getProject().getId(), application.getTaskSet().getId(),
                 application.getTaskSetName(), application.getFolderId(), application.getAppliedAt(), copied);
     }
