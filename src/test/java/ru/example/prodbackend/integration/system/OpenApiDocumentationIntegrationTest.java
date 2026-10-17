@@ -1,6 +1,7 @@
-package ru.example.prodbackend.integration;
+package ru.example.prodbackend.integration.system;
 
 import org.junit.jupiter.api.Test;
+import ru.example.prodbackend.support.BaseIntegrationTest;
 import tools.jackson.databind.JsonNode;
 import java.nio.file.Files;
 import java.nio.file.Path;
