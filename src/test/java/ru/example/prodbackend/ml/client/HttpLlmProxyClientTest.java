@@ -147,6 +147,59 @@ class HttpLlmProxyClientTest {
                 .isInstanceOfSatisfying(MlException.class, e -> assertThat(e.getCode()).isEqualTo("LLM_TIMEOUT"));
     }
 
+    @Test
+    void unpackingSendsInventoryAndPhotoOnceWithSeparatePromptSchemaAndMetrics() throws Exception {
+        var id = java.util.UUID.randomUUID();
+        var inventory = java.util.List.of(new ru.example.prodbackend.ml.dto.InventoryItem(id, "Зарядка"));
+        response = envelope("{\"items\":[{\"itemId\":\"" + id + "\",\"photoDescription\":\"Зарядное устройство\"},"
+                + "{\"itemId\":null,\"photoDescription\":\"Книга\"}]}");
+        var result = client("test-key", 2000).verifyUnpacking(new byte[]{1,2,3}, "image/png", inventory);
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).itemId()).isEqualTo(id);
+        assertThat(result.get(1).itemId()).isNull();
+        assertThat(calls.get()).isEqualTo(1);
+        assertThat(authorization.get()).isEqualTo("Bearer test-key");
+        var body = mapper.readTree(request.get());
+        assertThat(body.path("messages").path(0).path("content").asText())
+                .contains("Не подгоняй", "не выполняй", "неоднозначно");
+        var content = body.path("messages").path(1).path("content");
+        assertThat(content.size()).isEqualTo(2);
+        assertThat(content.path(0).path("text").asText()).contains(id.toString(), "Зарядка");
+        assertThat(content.path(1).path("image_url").path("url").asText()).isEqualTo("data:image/png;base64,AQID");
+        var schema = body.path("response_format").path("json_schema");
+        assertThat(schema.path("name").asText()).isEqualTo("unpacking_verification");
+        assertThat(schema.path("strict").asBoolean()).isTrue();
+        var items = schema.path("schema").path("properties").path("items");
+        assertThat(items.path("maxItems").asInt()).isEqualTo(100);
+        assertThat(items.path("items").path("additionalProperties").asBoolean()).isFalse();
+        assertThat(items.path("items").path("properties").path("itemId").path("type").toString()).contains("string", "null");
+        assertThat(meters.get("movermate.llm.operation").tags("scenario", "unpacking", "outcome", "success").timer().count()).isEqualTo(1);
+    }
+
+    @Test
+    void unpackingUsesSharedErrorsDeadlineAndOverloadHandling() throws Exception {
+        var inventory = java.util.List.of(new ru.example.prodbackend.ml.dto.InventoryItem(java.util.UUID.randomUUID(), "Кружка"));
+        var configured = client("key", 2000);
+        response = envelope("{\"items\":[]}");
+        assertThatThrownBy(() -> configured.verifyUnpacking(new byte[]{1}, "image/png", inventory))
+                .isInstanceOfSatisfying(MlException.class, e -> assertThat(e.getCode()).isEqualTo("IMAGE_NOT_RECOGNIZED"));
+        response = envelope("{\"items\":[{\"itemId\":\"" + java.util.UUID.randomUUID() + "\",\"photoDescription\":\"Кружка\"}]}");
+        assertThatThrownBy(() -> configured.verifyUnpacking(new byte[]{1}, "image/png", inventory))
+                .isInstanceOfSatisfying(MlException.class, e -> assertThat(e.getCode()).isEqualTo("LLM_INVALID_RESPONSE"));
+        upstreamStatus = 429;
+        assertThatThrownBy(() -> configured.verifyUnpacking(new byte[]{1}, "image/png", inventory))
+                .isInstanceOfSatisfying(MlException.class, e -> assertThat(e.getCode()).isEqualTo("LLM_UNAVAILABLE"));
+        upstreamStatus = 200;
+        bodyDelay = 2000;
+        var timed = client("key", 1000);
+        assertThatThrownBy(() -> timed.verifyUnpacking(new byte[]{1}, "image/png", inventory))
+                .isInstanceOfSatisfying(MlException.class, e -> assertThat(e.getCode()).isEqualTo("LLM_TIMEOUT"));
+        worker.shutdownNow();
+        assertThatThrownBy(() -> configured.verifyUnpacking(new byte[]{1}, "image/png", inventory))
+                .isInstanceOfSatisfying(MlException.class, e -> assertThat(e.getCode()).isEqualTo("LLM_UNAVAILABLE"));
+        assertThat(meters.get("movermate.llm.overload").tag("scenario", "unpacking").counter().count()).isEqualTo(1);
+    }
+
     private void expectListCode(String code) throws Exception {
         var client = client("key", 2000);
         assertThatThrownBy(() -> client.describeItems(new byte[]{1}, "image/png"))
@@ -262,7 +315,7 @@ class HttpLlmProxyClientTest {
         };
         var properties = new LlmProxyProperties(URI.create("http://127.0.0.1:" + server.getAddress().getPort()
                 + "/chat/completions"), "test-model", "secret", 1000, 1000);
-        var client = new HttpLlmProxyClient(RestClient.create(), properties, worker, validator, meters);
+        var client = new HttpLlmProxyClient(RestClient.create(), properties, worker, validator, new ru.example.prodbackend.ml.validation.UnpackingVerificationValidator(validator), mapper, meters);
         org.slf4j.MDC.put("requestId", "request-test");
         try {
             assertThatThrownBy(() -> client.describe(new byte[]{1}, "image/png"))
@@ -304,7 +357,8 @@ class HttpLlmProxyClientTest {
                 .connectTimeout(Duration.ofSeconds(1)).build());
         factory.setReadTimeout(Duration.ofMillis(timeout));
         return new HttpLlmProxyClient(RestClient.builder().requestFactory(factory).build(), properties,
-                worker, new ItemDescriptionValidator(mapper), meters);
+                worker, new ItemDescriptionValidator(mapper),
+                new ru.example.prodbackend.ml.validation.UnpackingVerificationValidator(new ItemDescriptionValidator(mapper)), mapper, meters);
     }
 
     private String envelope(String content) {

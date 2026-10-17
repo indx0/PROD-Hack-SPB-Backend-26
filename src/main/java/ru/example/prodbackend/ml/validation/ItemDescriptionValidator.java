@@ -32,7 +32,7 @@ public class ItemDescriptionValidator {
         return new ItemsDescriptionResponse(java.util.List.copyOf(items));
     }
 
-    private JsonNode content(String body) {
+    JsonNode content(String body) {
         JsonNode envelope = parse(body);
         JsonNode choice = envelope.path("choices").path(0);
         JsonNode message = choice.path("message");
