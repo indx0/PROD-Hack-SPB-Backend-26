@@ -1,5 +1,7 @@
 package ru.example.prodbackend.move.dto.request;
 
+import com.fasterxml.jackson.annotation.*;
+import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -10,10 +12,11 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.util.List;
 
 @Data
 @Builder
-@NoArgsConstructor
+@NoArgsConstructor(onConstructor_ = @JsonCreator)
 @AllArgsConstructor
 public class CreateMoveProjectRequest {
 
@@ -30,4 +33,11 @@ public class CreateMoveProjectRequest {
 
     @Size(max = 1000)
     private String destinationAddress;
+
+    @Builder.Default
+    @Valid
+    @Size(max = 100)
+    @JsonSetter(nulls = Nulls.FAIL)
+    @Schema(description = "Необязательный список участников: каждый задаётся по userId или email. Без подтверждения, с равными правами. По умолчанию пустой список")
+    private List<@NotNull AddProjectParticipantRequest> participants = List.of();
 }

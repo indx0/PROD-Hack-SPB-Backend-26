@@ -144,7 +144,7 @@ public class MoveTaskController {
 
     @GetMapping("/templates")
     @Operation(summary = "Получить готовые шаблоны задач",
-            description = "Общий локальный каталог, доступный владельцу проекта. Можно отфильтровать по stage. Сортировка title ASC, id ASC; общая пагинация.",
+            description = "Общий локальный каталог, доступный участнику проекта. Можно отфильтровать по stage. Сортировка title ASC, id ASC; общая пагинация.",
             responses = {
                     @ApiResponse(responseCode = "200", description = "Страница шаблонов"),
                     @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: некорректная пагинация; page >= 0, size от 1 до 100",

@@ -84,7 +84,8 @@ public interface BoxRepository extends JpaRepository<BoxEntity, UUID> {
     @EntityGraph(attributePaths = "room")
     @Query("""
             select b from BoxEntity b
-            where b.project.id = :projectId and b.project.owner.id = :ownerId
+            where b.project.id = :projectId
+              and (b.project.owner.id = :userId or exists (select m.id from ProjectParticipantEntity m where m.project.id = :projectId and m.user.id = :userId))
               and b.status <> BoxStatus.UNPACKED
               and (b.id in :matchingBoxIds or b.room.id = :roomId)
             order by case when b.id in :matchingBoxIds then 1 else 0 end desc,
@@ -93,7 +94,7 @@ public interface BoxRepository extends JpaRepository<BoxEntity, UUID> {
             """)
     List<BoxEntity> findSuggestions(
             @Param("projectId") UUID projectId,
-            @Param("ownerId") UUID ownerId,
+            @Param("userId") UUID userId,
             @Param("roomId") UUID roomId,
             @Param("matchingBoxIds") Collection<UUID> matchingBoxIds,
             Pageable pageable

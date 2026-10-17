@@ -39,7 +39,7 @@ public class FirstDayChecklistService {
 
     @Transactional
     public ChecklistItemResponse create(UUID projectId, CreateChecklistItemRequest request, UUID userId) {
-        var project = projectAccessService.getOwnedProjectForUpdate(projectId, userId);
+        var project = projectAccessService.getAccessibleProjectForUpdate(projectId, userId);
         ItemEntity linked = request.getItemId() == null ? null : requireLinkedItem(projectId, request.getItemId(), userId);
         if (linked != null && checklistRepository.existsByItem_Id(linked.getId())) {
             throw new ResourceConflictException("Вещь уже связана с другим пунктом чек-листа");
@@ -52,7 +52,7 @@ public class FirstDayChecklistService {
 
     @Transactional
     public ChecklistItemResponse link(UUID projectId, UUID checklistItemId, UUID linkedItemId, UUID userId) {
-        projectAccessService.getOwnedProjectForUpdate(projectId, userId);
+        projectAccessService.getAccessibleProjectForUpdate(projectId, userId);
         // Lock order: project, box, checklist; shared with transfers and item updates/deletes.
         ItemEntity linked = requireLinkedItem(projectId, linkedItemId, userId);
         var item = checklistRepository.findForUpdate(checklistItemId, projectId).orElseThrow(ChecklistItemNotFoundException::new);
@@ -72,7 +72,7 @@ public class FirstDayChecklistService {
     }
 
     public PageResponse<ChecklistItemResponse> findAll(UUID projectId, PaginationRequest pagination, UUID userId) {
-        projectAccessService.getOwnedProject(projectId, userId);
+        projectAccessService.getAccessibleProject(projectId, userId);
         var pageable = PageRequest.of(pagination.getPage(), pagination.getSize(), Sort.by("createdAt", "id"));
         return PageResponse.from(checklistRepository.findAllByProject_Id(projectId, pageable).map(this::toResponse));
     }
@@ -102,17 +102,17 @@ public class FirstDayChecklistService {
     }
 
     private FirstDayChecklistItemEntity requireItem(UUID projectId, UUID itemId, UUID userId) {
-        projectAccessService.getOwnedProjectForUpdate(projectId, userId);
+        projectAccessService.getAccessibleProjectForUpdate(projectId, userId);
         return checklistRepository.findForUpdate(itemId, projectId).orElseThrow(ChecklistItemNotFoundException::new);
     }
 
     private ItemEntity requireLinkedItem(UUID projectId, UUID itemId, UUID userId) {
         // Read only the box ID before locking; load the item afterwards to avoid stale firstDay state.
-        UUID boxId = itemRepository.findOwnedBoxId(itemId, projectId, userId)
+        UUID boxId = itemRepository.findAccessibleBoxId(itemId, projectId, userId)
                 .orElseThrow(() -> new ItemNotFoundException("Вещь не найдена в этом проекте"));
         boxRepository.findForUpdate(boxId, projectId).orElseThrow(() -> new ItemNotFoundException("Коробка не найдена"));
         return itemRepository.findByIdAndBox_Id(itemId, boxId).orElseThrow(() -> {
-            if (itemRepository.findOwnedBoxId(itemId, projectId, userId).isPresent()) {
+            if (itemRepository.findAccessibleBoxId(itemId, projectId, userId).isPresent()) {
                 // Do not acquire the new box after holding the old one: that would break transfer lock ordering.
                 return new ResourceConflictException("Вещь перемещена в другую коробку; повторите привязку");
             }

@@ -15,6 +15,9 @@ public class MoveProjectResponse {
     @Schema(description = "Идентификатор проекта переезда")
     private UUID id;
 
+    @Schema(description = "UUID создателя; все добавленные участники имеют те же права")
+    private UUID ownerId;
+
     @Schema(description = "Название переезда")
     private String name;
 

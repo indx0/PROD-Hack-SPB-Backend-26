@@ -15,24 +15,32 @@ import java.util.UUID;
 
 public interface MoveProjectRepository extends JpaRepository<MoveProjectEntity, UUID> {
 
-    Page<MoveProjectEntity> findAllByOwner_Id(UUID ownerId, Pageable pageable);
-    Optional<MoveProjectEntity> findByIdAndOwner_Id(UUID projectId, UUID ownerId);
+    @Query("""
+            select p from MoveProjectEntity p where p.id = :projectId
+            and (p.owner.id = :userId or exists (select m.id from ProjectParticipantEntity m where m.project.id = p.id and m.user.id = :userId))
+            """)
+    Optional<MoveProjectEntity> findAccessibleById(@Param("projectId") UUID projectId, @Param("userId") UUID userId);
     boolean existsByOwner_IdAndName(UUID ownerId, String name);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select p from MoveProjectEntity p where p.id = :projectId and p.owner.id = :ownerId")
-    Optional<MoveProjectEntity> findForUpdate(@Param("projectId") UUID projectId, @Param("ownerId") UUID ownerId);
+    @Query("""
+            select p from MoveProjectEntity p where p.id = :projectId
+            and (p.owner.id = :userId or exists (select m.id from ProjectParticipantEntity m where m.project.id = p.id and m.user.id = :userId))
+            """)
+    Optional<MoveProjectEntity> findForUpdate(@Param("projectId") UUID projectId, @Param("userId") UUID userId);
 
     @Query(value = """
-            select p from MoveProjectEntity p where p.owner.id = :ownerId
+            select p from MoveProjectEntity p
+            where (p.owner.id = :userId or exists (select m.id from ProjectParticipantEntity m where m.project.id = p.id and m.user.id = :userId))
             and (:archived is null or (:archived = true and p.archivedAt is not null)
                 or (:archived = false and p.archivedAt is null))
             """, countQuery = """
-            select count(p) from MoveProjectEntity p where p.owner.id = :ownerId
+            select count(p) from MoveProjectEntity p
+            where (p.owner.id = :userId or exists (select m.id from ProjectParticipantEntity m where m.project.id = p.id and m.user.id = :userId))
             and (:archived is null or (:archived = true and p.archivedAt is not null)
                 or (:archived = false and p.archivedAt is null))
             """)
-    Page<MoveProjectEntity> findAllByArchiveFilter(@Param("ownerId") UUID ownerId, @Param("archived") Boolean archived, Pageable pageable);
+    Page<MoveProjectEntity> findAllByArchiveFilter(@Param("userId") UUID userId, @Param("archived") Boolean archived, Pageable pageable);
 
     @Modifying
     @Query(value = """

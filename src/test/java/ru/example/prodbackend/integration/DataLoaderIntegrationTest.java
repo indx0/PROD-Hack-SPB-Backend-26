@@ -80,6 +80,7 @@ class DataLoaderIntegrationTest extends BaseIntegrationTest {
         MoveProjectEntity project = entityManager.createQuery("from MoveProjectEntity", MoveProjectEntity.class)
                 .getSingleResult();
         assertThat(project.getOwner().getEmail()).isEqualTo("user1");
+        assertThat(entityManager.createQuery("select p.user.email from ProjectParticipantEntity p", String.class).getResultList()).containsExactly("admin");
         LocalDate moveDate = project.getMoveDate().atOffset(ZoneOffset.UTC).toLocalDate();
         assertThat(moveDate).isBetween(beforeLoad.plusDays(14), afterLoad.plusDays(14));
         assertThat(project.getMoveDate().atOffset(ZoneOffset.UTC).toLocalTime()).isEqualTo(LocalTime.MIDNIGHT);
@@ -155,7 +156,7 @@ class DataLoaderIntegrationTest extends BaseIntegrationTest {
         loader.run(args);
         entityManager.flush();
         var before = new HashMap<String, List<UUID>>();
-        for (String entity : new String[]{"UserEntity", "RefreshTokenEntity", "MoveProjectEntity", "RoomEntity", "BoxEntity", "ItemEntity", "MoveTaskEntity", "FirstDayChecklistItemEntity", "ProjectEventEntity"}) {
+        for (String entity : new String[]{"UserEntity", "RefreshTokenEntity", "MoveProjectEntity", "ProjectParticipantEntity", "RoomEntity", "BoxEntity", "ItemEntity", "MoveTaskEntity", "FirstDayChecklistItemEntity", "ProjectEventEntity"}) {
             before.put(entity, entityManager.createQuery("select e.id from " + entity + " e order by e.id", UUID.class).getResultList());
         }
         String password = userRepository.findByEmail("user1").orElseThrow().getPassword();

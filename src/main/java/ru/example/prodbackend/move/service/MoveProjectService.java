@@ -41,10 +41,12 @@ public class MoveProjectService {
     private final TaskTemplateService taskTemplateService;
     private final MoveTaskRepository moveTaskRepository;
     private final FirstDayChecklistService checklistService;
+    private final ProjectParticipantService participantService;
 
     @Transactional
     public MoveProjectResponse createMoveProject(CreateMoveProjectRequest request, UserEntity user) {
         UserEntity owner = userRepository.findById(user.getId()).orElseThrow(() -> new UserNotFoundException("Current user not found"));
+        var participants = participantService.resolveUsers(request.getParticipants());
 
         MoveProjectEntity project = MoveProjectEntity.builder()
                 .owner(owner)
@@ -55,6 +57,7 @@ public class MoveProjectService {
                 .build();
 
         MoveProjectEntity savedProject = moveProjectRepository.save(project);
+        participantService.addInitialParticipants(savedProject, participants);
         var moveDate = savedProject.getMoveDate().atOffset(ZoneOffset.UTC).toLocalDate();
         moveTaskRepository.saveAll(taskTemplateService.getDefaultTemplates().stream().map(template -> MoveTaskEntity.builder()
                 .project(savedProject).template(template).title(template.getTitle()).description(template.getDescription()).stage(template.getStage())
@@ -75,12 +78,12 @@ public class MoveProjectService {
     }
 
     public MoveProjectResponse getMoveProject(UUID projectId, UserEntity user) {
-        return toResponse(projectAccessService.getOwnedProject(projectId, user.getId()));
+        return toResponse(projectAccessService.getAccessibleProject(projectId, user.getId()));
     }
 
     @Transactional
     public MoveProjectResponse updateMoveProject(UUID projectId, UpdateMoveProjectRequest request, UserEntity user) {
-        MoveProjectEntity project = projectAccessService.getOwnedProjectForUpdate(projectId, user.getId());
+        MoveProjectEntity project = projectAccessService.getAccessibleProjectForUpdate(projectId, user.getId());
 
         if (request.getName() != null) {
             project.setName(request.getName().strip());
@@ -104,7 +107,7 @@ public class MoveProjectService {
 
     @Transactional
     public void deleteMoveProject(UUID projectId, UserEntity user) {
-        MoveProjectEntity project = projectAccessService.getOwnedProjectForUpdate(projectId, user.getId());
+        MoveProjectEntity project = projectAccessService.getAccessibleProjectForUpdate(projectId, user.getId());
 
         // Порядок важен из-за внешних ключей.
         moveProjectRepository.deleteProjectItems(projectId);
@@ -129,11 +132,11 @@ public class MoveProjectService {
     }
 
     private MoveProjectResponse changeArchiveState(UUID projectId, UserEntity user, boolean archived) {
-        var project = projectAccessService.lockOwnedProject(projectId, user.getId());
+        var project = projectAccessService.lockAccessibleProject(projectId, user.getId());
         if ((project.getArchivedAt() != null) == archived) return toResponse(project);
         project.setArchivedAt(archived ? Instant.now().truncatedTo(ChronoUnit.MICROS) : null);
         moveProjectRepository.saveAndFlush(project);
-        projectEventService.record(project, project.getOwner(), archived ? ProjectEventType.PROJECT_ARCHIVED : ProjectEventType.PROJECT_RESTORED,
+        projectEventService.record(project, user, archived ? ProjectEventType.PROJECT_ARCHIVED : ProjectEventType.PROJECT_RESTORED,
                 EventObjectType.PROJECT, projectId, (archived ? "Архивирован" : "Восстановлен") + " проект переезда «" + project.getName() + "»");
         return toResponse(project);
     }
@@ -141,6 +144,7 @@ public class MoveProjectService {
     private MoveProjectResponse toResponse(MoveProjectEntity project) {
         return MoveProjectResponse.builder()
                 .id(project.getId())
+                .ownerId(project.getOwner().getId())
                 .name(project.getName())
                 .moveDate(project.getMoveDate())
                 .originAddress(project.getOriginAddress())

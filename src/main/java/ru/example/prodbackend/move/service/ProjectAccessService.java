@@ -18,13 +18,13 @@ public class ProjectAccessService {
 
     private final MoveProjectRepository moveProjectRepository;
 
-    public MoveProjectEntity getOwnedProject(UUID projectId, UUID userId) {
-        return moveProjectRepository.findByIdAndOwner_Id(projectId, userId).orElseThrow(() -> new MoveProjectNotFoundException("Проект переезда не найден"));
+    public MoveProjectEntity getAccessibleProject(UUID projectId, UUID userId) {
+        return moveProjectRepository.findAccessibleById(projectId, userId).orElseThrow(() -> new MoveProjectNotFoundException("Проект переезда не найден"));
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public MoveProjectEntity getOwnedProjectForUpdate(UUID projectId, UUID userId) {
-        var project = lockOwnedProject(projectId, userId);
+    public MoveProjectEntity getAccessibleProjectForUpdate(UUID projectId, UUID userId) {
+        var project = lockAccessibleProject(projectId, userId);
         if (project.getArchivedAt() != null) {
             throw new ResourceConflictException("Переезд находится в архиве. Восстановите его для изменения данных.");
         }
@@ -33,7 +33,7 @@ public class ProjectAccessService {
 
     /** Archive/restore also take this lock, but must be allowed to load archived projects. */
     @Transactional(propagation = Propagation.MANDATORY)
-    public MoveProjectEntity lockOwnedProject(UUID projectId, UUID userId) {
+    public MoveProjectEntity lockAccessibleProject(UUID projectId, UUID userId) {
         return moveProjectRepository.findForUpdate(projectId, userId)
                 .orElseThrow(() -> new MoveProjectNotFoundException("Проект переезда не найден"));
     }

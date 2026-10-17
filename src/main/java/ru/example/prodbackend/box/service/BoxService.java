@@ -53,7 +53,7 @@ public class BoxService {
 
     @Transactional
     public BoxResponse create(UUID userId, UUID projectId, CreateBoxRequest request) {
-        var project = projectAccessService.getOwnedProjectForUpdate(projectId, userId);
+        var project = projectAccessService.getAccessibleProjectForUpdate(projectId, userId);
         RoomEntity room = requireProjectRoom(request.getRoomId(), projectId);
 
         if (request.getNumber() == null || request.getNumber() <= 0) {
@@ -67,12 +67,12 @@ public class BoxService {
                 .contentsDeferred(request.isContentsDeferred()).title(request.getTitle().strip())
                 .fragile(request.isFragile()).firstDay(request.isFirstDay()).carryWithMe(request.isCarryWithMe()).build();
         boxRepository.saveAndFlush(box);
-        recordEvent(box, ProjectEventType.BOX_CREATED, "Создана коробка №" + box.getNumber() + ", комната: " + room.getName());
+        recordEvent(box, userId, ProjectEventType.BOX_CREATED, "Создана коробка №" + box.getNumber() + ", комната: " + room.getName());
         return toResponse(box);
     }
 
     public PageResponse<BoxResponse> findAll(UUID userId, UUID projectId, BoxFilter filter, PaginationRequest pagination) {
-        projectAccessService.getOwnedProject(projectId, userId);
+        projectAccessService.getAccessibleProject(projectId, userId);
 
         PageRequest pageable = PageRequest.of(pagination.getPage(), pagination.getSize(), Sort.by("number", "id"));
 
@@ -85,12 +85,12 @@ public class BoxService {
     }
 
     public BoxResponse findById(UUID userId, UUID projectId, UUID boxId) {
-        return toResponse(requireOwnedBox(userId, projectId, boxId, false));
+        return toResponse(requireAccessibleBox(userId, projectId, boxId, false));
     }
 
     @Transactional
     public BoxResponse update(UUID userId, UUID projectId, UUID boxId, UpdateBoxRequest request) {
-        BoxEntity box = requireOwnedBox(userId, projectId, boxId, true);
+        BoxEntity box = requireAccessibleBox(userId, projectId, boxId, true);
 
         if (!request.isUpdatePresent()) {
             throw new RequestValidationException("request", "Укажите хотя бы одно поле для изменения");
@@ -128,7 +128,7 @@ public class BoxService {
 
     @Transactional
     public BoxResponse changeStatus(UUID userId, UUID projectId, UUID boxId, BoxStatus status) {
-        BoxEntity box = requireOwnedBox(userId, projectId, boxId, true);
+        BoxEntity box = requireAccessibleBox(userId, projectId, boxId, true);
         BoxStatus previousStatus = box.getStatus();
 
         if (status == null) {
@@ -159,13 +159,13 @@ public class BoxService {
         box.changeStatus(status);
         boxRepository.saveAndFlush(box);
 
-        recordEvent(box, ProjectEventType.BOX_STATUS_CHANGED, "Коробка №" + box.getNumber() + ": " + previousStatus + " → " + status);
+        recordEvent(box, userId, ProjectEventType.BOX_STATUS_CHANGED, "Коробка №" + box.getNumber() + ": " + previousStatus + " → " + status);
         return toResponse(box, counts);
     }
 
     @Transactional
     public BoxResponse correctStatus(UUID userId, UUID projectId, UUID boxId, CorrectBoxStatusRequest request) {
-        BoxEntity box = requireOwnedBox(userId, projectId, boxId, true);
+        BoxEntity box = requireAccessibleBox(userId, projectId, boxId, true);
         if (request.getExpectedStatus() == null) throw new RequestValidationException("expectedStatus", "Укажите ожидаемый статус");
         if (request.getTargetStatus() == null) throw new RequestValidationException("targetStatus", "Укажите целевой статус");
         if (!Boolean.TRUE.equals(request.getConfirmed())) throw new RequestValidationException("confirmed", "Подтвердите исправление статуса");
@@ -197,13 +197,13 @@ public class BoxService {
         boxRepository.saveAndFlush(box);
         String description = "Исправлен статус коробки №" + box.getNumber() + ": " + previous + " → " + target
                 + (resetUnpacked ? ". Отметки распаковки сброшены." : ". Отметки распаковки сохранены.");
-        projectEventService.recordStatusCorrection(box, previous, target, description);
+        projectEventService.recordStatusCorrection(box, userId, previous, target, description);
         return toResponse(box, counts);
     }
 
     @Transactional
     public void delete(UUID userId, UUID projectId, UUID boxId) {
-        BoxEntity box = requireOwnedBox(userId, projectId, boxId, true);
+        BoxEntity box = requireAccessibleBox(userId, projectId, boxId, true);
 
         itemRepository.deleteByBox_Id(boxId);
         boxRepository.delete(box);
@@ -211,7 +211,7 @@ public class BoxService {
     }
 
     public BoxSummaryResponse summary(UUID userId, UUID projectId) {
-        projectAccessService.getOwnedProject(projectId, userId);
+        projectAccessService.getAccessibleProject(projectId, userId);
 
         List<BoxEntity> boxes =
                 boxRepository.findAllByProject_IdOrderByNumberAscIdAsc(projectId);
@@ -237,9 +237,9 @@ public class BoxService {
                 .build();
     }
 
-    private BoxEntity requireOwnedBox(UUID userId, UUID projectId, UUID boxId, boolean forUpdate) {
-        if (forUpdate) projectAccessService.getOwnedProjectForUpdate(projectId, userId);
-        else projectAccessService.getOwnedProject(projectId, userId);
+    private BoxEntity requireAccessibleBox(UUID userId, UUID projectId, UUID boxId, boolean forUpdate) {
+        if (forUpdate) projectAccessService.getAccessibleProjectForUpdate(projectId, userId);
+        else projectAccessService.getAccessibleProject(projectId, userId);
         var box = forUpdate ? boxRepository.findForUpdate(boxId, projectId) : boxRepository.findByIdAndProject_Id(boxId, projectId);
         return box.orElseThrow(BoxNotFoundException::new);
     }
@@ -252,9 +252,8 @@ public class BoxService {
         return roomRepository.findForUpdate(roomId, projectId).orElseThrow(() -> new RoomNotFoundException("Комната не найдена в этом проекте"));
     }
 
-    private void recordEvent(BoxEntity box, ProjectEventType type, String description) {
-        // Доступ к коробке разрешён только владельцу проекта; событие сохраняется в транзакции изменения коробки.
-        projectEventService.record(box.getProject(), box.getProject().getOwner(), type, EventObjectType.BOX, box.getId(), description);
+    private void recordEvent(BoxEntity box, UUID actorId, ProjectEventType type, String description) {
+        projectEventService.recordByActorId(box.getProject(), actorId, type, EventObjectType.BOX, box.getId(), description);
     }
 
     private BoxResponse toResponse(BoxEntity box) {

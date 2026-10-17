@@ -50,7 +50,7 @@ public class RoomController {
                     """,
             responses = {
                     @ApiResponse(responseCode = "201", description = "Комната создана", content = @Content(schema = @Schema(implementation = RoomResponse.class))),
-                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не существует или принадлежит другому пользователю", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не существует или недоступен текущему пользователю", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: название уже занято в этом проекте; для изменений — переезд в архиве, сначала восстановите его", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: название пустое или длиннее 255 символов; iconKey пустой, пробельный или длиннее 64 символов", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             })
@@ -66,7 +66,7 @@ public class RoomController {
             description = "Возвращает комнаты своего проекта с сортировкой name ASC, id ASC. По умолчанию page=0, size=20. Пустая страница возвращается с кодом 200.",
             responses = {
                     @ApiResponse(responseCode = "200", description = "Страница комнат получена"),
-                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не существует или принадлежит другому пользователю", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не существует или недоступен текущему пользователю", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: page должен быть целым числом >= 0, size — целым числом от 1 до 100", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             })
     public ResponseEntity<PageResponse<RoomResponse>> getRooms(

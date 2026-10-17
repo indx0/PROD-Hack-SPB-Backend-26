@@ -55,7 +55,7 @@ public class ItemController {
     private final ItemService itemService;
 
     @Operation(summary = "Получение карточки вещи",
-            description = "Возвращает вещь владельца проекта, включая отметки упаковки и распаковки.",
+            description = "Возвращает вещь доступного участнику проекта, включая отметки упаковки и распаковки.",
             responses = @ApiResponse(responseCode = "200", description = "Карточка вещи",
                     content = @Content(schema = @Schema(implementation = ItemResponse.class))))
     @GetMapping("/boxes/{boxId}/items/{itemId}")
@@ -66,7 +66,7 @@ public class ItemController {
 
     @Operation(summary = "Получение содержимого коробки",
             description = """
-                    Возвращает страницу вещей коробки владельца проекта.
+                    Возвращает страницу вещей коробки доступного участнику проекта.
                     page начинается с 0, size — от 1 до 100, по умолчанию 20.
                     Сортировка фиксирована: createdAt ASC, id ASC; параметр sort игнорируется.
                     """,
@@ -181,7 +181,7 @@ public class ItemController {
     }
 
     @Operation(summary = "Удаление вещи",
-            description = "Удаляет вещь только в коробке PACKING, после проверки владельца. Иначе 409. Подтверждение показывает клиент.",
+            description = "Удаляет вещь только в коробке PACKING, после проверки участия в проекте. Иначе 409. Подтверждение показывает клиент.",
             responses = @ApiResponse(responseCode = "204", description = "Вещь удалена", content = @Content))
     @DeleteMapping("/boxes/{boxId}/items/{itemId}")
     public ResponseEntity<Void> delete(

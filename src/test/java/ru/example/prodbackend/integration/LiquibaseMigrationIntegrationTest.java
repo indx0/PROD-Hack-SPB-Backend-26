@@ -26,7 +26,7 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
     private static final String CHANGELOG = "db/changelog/db.changelog-master.xml";
     private static final String[] TABLES = {
             "users", "refresh_tokens", "move_projects", "rooms", "boxes", "items",
-            "task_templates", "move_tasks", "first_day_checklist_items", "project_events"
+            "task_templates", "move_tasks", "first_day_checklist_items", "project_events", "project_participants"
     };
 
     @Autowired
@@ -47,6 +47,13 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                 assertHistory(jdbc);
                 assertConstraints(jdbc);
 
+                // Remove only the participant feature before checking the preceding archive migration's guard.
+                var existingProjects = jdbc.queryForList("SELECT * FROM move_projects ORDER BY id");
+                runLiquibase(schema, 1);
+                assertHistory(jdbc, 17);
+                assertThat(jdbc.queryForObject("SELECT count(*) FROM information_schema.tables WHERE table_schema = ? AND table_name = 'project_participants'", Long.class, schema)).isZero();
+                assertThat(jdbc.queryForList("SELECT * FROM move_projects ORDER BY id")).isEqualTo(existingProjects);
+
                 // Downgrade must refuse to erase or relabel archive history.
                 UUID archivedProject = jdbc.queryForObject("SELECT id FROM move_projects ORDER BY id LIMIT 1", UUID.class);
                 UUID archiveEvent = UUID.randomUUID();
@@ -58,10 +65,13 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                 jdbc.update("UPDATE project_events SET event_type = 'PROJECT_RESTORED' WHERE id = ?", archiveEvent);
                 assertThatThrownBy(() -> runLiquibase(schema, 1)).hasRootCauseInstanceOf(SQLException.class)
                         .rootCause().extracting(error -> ((SQLException) error).getSQLState()).isEqualTo("23514");
-                assertHistory(jdbc);
+                assertHistory(jdbc, 17);
                 assertThat(jdbc.queryForObject("SELECT event_type FROM project_events WHERE id = ?", String.class, archiveEvent)).isEqualTo("PROJECT_RESTORED");
                 assertThat(jdbc.queryForObject("SELECT archived_at FROM move_projects WHERE id = ?", java.sql.Timestamp.class, archivedProject)).isNotNull();
                 jdbc.update("DELETE FROM project_events WHERE id = ?", archiveEvent); // Remove only this test fixture before lifecycle rollback.
+                runLiquibase(schema, 0);
+                assertHistory(jdbc);
+                assertThat(jdbc.queryForObject("SELECT count(*) FROM project_participants", Long.class)).isZero();
 
                 // Roll back only the new columns, then upgrade a schema that already has items.
                 var items = jdbc.queryForList("SELECT id, name, quantity, first_day FROM items ORDER BY id");
@@ -70,7 +80,7 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                 var projects = jdbc.queryForList("SELECT id, name, move_date FROM move_projects ORDER BY id");
                 var checklist = jdbc.queryForList("SELECT id, name, completed_at FROM first_day_checklist_items ORDER BY id");
                 var events = jdbc.queryForList("SELECT id, actor_id, object_id, description, occurred_at FROM project_events ORDER BY id");
-                runLiquibase(schema, 6);
+                runLiquibase(schema, 7);
                 assertThat(jdbc.queryForList("""
                         SELECT column_name FROM information_schema.columns
                         WHERE table_schema = ? AND table_name = 'items'
@@ -113,7 +123,7 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                 assertHistory(jdbc);
                 assertThat(jdbc.queryForList("SELECT id, email FROM users ORDER BY email")).isEqualTo(users);
 
-                runLiquibase(schema, 17);
+                runLiquibase(schema, 18);
                 assertThat(jdbc.queryForList("""
                         SELECT tablename FROM pg_tables
                         WHERE schemaname = ? AND tablename NOT IN ('databasechangelog', 'databasechangeloglock')
@@ -166,8 +176,12 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
     }
 
     private void assertHistory(JdbcTemplate jdbc) {
+        assertHistory(jdbc, 18);
+    }
+
+    private void assertHistory(JdbcTemplate jdbc, int expectedCount) {
         assertThat(jdbc.queryForList("SELECT author FROM databasechangelog", String.class))
-                .hasSize(17).containsOnly("indx0", "timn2020");
+                .hasSize(expectedCount).containsOnly("indx0", "timn2020");
     }
 
     private void assertConstraints(JdbcTemplate jdbc) {
@@ -198,6 +212,18 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
         }
         UUID room = UUID.randomUUID();
         assertThat(jdbc.queryForObject("SELECT archived_at FROM move_projects WHERE id = ?", java.sql.Timestamp.class, project)).isNull();
+        String insertParticipant = "INSERT INTO project_participants (id, project_id, user_id) VALUES (?, ?, ?)";
+        UUID participant = UUID.randomUUID();
+        jdbc.update(insertParticipant, participant, project, otherUser);
+        assertThat(jdbc.queryForObject("SELECT added_at FROM project_participants WHERE id = ?", java.sql.Timestamp.class, participant)).isNotNull();
+        rejects(jdbc, insertParticipant, "23505", UUID.randomUUID(), project, otherUser);
+        rejects(jdbc, insertParticipant, "23503", UUID.randomUUID(), UUID.randomUUID(), otherUser);
+        rejects(jdbc, insertParticipant, "23503", UUID.randomUUID(), project, UUID.randomUUID());
+        UUID temporaryProject = UUID.randomUUID();
+        jdbc.update("INSERT INTO move_projects (id, owner_id, name, move_date, created_at, updated_at) VALUES (?, ?, 'Temporary', now(), now(), now())", temporaryProject, owner);
+        jdbc.update(insertParticipant, UUID.randomUUID(), temporaryProject, otherUser);
+        jdbc.update("DELETE FROM move_projects WHERE id = ?", temporaryProject);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM project_participants WHERE project_id = ?", Long.class, temporaryProject)).isZero();
         UUID otherRoom = UUID.randomUUID();
         jdbc.update("INSERT INTO rooms (id, project_id, name, created_at, updated_at) VALUES (?, ?, 'Room', now(), now())",
                 room, project);

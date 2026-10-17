@@ -12,6 +12,7 @@ import ru.example.prodbackend.event.entity.ProjectEventType;
 import ru.example.prodbackend.event.repository.ProjectEventRepository;
 import ru.example.prodbackend.move.entity.MoveProjectEntity;
 import ru.example.prodbackend.user.entity.UserEntity;
+import ru.example.prodbackend.user.repository.UserRepository;
 import ru.example.prodbackend.common.dto.PageResponse;
 import ru.example.prodbackend.common.dto.PaginationRequest;
 import ru.example.prodbackend.event.dto.ProjectEventResponse;
@@ -27,10 +28,11 @@ public class ProjectEventService {
 
     private final ProjectEventRepository projectEventRepository;
     private final ProjectAccessService projectAccessService;
+    private final UserRepository userRepository;
 
     @Transactional(readOnly = true)
     public PageResponse<ProjectEventResponse> findAll(UUID projectId, PaginationRequest pagination, UUID userId) {
-        projectAccessService.getOwnedProject(projectId, userId);
+        projectAccessService.getAccessibleProject(projectId, userId);
         var pageable = PageRequest.of(pagination.getPage(), pagination.getSize(), Sort.by(Sort.Order.desc("occurredAt"), Sort.Order.desc("id")));
         return PageResponse.from(projectEventRepository.findAllByProject_Id(projectId, pageable).map(this::toResponse));
     }
@@ -43,8 +45,13 @@ public class ProjectEventService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public void recordStatusCorrection(BoxEntity box, BoxStatus previousStatus, BoxStatus newStatus, String description) {
-        projectEventRepository.save(ProjectEventEntity.builder().project(box.getProject()).actor(box.getProject().getOwner())
+    public void recordByActorId(MoveProjectEntity project, UUID actorId, ProjectEventType eventType, EventObjectType objectType, UUID objectId, String description) {
+        record(project, userRepository.getReferenceById(actorId), eventType, objectType, objectId, description);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void recordStatusCorrection(BoxEntity box, UUID actorId, BoxStatus previousStatus, BoxStatus newStatus, String description) {
+        projectEventRepository.save(ProjectEventEntity.builder().project(box.getProject()).actor(userRepository.getReferenceById(actorId))
                 .eventType(ProjectEventType.BOX_STATUS_CORRECTED).objectType(EventObjectType.BOX).objectId(box.getId())
                 .previousStatus(previousStatus).newStatus(newStatus).description(description).build());
     }

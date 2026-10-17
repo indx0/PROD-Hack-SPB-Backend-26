@@ -55,7 +55,7 @@ public class BoxController {
                     title — подпись до 255 символов с удалением пробелов по краям, по умолчанию пустая строка.
                     fragile, firstDay и carryWithMe по умолчанию false; явный null для новых полей запрещён.
                     firstDay коробки не меняет вещи и чек-лист, carryWithMe не меняет последовательность статусов.
-                    Комната должна принадлежать этому проекту. Доступ разрешён только владельцу проекта.
+                    Комната должна принадлежать этому проекту. Доступ разрешён любому участнику проекта.
                     Событие BOX_CREATED сохраняется вместе с коробкой в одной транзакции.
                     """,
             responses = {
@@ -94,7 +94,7 @@ public class BoxController {
                     """,
             responses = {
                     @ApiResponse(responseCode = "200", description = "Страница коробок проекта"),
-                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не существует или принадлежит другому пользователю", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не существует или недоступен текущему пользователю", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: некорректные фильтры или параметры пагинации; page >= 0, size от 1 до 100, number > 0; подробности в fieldErrors", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             }
     )
@@ -220,7 +220,7 @@ public class BoxController {
             summary = "Удаление коробки",
             description = """
                     Удаляет коробку вместе с содержимым. Подтверждение выполняется на клиенте.
-                    Вещи и коробка удаляются в одной транзакции после проверки владельца проекта.
+                    Вещи и коробка удаляются в одной транзакции после проверки участия в проекте.
                     """,
             responses = {
                     @ApiResponse(responseCode = "204", description = "Коробка удалена", content = @Content),
@@ -249,7 +249,7 @@ public class BoxController {
             responses = {
                     @ApiResponse(responseCode = "200", description = "Статистика коробок проекта",
                             content = @Content(schema = @Schema(implementation = BoxSummaryResponse.class))),
-                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не существует или принадлежит другому пользователю", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не существует или недоступен текущему пользователю", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             }
     )
     @GetMapping("/summary")

@@ -31,10 +31,10 @@ class ProjectAccessServiceTest {
         UUID projectId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
         var project = MoveProjectEntity.builder().id(projectId).build();
-        when(repository.findByIdAndOwner_Id(projectId, userId)).thenReturn(Optional.of(project));
+        when(repository.findAccessibleById(projectId, userId)).thenReturn(Optional.of(project));
 
-        assertSame(project, service.getOwnedProject(projectId, userId));
-        verify(repository).findByIdAndOwner_Id(projectId, userId);
+        assertSame(project, service.getAccessibleProject(projectId, userId));
+        verify(repository).findAccessibleById(projectId, userId);
         verifyNoMoreInteractions(repository);
     }
 
@@ -44,12 +44,12 @@ class ProjectAccessServiceTest {
         UUID ownerId = UUID.randomUUID();
         UUID userId = scenario.equals("foreign") ? UUID.randomUUID() : ownerId;
         UUID projectId = UUID.randomUUID();
-        when(repository.findByIdAndOwner_Id(projectId, userId)).thenReturn(Optional.empty());
+        when(repository.findAccessibleById(projectId, userId)).thenReturn(Optional.empty());
 
-        var exception = assertThrows(MoveProjectNotFoundException.class, () -> service.getOwnedProject(projectId, userId));
+        var exception = assertThrows(MoveProjectNotFoundException.class, () -> service.getAccessibleProject(projectId, userId));
 
         assertEquals("Проект переезда не найден", exception.getMessage());
-        verify(repository).findByIdAndOwner_Id(projectId, userId);
+        verify(repository).findAccessibleById(projectId, userId);
         verifyNoMoreInteractions(repository);
     }
 }

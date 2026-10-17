@@ -44,12 +44,12 @@ public class ItemService {
     private final ProjectAccessService projectAccessService;
 
     public ItemResponse findById(UUID userId, UUID projectId, UUID boxId, UUID itemId) {
-        requireOwnedBox(userId, projectId, boxId, false);
+        requireAccessibleBox(userId, projectId, boxId, false);
         return toResponse(requireItem(boxId, itemId));
     }
 
     public PageResponse<ItemResponse> findAll(UUID userId, UUID projectId, UUID boxId, PaginationRequest pagination) {
-        requireOwnedBox(userId, projectId, boxId, false);
+        requireAccessibleBox(userId, projectId, boxId, false);
         Pageable ordered = PageRequest.of(pagination.getPage(), pagination.getSize(),
                 Sort.by("createdAt", "id"));
         return PageResponse.from(itemRepository.findAllByBox_Id(boxId, ordered).map(this::toResponse));
@@ -58,7 +58,7 @@ public class ItemService {
     @Transactional
     public ItemResponse create(UUID userId, UUID projectId, UUID boxId, CreateItemRequest request) {
         requireWritableProject(userId, projectId);
-        BoxEntity box = requireOwnedBox(userId, projectId, boxId, true);
+        BoxEntity box = requireAccessibleBox(userId, projectId, boxId, true);
         requirePacking(box, "добавлять вещи");
 
         ItemEntity item = ItemEntity.builder().box(box).name(request.getName().strip())
@@ -70,7 +70,7 @@ public class ItemService {
     @Transactional
     public List<ItemResponse> createBatch(UUID userId, UUID projectId, UUID boxId, CreateItemsRequest request) {
         requireWritableProject(userId, projectId);
-        BoxEntity box = requireOwnedBox(userId, projectId, boxId, true);
+        BoxEntity box = requireAccessibleBox(userId, projectId, boxId, true);
         requirePacking(box, "добавлять вещи");
 
         List<CreateItemRequest> entries = request.getItems() != null ? request.getItems()
@@ -86,7 +86,7 @@ public class ItemService {
     @Transactional
     public ItemResponse update(UUID userId, UUID projectId, UUID boxId, UUID itemId, UpdateItemRequest request) {
         requireWritableProject(userId, projectId);
-        BoxEntity box = requireOwnedBox(userId, projectId, boxId, true);
+        BoxEntity box = requireAccessibleBox(userId, projectId, boxId, true);
         ItemEntity item = requireItem(boxId, itemId);
         boolean quantityChanged = request.getQuantity() != null && request.getQuantity() != item.getQuantity();
         if (quantityChanged) requirePacking(box, "изменять количество");
@@ -112,12 +112,12 @@ public class ItemService {
         UUID targetBoxId = request.getTargetBoxId();
         boolean sourceFirst = sourceBoxId.compareTo(targetBoxId) <= 0;
         // Every transfer locks the pair in the same UUID order, including opposite transfers.
-        BoxEntity first = requireOwnedBox(userId, projectId, sourceFirst ? sourceBoxId : targetBoxId, true);
+        BoxEntity first = requireAccessibleBox(userId, projectId, sourceFirst ? sourceBoxId : targetBoxId, true);
         BoxEntity second = sourceBoxId.equals(targetBoxId) ? first
-                : requireOwnedBox(userId, projectId, sourceFirst ? targetBoxId : sourceBoxId, true);
+                : requireAccessibleBox(userId, projectId, sourceFirst ? targetBoxId : sourceBoxId, true);
         BoxEntity source = sourceFirst ? first : second;
         BoxEntity target = sourceFirst ? second : first;
-        ItemEntity item = itemRepository.findByIdAndBoxProject_IdAndBoxProjectOwnerId(itemId, projectId, userId)
+        ItemEntity item = itemRepository.findAccessibleById(itemId, projectId, userId)
                 .orElseThrow(() -> new ItemNotFoundException("Вещь не найдена в этом проекте"));
         UUID currentBoxId = item.getBox().getId();
         if (currentBoxId.equals(targetBoxId)) return toResponse(item);
@@ -133,7 +133,7 @@ public class ItemService {
     @Transactional
     public void delete(UUID userId, UUID projectId, UUID boxId, UUID itemId) {
         requireWritableProject(userId, projectId);
-        BoxEntity box = requireOwnedBox(userId, projectId, boxId, true);
+        BoxEntity box = requireAccessibleBox(userId, projectId, boxId, true);
         ItemEntity item = requireItem(boxId, itemId);
         requirePacking(box, "удалять вещи");
         itemRepository.delete(item);
@@ -148,7 +148,7 @@ public class ItemService {
     }
 
     public List<ItemBoxSuggestionResponse> suggestions(UUID userId, UUID projectId, UUID itemId, int limit) {
-        ItemEntity item = itemRepository.findByIdAndBoxProject_IdAndBoxProjectOwnerId(itemId, projectId, userId)
+        ItemEntity item = itemRepository.findAccessibleById(itemId, projectId, userId)
                 .orElseThrow(() -> new ItemNotFoundException("Item not found"));
         UUID roomId = item.getBox().getRoom().getId();
         Set<UUID> matchingBoxes = new HashSet<>(itemRepository.findMatchingBoxIds(
@@ -181,19 +181,23 @@ public class ItemService {
 
     private void requireWritableProject(UUID userId, UUID projectId) {
         try {
-            projectAccessService.getOwnedProjectForUpdate(projectId, userId);
+            projectAccessService.getAccessibleProjectForUpdate(projectId, userId);
         } catch (MoveProjectNotFoundException exception) {
             // Preserve the existing item API's generic 404 for unavailable resources.
             throw new ItemNotFoundException("Box not found");
         }
     }
 
-    private BoxEntity requireOwnedBox(UUID userId, UUID projectId, UUID boxId, boolean forUpdate) {
+    private BoxEntity requireAccessibleBox(UUID userId, UUID projectId, UUID boxId, boolean forUpdate) {
         BoxEntity box = (forUpdate ? boxRepository.findForUpdate(boxId, projectId)
                 : boxRepository.findByIdAndProject_Id(boxId, projectId))
                 .orElseThrow(() -> new ItemNotFoundException("Box not found"));
-        if (!box.getProject().getOwner().getId().equals(userId)) {
-            throw new ItemNotFoundException("Box not found");
+        if (!forUpdate) {
+            try {
+                projectAccessService.getAccessibleProject(projectId, userId);
+            } catch (MoveProjectNotFoundException exception) {
+                throw new ItemNotFoundException("Box not found");
+            }
         }
         return box;
     }

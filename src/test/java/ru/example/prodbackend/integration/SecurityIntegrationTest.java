@@ -126,7 +126,7 @@ class SecurityIntegrationTest extends AuthIntegrationTestSupport {
         }
         for (String operation : new String[]{project + ".get", project + ".patch", project + ".delete"}) {
             response.andExpect(jsonPath(operation + ".responses['400'].content['application/json'].schema['$ref']").value("#/components/schemas/ErrorResponse"))
-                    .andExpect(jsonPath(operation + ".responses['404'].description").value("MOVE_PROJECT_NOT_FOUND: проект не существует или принадлежит другому пользователю"));
+                    .andExpect(jsonPath(operation + ".responses['404'].description").value("MOVE_PROJECT_NOT_FOUND: проект не существует или недоступен текущему пользователю"));
         }
         response.andExpect(jsonPath(collection + ".get.responses['422'].content['application/json'].schema['$ref']").value("#/components/schemas/ErrorResponse"))
                 .andExpect(jsonPath(project + ".patch.responses['422'].content['application/json'].schema['$ref']").value("#/components/schemas/ErrorResponse"));

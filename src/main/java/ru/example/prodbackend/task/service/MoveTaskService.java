@@ -39,7 +39,7 @@ public class MoveTaskService {
     private final ProjectEventService projectEventService;
 
     public TaskSummaryResponse summary(UUID projectId, UUID userId) {
-        projectAccessService.getOwnedProject(projectId, userId);
+        projectAccessService.getAccessibleProject(projectId, userId);
         return TaskSummaryResponse.builder()
                 .totalTasks(moveTaskRepository.countByProject_Id(projectId))
                 .completedTasks(moveTaskRepository.countByProject_IdAndCompletedAtIsNotNull(projectId))
@@ -48,7 +48,7 @@ public class MoveTaskService {
 
     @Transactional
     public MoveTaskResponse create(UUID projectId, CreateMoveTaskRequest request, UUID userId) {
-        var project = projectAccessService.getOwnedProjectForUpdate(projectId, userId);
+        var project = projectAccessService.getAccessibleProjectForUpdate(projectId, userId);
 
         MoveTaskEntity task = MoveTaskEntity.builder()
                 .project(project)
@@ -63,14 +63,14 @@ public class MoveTaskService {
     }
 
     public PageResponse<MoveTaskResponse> findAll(UUID projectId, MoveTaskFilter filter, PaginationRequest pagination, UUID userId) {
-        projectAccessService.getOwnedProject(projectId, userId);
+        projectAccessService.getAccessibleProject(projectId, userId);
         var pageable = PageRequest.of(pagination.getPage(), pagination.getSize(), Sort.by("createdAt", "id"));
         var tasks = moveTaskRepository.findAllByFilters(projectId, filter.getStage(), filter.getCompleted(), pageable);
         return PageResponse.from(tasks.map(this::toResponse));
     }
 
     public MoveTaskResponse findById(UUID projectId, UUID taskId, UUID userId) {
-        projectAccessService.getOwnedProject(projectId, userId);
+        projectAccessService.getAccessibleProject(projectId, userId);
         var task = moveTaskRepository.findByIdAndProject_Id(taskId, projectId).orElseThrow(() -> new MoveTaskNotFoundException("move task not found"));
         return toResponse(task);
     }
@@ -113,7 +113,7 @@ public class MoveTaskService {
         moveTaskRepository.saveAndFlush(task);
 
         if (completed) {
-            projectEventService.record(task.getProject(), task.getProject().getOwner(), ProjectEventType.TASK_COMPLETED,
+            projectEventService.recordByActorId(task.getProject(), userId, ProjectEventType.TASK_COMPLETED,
                     EventObjectType.TASK, task.getId(), "Выполнена задача: " + task.getTitle());
         }
 
@@ -128,14 +128,14 @@ public class MoveTaskService {
     }
 
     public PageResponse<TaskTemplateResponse> findTemplates(UUID projectId, TaskStage stage, PaginationRequest pagination, UUID userId) {
-        projectAccessService.getOwnedProject(projectId, userId);
+        projectAccessService.getAccessibleProject(projectId, userId);
         var pageable = PageRequest.of(pagination.getPage(), pagination.getSize(), Sort.by("title", "id"));
         return PageResponse.from(taskTemplateRepository.findAllByStageFilter(stage, pageable).map(this::toTemplateResponse));
     }
 
     @Transactional
     public MoveTaskResponse applyTemplate(UUID projectId, ApplyTaskTemplateRequest request, UUID userId) {
-        var project = projectAccessService.getOwnedProjectForUpdate(projectId, userId);
+        var project = projectAccessService.getAccessibleProjectForUpdate(projectId, userId);
         var template = taskTemplateRepository.findById(request.getTemplateId()).orElseThrow(() -> new TaskTemplateNotFoundException("task template not found exception"));
 
         if (moveTaskRepository.existsByProject_IdAndTemplate_Id(projectId, template.getId())) {
@@ -156,7 +156,7 @@ public class MoveTaskService {
     }
 
     private MoveTaskEntity requireTaskForUpdate(UUID projectId, UUID taskId, UUID userId) {
-        projectAccessService.getOwnedProjectForUpdate(projectId, userId);
+        projectAccessService.getAccessibleProjectForUpdate(projectId, userId);
         return moveTaskRepository.findForUpdate(taskId, projectId).orElseThrow(() -> new MoveTaskNotFoundException("move task not found"));
     }
 

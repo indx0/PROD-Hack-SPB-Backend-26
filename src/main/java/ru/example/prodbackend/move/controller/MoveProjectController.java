@@ -37,12 +37,12 @@ public class MoveProjectController {
 
     @PostMapping
     @Operation(summary = "Создать проект переезда",
-            description = "Создаёт проект, 11 задач из локальных шаблонов и 4 пункта чек-листа первого дня одной транзакцией. Сроки задач вычисляются относительно даты переезда в UTC. Адреса необязательны; дата — ISO 8601 с часовым поясом. PROJECT_CREATED записывается один раз. Последующая смена даты проекта не меняет сроки задач.",
+            description = "Создаёт проект, 11 задач из локальных шаблонов и 4 пункта чек-листа первого дня одной транзакцией. Необязательный participants содержит до 100 записей с userId или email существующих аккаунтов; они получают равные права сразу, без подтверждения. Повторы пользователей не создают дубли, создатель уже имеет доступ. Если хотя бы один пользователь не найден, создание целиком откатывается. Сроки задач вычисляются относительно даты переезда в UTC. Адреса необязательны; дата — ISO 8601 с часовым поясом. PROJECT_CREATED записывается один раз. Последующая смена даты проекта не меняет сроки задач.",
             responses = {
                     @ApiResponse(responseCode = "201", description = "Проект создан", content = @Content(mediaType = "application/json", schema = @Schema(implementation = MoveProjectResponse.class))),
                     @ApiResponse(responseCode = "400", description = "INVALID_REQUEST_BODY: тело отсутствует, некорректный JSON или формат даты", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "401", description = "UNAUTHORIZED: access токен отсутствует, некорректный или истек", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "404", description = "NOT_FOUND: текущий пользователь больше не существует", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "404", description = "NOT_FOUND: текущий пользователь или добавляемый участник не найден", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: название пустое или длиннее 255 символов, дата отсутствует либо адрес длиннее 1000 символов; подробности в fieldErrors", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             })
     public ResponseEntity<MoveProjectResponse> createMoveProject(
@@ -53,7 +53,7 @@ public class MoveProjectController {
 
     @GetMapping
     @Operation(summary = "Получить список своих переездов",
-            description = "Возвращает только проекты текущего пользователя, новые первыми (createdAt DESC, id DESC). archived=true — архивные, false — активные; без параметра возвращаются все. Фильтрация выполняется до пагинации. Страницы начинаются с 0; по умолчанию page=0, size=20. Пустая или выходящая за пределы списка страница возвращает пустой content.",
+            description = "Возвращает созданные пользователем и доступные ему совместные проекты, новые первыми (createdAt DESC, id DESC). archived=true — архивные, false — активные; без параметра возвращаются все. Фильтрация выполняется до пагинации. Страницы начинаются с 0; по умолчанию page=0, size=20. Пустая или выходящая за пределы списка страница возвращает пустой content.",
             responses = {
                     @ApiResponse(responseCode = "200", description = "Страница проектов получена"),
                     @ApiResponse(responseCode = "400", description = "INVALID_REQUEST_PARAMETER: archived должен быть true или false", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
@@ -69,12 +69,12 @@ public class MoveProjectController {
 
     @GetMapping("/{projectId}")
     @Operation(summary = "Получить свой проект переезда",
-            description = "Возвращает проект только его владельцу. Для чужого и несуществующего проекта ответ одинаковый: 404.",
+            description = "Возвращает проект создателю и добавленным участникам. Для чужого и несуществующего проекта ответ одинаковый: 404.",
             responses = {
                     @ApiResponse(responseCode = "200", description = "Проект получен", content = @Content(mediaType = "application/json", schema = @Schema(implementation = MoveProjectResponse.class))),
                     @ApiResponse(responseCode = "400", description = "INVALID_REQUEST_PARAMETER: projectId не является UUID", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "401", description = "UNAUTHORIZED: access токен отсутствует, некорректный или истек", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не существует или принадлежит другому пользователю", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не существует или недоступен текущему пользователю", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             })
     public ResponseEntity<MoveProjectResponse> getMoveProject(
             @PathVariable("projectId") UUID projectId,
@@ -90,7 +90,7 @@ public class MoveProjectController {
                     @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: переезд в архиве; сначала восстановите его", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "400", description = "INVALID_REQUEST_BODY: тело отсутствует, некорректный JSON или дата; INVALID_REQUEST_PARAMETER: projectId не является UUID", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "401", description = "UNAUTHORIZED: access токен отсутствует, некорректный или истек", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не существует или принадлежит другому пользователю", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не существует или недоступен текущему пользователю", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: передано пустое название, название длиннее 255 символов или адрес длиннее 1000 символов; подробности в fieldErrors", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             })
     public ResponseEntity<MoveProjectResponse> updateMoveProject(
@@ -108,7 +108,7 @@ public class MoveProjectController {
                     @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: переезд в архиве; сначала восстановите его", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "400", description = "INVALID_REQUEST_PARAMETER: projectId не является UUID", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "401", description = "UNAUTHORIZED: access токен отсутствует, некорректный или истек", content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не существует или принадлежит другому пользователю", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+                    @ApiResponse(responseCode = "404", description = "MOVE_PROJECT_NOT_FOUND: проект не существует или недоступен текущему пользователю", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
             })
     public ResponseEntity<Void> deleteMoveProject(
             @PathVariable("projectId") UUID projectId,

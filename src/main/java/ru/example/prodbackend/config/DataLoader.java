@@ -22,6 +22,7 @@ import ru.example.prodbackend.item.dto.CreateItemRequest;
 import ru.example.prodbackend.item.dto.UpdateItemRequest;
 import ru.example.prodbackend.item.service.ItemService;
 import ru.example.prodbackend.move.dto.request.CreateMoveProjectRequest;
+import ru.example.prodbackend.move.dto.request.AddProjectParticipantRequest;
 import ru.example.prodbackend.move.repository.MoveProjectRepository;
 import ru.example.prodbackend.move.service.MoveProjectService;
 import ru.example.prodbackend.room.dto.request.CreateRoomRequest;
@@ -87,9 +88,11 @@ public class DataLoader implements ApplicationRunner {
 
     private void createDemoProject(UserEntity user) {
         LocalDate moveDate = LocalDate.now(ZoneOffset.UTC).plusDays(14);
+        UUID adminId = userRepository.findByEmail("admin").orElseThrow().getId();
         var project = moveProjectService.createMoveProject(CreateMoveProjectRequest.builder().name(DEMO_PROJECT_NAME)
                 .moveDate(moveDate.atStartOfDay(ZoneOffset.UTC).toInstant()).originAddress("Москва, ул. Лесная, д. 10, кв. 15")
-                .destinationAddress("Москва, ул. Садовая, д. 25, кв. 42").build(), user);
+                .destinationAddress("Москва, ул. Садовая, д. 25, кв. 42")
+                .participants(List.of(AddProjectParticipantRequest.builder().userId(adminId).build())).build(), user);
         UUID projectId = project.getId();
         UUID kitchen = roomService.createRoom(projectId, CreateRoomRequest.builder().name("Кухня").iconKey("kitchen").build(), user.getId()).getId();
         UUID livingRoom = roomService.createRoom(projectId, CreateRoomRequest.builder().name("Гостиная").iconKey("sofa").build(), user.getId()).getId();
