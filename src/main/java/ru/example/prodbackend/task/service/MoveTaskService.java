@@ -23,7 +23,6 @@ import ru.example.prodbackend.task.dto.response.TaskSummaryResponse;
 import ru.example.prodbackend.task.entity.MoveTaskEntity;
 import ru.example.prodbackend.task.entity.TaskStage;
 import ru.example.prodbackend.task.entity.TaskDueType;
-import ru.example.prodbackend.task.entity.TaskTemplateEntity;
 import ru.example.prodbackend.task.repository.MoveTaskRepository;
 import ru.example.prodbackend.task.repository.TaskTemplateRepository;
 
@@ -145,13 +144,14 @@ public class MoveTaskService {
     public PageResponse<TaskTemplateResponse> findTemplates(UUID projectId, TaskStage stage, PaginationRequest pagination, UUID userId) {
         projectAccessService.getAccessibleProject(projectId, userId);
         var pageable = PageRequest.of(pagination.getPage(), pagination.getSize(), Sort.by("title", "id"));
-        return PageResponse.from(taskTemplateRepository.findAllByStageFilter(stage, pageable).map(this::toTemplateResponse));
+        return PageResponse.from(taskTemplateRepository.findAllByStageFilter(userId, stage, pageable).map(TaskTemplateService::toResponse));
     }
 
     @Transactional
     public MoveTaskResponse applyTemplate(UUID projectId, ApplyTaskTemplateRequest request, UUID userId) {
         var project = projectAccessService.getAccessibleProjectForUpdate(projectId, userId);
-        var template = taskTemplateRepository.findById(request.getTemplateId()).orElseThrow(() -> new TaskTemplateNotFoundException("task template not found exception"));
+        var template = taskTemplateRepository.findAccessibleForUpdate(request.getTemplateId(), userId)
+                .orElseThrow(() -> new TaskTemplateNotFoundException("Готовая задача не найдена или недоступна"));
 
         if (moveTaskRepository.existsByProject_IdAndTemplate_Id(projectId, template.getId())) {
             throw new ResourceConflictException("Задача из этого шаблона уже существует в проекте");
@@ -220,13 +220,4 @@ public class MoveTaskService {
 
     private MoveTaskResponse toResponse(MoveTaskEntity task) { return MoveTaskMapper.toResponse(task); }
 
-    private TaskTemplateResponse toTemplateResponse(TaskTemplateEntity template) {
-        return TaskTemplateResponse.builder()
-                .id(template.getId())
-                .title(template.getTitle())
-                .description(template.getDescription())
-                .stage(template.getStage())
-                .dueDateOffsetDays(template.getDueDateOffsetDays())
-                .build();
-    }
 }

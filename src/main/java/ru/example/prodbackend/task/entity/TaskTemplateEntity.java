@@ -3,6 +3,7 @@ package ru.example.prodbackend.task.entity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.*;
+import ru.example.prodbackend.user.entity.UserEntity;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -13,15 +14,20 @@ import java.util.UUID;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name = "task_templates",
-        uniqueConstraints = @UniqueConstraint(
-                name = "uk_task_templates_stage_title",
-                columnNames = {"stage", "title"}))
+@Table(name = "task_templates")
 public class TaskTemplateEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
+
+    /** null — общий серверный образец; иначе личная готовая задача аккаунта. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_id")
+    private UserEntity owner;
+
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
 
     @NotBlank
     @Size(max = 255)

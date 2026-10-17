@@ -47,7 +47,7 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                 assertHistory(jdbc);
                 assertConstraints(jdbc);
                 var copiedTasks = jdbc.queryForList("SELECT id, title, due_date FROM move_tasks ORDER BY id");
-                runLiquibase(schema, 1); // Отмена только наборов сохраняет созданные задачи.
+                runLiquibase(schema, 2); // Отмена личных образцов и наборов сохраняет созданные задачи.
                 assertHistory(jdbc, 20);
                 assertThat(jdbc.queryForList("SELECT id, title, due_date FROM move_tasks ORDER BY id")).isEqualTo(copiedTasks);
                 runLiquibase(schema, 0);
@@ -57,7 +57,7 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                 // Roll back task deadline metadata and participants before checking the archive migration guard.
                 var existingProjects = jdbc.queryForList("SELECT * FROM move_projects ORDER BY id");
                 var existingTasks = jdbc.queryForList("SELECT id, due_date, template_id FROM move_tasks ORDER BY id");
-                runLiquibase(schema, 3);
+                runLiquibase(schema, 4);
                 assertThat(jdbc.queryForList("SELECT id, due_date, template_id FROM move_tasks ORDER BY id")).isEqualTo(existingTasks);
                 assertThat(jdbc.queryForList("SELECT column_name FROM information_schema.columns WHERE table_schema = ? AND table_name = 'move_tasks'", String.class, schema)).doesNotContain("due_type", "offset_days");
                 assertHistory(jdbc, 18);
@@ -93,7 +93,7 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                 var projects = jdbc.queryForList("SELECT id, name, move_date FROM move_projects ORDER BY id");
                 var checklist = jdbc.queryForList("SELECT id, name, completed_at FROM first_day_checklist_items ORDER BY id");
                 var events = jdbc.queryForList("SELECT id, actor_id, object_id, description, occurred_at FROM project_events ORDER BY id");
-                runLiquibase(schema, 9);
+                runLiquibase(schema, 10);
                 assertThat(jdbc.queryForList("""
                         SELECT column_name FROM information_schema.columns
                         WHERE table_schema = ? AND table_name = 'items'
@@ -136,7 +136,7 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                 assertHistory(jdbc);
                 assertThat(jdbc.queryForList("SELECT id, email FROM users ORDER BY email")).isEqualTo(users);
 
-                runLiquibase(schema, 21);
+                runLiquibase(schema, 22);
                 assertThat(jdbc.queryForList("""
                         SELECT tablename FROM pg_tables
                         WHERE schemaname = ? AND tablename NOT IN ('databasechangelog', 'databasechangeloglock')
@@ -189,7 +189,7 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
     }
 
     private void assertHistory(JdbcTemplate jdbc) {
-        assertHistory(jdbc, 21);
+        assertHistory(jdbc, 22);
     }
 
     private void assertHistory(JdbcTemplate jdbc, int expectedCount) {

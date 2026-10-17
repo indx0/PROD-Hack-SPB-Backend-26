@@ -26,3 +26,5 @@ ML-опись по фотографии через LLM Proxy: описание �
 Контракт относительных сроков и переноса даты переезда: [docs/task-deadlines.md](docs/task-deadlines.md).
 
 Личные наборы и добровольный выбор задач при создании переезда: [docs/task-sets.md](docs/task-sets.md).
+
+Личные готовые задачи и выбор начального чек-листа первого дня: [docs/ready-tasks.md](docs/ready-tasks.md).

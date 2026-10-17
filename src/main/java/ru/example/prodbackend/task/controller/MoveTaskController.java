@@ -144,7 +144,7 @@ public class MoveTaskController {
 
     @GetMapping("/templates")
     @Operation(summary = "Получить готовые шаблоны задач",
-            description = "Общий локальный каталог, доступный участнику проекта. Можно отфильтровать по stage. Сортировка title ASC, id ASC; общая пагинация.",
+            description = "Общие и свои личные готовые задачи, без удалённых. Чужие личные образцы скрыты даже от участников проекта; personal=true обозначает редактируемый личный образец. Каталог без выбора проекта также доступен через GET /api/task-templates. Можно отфильтровать по stage. Сортировка title ASC, id ASC; общая пагинация.",
             responses = {
                     @ApiResponse(responseCode = "200", description = "Страница шаблонов"),
                     @ApiResponse(responseCode = "422", description = "VALIDATION_ERROR: некорректная пагинация; page >= 0, size от 1 до 100",
@@ -160,7 +160,7 @@ public class MoveTaskController {
 
     @PostMapping("/from-template")
     @Operation(summary = "Создать задачу из шаблона",
-            description = "Копирует название, описание, этап и смещение шаблона в новую RELATIVE-задачу. Срок = дата переезда UTC + offsetDays; смещение сохраняется у задачи независимо от шаблона. Можно переопределить offsetDays или явно выбрать FIXED и dueDate; старый запрос только с dueDate также означает FIXED. dueDate:null задаёт FIXED без срока. Противоречивый срок — 422. Один шаблон применяется один раз, пока соответствующая задача существует.",
+            description = "Копирует название, описание, этап и смещение общего или своего личного образца в новую RELATIVE-задачу. Чужой или удалённый образец — 404. Последующее изменение или удаление образца не меняет созданную задачу. Срок = дата переезда UTC + offsetDays; смещение сохраняется у задачи независимо от шаблона. Можно переопределить offsetDays или явно выбрать FIXED и dueDate; старый запрос только с dueDate также означает FIXED. dueDate:null задаёт FIXED без срока. Противоречивый срок — 422. Один шаблон применяется один раз, пока соответствующая задача существует.",
             responses = {
                     @ApiResponse(responseCode = "201", description = "Задача создана из шаблона",
                             content = @Content(schema = @Schema(implementation = MoveTaskResponse.class))),

@@ -91,6 +91,17 @@ mvn -Dit.test=TaskRescheduleIntegrationTest,MoveProjectBootstrapIntegrationTest,
 мягкое удаление, атомарность создания с наборами, архив и применение участником общего проекта.
 `DataLoaderIntegrationTest` проверяет явный выбор демо-набора без дублей при повторном запуске.
 
+`PersonalTaskTemplateIntegrationTest` проверяет CRUD отдельных личных образцов, каталог
+после повторного входа, приватность в общих проектах, применение относительного срока,
+независимость созданных задач, мягкое удаление, запрет правки общих образцов и валидацию.
+`MoveProjectBootstrapIntegrationTest` также проверяет includeFirstDayChecklist=true/false,
+совместимость при отсутствии поля, запрет null и отсутствие повторного наполнения при чтении.
+Для этих изменений достаточно целевого прогона:
+
+```bash
+mvn -Dtest=MoveProjectControllerTest -Dit.test=PersonalTaskTemplateIntegrationTest,MoveProjectBootstrapIntegrationTest,MoveTaskIntegrationTest,LiquibaseMigrationIntegrationTest,MergedMigrationHistoryIntegrationTest verify
+```
+
 ## ML-опись по фото
 
 Маршруты `/api/ml/item-description`, `/api/ml/items-description` и `boxes/{boxId}/unpacking-verification` проверяются без обращения

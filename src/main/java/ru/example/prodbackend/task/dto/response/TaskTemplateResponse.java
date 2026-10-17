@@ -17,6 +17,9 @@ public class TaskTemplateResponse {
     private String description;
     private TaskStage stage;
 
-    @Schema(description = "Смещение срока в днях относительно даты переезда в UTC; используется при создании проекта")
+    @Schema(description = "Смещение срока в днях относительно даты переезда в UTC при явном применении шаблона")
     private int dueDateOffsetDays;
+
+    @Schema(description = "true — личная готовая задача текущего пользователя, её можно изменить и удалить; false — общий образец")
+    private boolean personal;
 }

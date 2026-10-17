@@ -61,7 +61,7 @@ public class MoveProjectService {
         MoveProjectEntity savedProject = moveProjectRepository.save(project);
         participantService.addInitialParticipants(savedProject, participants);
         taskSetService.applyInitialSets(savedProject, request.getTaskSetIds(), owner.getId());
-        checklistService.createDefaults(savedProject);
+        if (Boolean.TRUE.equals(request.getIncludeFirstDayChecklist())) checklistService.createDefaults(savedProject);
         projectEventService.record(savedProject, owner, ProjectEventType.PROJECT_CREATED, EventObjectType.PROJECT,
                 savedProject.getId(), "Создан проект переезда «" + savedProject.getName() + "»");
 

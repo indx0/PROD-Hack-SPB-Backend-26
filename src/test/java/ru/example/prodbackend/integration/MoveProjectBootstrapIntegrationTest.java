@@ -2,6 +2,8 @@ package ru.example.prodbackend.integration;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpHeaders;
@@ -54,6 +56,34 @@ class MoveProjectBootstrapIntegrationTest extends AuthIntegrationTestSupport {
         assertEquals(1L, eventRepository.count());
         assertEquals(ProjectEventType.PROJECT_CREATED, eventRepository.findAll().get(0).getEventType());
         assertEquals(projectId, eventRepository.findAll().get(0).getObjectId());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void initialChecklistChoicePersistsWithoutReadSideEffects(boolean include) throws Exception {
+        byte[] response = mockMvc.perform(post("/api/move-projects").header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"Выбор чек-листа\",\"moveDate\":\"2026-11-01T09:00:00Z\",\"includeFirstDayChecklist\":" + include + "}"))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsByteArray();
+        var id = jsonMapper.readValue(response, MoveProjectResponse.class).getId();
+        String anotherDevice = authenticateUser(EMAIL).getAccessToken();
+        for (int i = 0; i < 2; i++) {
+            mockMvc.perform(get("/api/move-projects/" + id).header(HttpHeaders.AUTHORIZATION, "Bearer " + anotherDevice)).andExpect(status().isOk());
+            mockMvc.perform(get("/api/move-projects/" + id + "/first-day-checklist").header(HttpHeaders.AUTHORIZATION, "Bearer " + anotherDevice))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(include ? 4 : 0));
+        }
+        assertEquals(include ? 4 : 0, checklistRepository.count());
+        assertEquals(0, taskRepository.count());
+        assertEquals(1, eventRepository.count());
+    }
+
+    @Test
+    void explicitNullChecklistChoiceRejectsCreationEntirely() throws Exception {
+        mockMvc.perform(post("/api/move-projects").header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"Выбор\",\"moveDate\":\"2026-11-01T09:00:00Z\",\"includeFirstDayChecklist\":null}"))
+                .andExpect(status().isUnprocessableEntity());
+        assertEquals(0, moveProjectRepository.count());
+        assertEquals(0, checklistRepository.count());
+        assertEquals(0, eventRepository.count());
     }
 
     @Test

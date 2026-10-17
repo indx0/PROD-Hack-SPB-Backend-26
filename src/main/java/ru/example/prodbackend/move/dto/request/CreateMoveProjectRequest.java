@@ -36,6 +36,11 @@ public class CreateMoveProjectRequest {
     private String destinationAddress;
 
     @Builder.Default
+    @NotNull
+    @Schema(description = "Создать четыре стандартных пункта первого дня. false — пустой чек-лист; отсутствие поля — true для совместимости", defaultValue = "true")
+    private Boolean includeFirstDayChecklist = true;
+
+    @Builder.Default
     @Size(max = 100)
     @JsonSetter(nulls = Nulls.FAIL)
     @Schema(description = "Добровольный выбор собственных наборов: без поля или [] проект создаётся без задач. Повторные UUID объединяются; недоступный набор откатывает всё создание")
