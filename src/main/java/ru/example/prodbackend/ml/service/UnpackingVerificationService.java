@@ -22,7 +22,6 @@ public class UnpackingVerificationService {
     private final LlmProxyClient client;
 
     public UnpackingVerificationResponse verify(UUID userId, UUID projectId, UUID boxId, MultipartFile photo) {
-        // The snapshot transaction ends before the external request; no managed entities escape it.
         var inventory = inventories.snapshot(userId, projectId, boxId);
         var validated = photos.validate(photo);
         var observed = client.verifyUnpacking(validated.bytes(), validated.mime(), inventory);

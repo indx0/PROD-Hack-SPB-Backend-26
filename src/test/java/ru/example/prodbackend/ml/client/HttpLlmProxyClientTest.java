@@ -200,6 +200,79 @@ class HttpLlmProxyClientTest {
         assertThat(meters.get("movermate.llm.overload").tag("scenario", "unpacking").counter().count()).isEqualTo(1);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"text", "photo", "combined"})
+    void roomPackingSendsOnlyProvidedSourcesAndUsesOwnSchemaAndMetrics(String mode) throws Exception {
+        response = envelope(ru.example.prodbackend.ml.RoomPackingPlanFixtures.PLAN);
+        byte[] image = mode.equals("text") ? null : new byte[]{1,2,3};
+        String description = mode.equals("photo") ? "" : "Кухня";
+        var result = client("test-key", 2000).planRoomPacking(description, image, image == null ? null : "image/png");
+        assertThat(result).isEqualTo(ru.example.prodbackend.ml.RoomPackingPlanFixtures.response());
+        assertThat(calls.get()).isEqualTo(1);
+        assertThat(authorization.get()).isEqualTo("Bearer test-key");
+        var body = mapper.readTree(request.get());
+        assertThat(body.path("messages").path(0).path("content").asText()).contains(
+                "40×30×30", "до 10 кг", "последними и отдельно", "не выполняй", "условие проверки", "Крупную мебель");
+        var content = body.path("messages").path(1).path("content");
+        assertThat(content.size()).isEqualTo(image == null ? 1 : 2);
+        assertThat(content.path(0).path("text").asText()).contains(mapper.writeValueAsString(description));
+        if (image == null) assertThat(request.get()).doesNotContain("image_url", "base64");
+        else assertThat(content.path(1).path("image_url").path("url").asText()).isEqualTo("data:image/png;base64,AQID");
+        var schema = body.path("response_format").path("json_schema");
+        assertThat(schema.path("name").asText()).isEqualTo("room_packing_plan");
+        assertThat(schema.path("strict").asBoolean()).isTrue();
+        assertThat(schema.path("schema").path("additionalProperties").asBoolean()).isFalse();
+        var fields = schema.path("schema").path("properties");
+        assertThat(fields.has("boxCount")).isFalse();
+        assertThat(fields.size()).isEqualTo(4);
+        assertThat(fields.path("boxGroups").path("maxItems").asInt()).isEqualTo(100);
+        assertThat(fields.path("boxGroups").path("items").path("properties").path("count").path("minimum").asInt()).isEqualTo(1);
+        assertThat(fields.path("declutteringSuggestions").path("items").path("properties").path("action").path("enum").toString())
+                .contains("donate", "discard");
+        assertThat(meters.get("movermate.llm.operation").tags("scenario", "room_packing", "outcome", "success").timer().count()).isEqualTo(1);
+    }
+
+    @Test
+    void roomPackingMapsRefusalAndInvalidResponsesWithoutChangingRecognitionErrors() throws Exception {
+        var configured = client("key", 2000);
+        for (String body : java.util.List.of(envelope(ru.example.prodbackend.ml.RoomPackingPlanFixtures.NO_PLAN),
+                "{\"choices\":[{\"finish_reason\":\"stop\",\"message\":{\"refusal\":\"refused\"}}]}",
+                "{\"choices\":[{\"finish_reason\":\"content_filter\"}]}")) {
+            response = body;
+            assertThatThrownBy(() -> configured.planRoomPacking("Кухня", null, null))
+                    .isInstanceOfSatisfying(MlException.class, e -> assertThat(e.getCode()).isEqualTo("ROOM_PLAN_NOT_GENERATED"));
+        }
+        assertThat(meters.get("movermate.llm.operation").tags("scenario", "room_packing", "outcome", "not_recognized").timer().count()).isEqualTo(3);
+        for (String body : java.util.List.of("not json", envelope("{}"), "x".repeat(64 * 1024 + 1))) {
+            response = body;
+            assertThatThrownBy(() -> configured.planRoomPacking("Кухня", null, null))
+                    .isInstanceOfSatisfying(MlException.class, e -> assertThat(e.getCode()).isEqualTo("LLM_INVALID_RESPONSE"));
+        }
+    }
+
+    @Test
+    void roomPackingUsesSharedAvailabilityDeadlineAndOverloadHandling() throws Exception {
+        var unavailable = client("", 2000);
+        assertThatThrownBy(() -> unavailable.planRoomPacking("Кухня", null, null))
+                .isInstanceOfSatisfying(MlException.class, e -> assertThat(e.getCode()).isEqualTo("LLM_UNAVAILABLE"));
+        assertThat(calls.get()).isZero();
+        var configured = client("key", 2000);
+        upstreamStatus = 429;
+        assertThatThrownBy(() -> configured.planRoomPacking("Кухня", null, null))
+                .isInstanceOfSatisfying(MlException.class, e -> assertThat(e.getCode()).isEqualTo("LLM_UNAVAILABLE"));
+        upstreamStatus = 200;
+        response = envelope(ru.example.prodbackend.ml.RoomPackingPlanFixtures.PLAN);
+        bodyDelay = 2000;
+        var timed = client("key", 1000);
+        assertThatThrownBy(() -> timed.planRoomPacking("Кухня", null, null))
+                .isInstanceOfSatisfying(MlException.class, e -> assertThat(e.getCode()).isEqualTo("LLM_TIMEOUT"));
+        assertThat(calls.get()).isEqualTo(2);
+        worker.shutdownNow();
+        assertThatThrownBy(() -> configured.planRoomPacking("Кухня", null, null))
+                .isInstanceOfSatisfying(MlException.class, e -> assertThat(e.getCode()).isEqualTo("LLM_UNAVAILABLE"));
+        assertThat(meters.get("movermate.llm.overload").tag("scenario", "room_packing").counter().count()).isEqualTo(1);
+    }
+
     private void expectListCode(String code) throws Exception {
         var client = client("key", 2000);
         assertThatThrownBy(() -> client.describeItems(new byte[]{1}, "image/png"))
@@ -315,7 +388,7 @@ class HttpLlmProxyClientTest {
         };
         var properties = new LlmProxyProperties(URI.create("http://127.0.0.1:" + server.getAddress().getPort()
                 + "/chat/completions"), "test-model", "secret", 1000, 1000);
-        var client = new HttpLlmProxyClient(RestClient.create(), properties, worker, validator, new ru.example.prodbackend.ml.validation.UnpackingVerificationValidator(validator), mapper, meters);
+        var client = new HttpLlmProxyClient(RestClient.create(), properties, worker, validator, new ru.example.prodbackend.ml.validation.UnpackingVerificationValidator(validator), mapper, new ru.example.prodbackend.ml.validation.RoomPackingPlanValidator(new ItemDescriptionValidator(mapper)), meters);
         org.slf4j.MDC.put("requestId", "request-test");
         try {
             assertThatThrownBy(() -> client.describe(new byte[]{1}, "image/png"))
@@ -358,7 +431,7 @@ class HttpLlmProxyClientTest {
         factory.setReadTimeout(Duration.ofMillis(timeout));
         return new HttpLlmProxyClient(RestClient.builder().requestFactory(factory).build(), properties,
                 worker, new ItemDescriptionValidator(mapper),
-                new ru.example.prodbackend.ml.validation.UnpackingVerificationValidator(new ItemDescriptionValidator(mapper)), mapper, meters);
+                new ru.example.prodbackend.ml.validation.UnpackingVerificationValidator(new ItemDescriptionValidator(mapper)), mapper, new ru.example.prodbackend.ml.validation.RoomPackingPlanValidator(new ItemDescriptionValidator(mapper)), meters);
     }
 
     private String envelope(String content) {

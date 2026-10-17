@@ -40,7 +40,6 @@ public class UnpackingVerificationValidator {
                 try { id = UUID.fromString(value); }
                 catch (IllegalArgumentException e) { throw invalid(); }
                 if (!id.toString().equalsIgnoreCase(value) || !byId.containsKey(id) || !rawIds.add(id)) throw invalid();
-                // Equal names cannot identify a particular physical copy. Assign copies in snapshot order.
                 String name = byId.get(id).name();
                 id = inventory.stream().filter(item -> item.name().equals(name) && !assigned.contains(item.itemId()))
                         .map(InventoryItem::itemId).findFirst().orElseThrow(this::invalid);
