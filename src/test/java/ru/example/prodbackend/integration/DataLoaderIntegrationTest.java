@@ -18,6 +18,7 @@ import ru.example.prodbackend.config.TestcontainersConfig;
 import ru.example.prodbackend.move.entity.MoveProjectEntity;
 import ru.example.prodbackend.item.entity.ItemEntity;
 import ru.example.prodbackend.item.service.ItemService;
+import ru.example.prodbackend.checklist.entity.FirstDayChecklistItemEntity;
 import ru.example.prodbackend.task.entity.MoveTaskEntity;
 import ru.example.prodbackend.user.repository.UserRepository;
 import ru.example.prodbackend.box.service.BoxService;
@@ -99,6 +100,13 @@ class DataLoaderIntegrationTest extends BaseIntegrationTest {
                 .getSingleResult()).isTrue();
         assertThat(count("MoveTaskEntity")).isEqualTo(12);
         assertThat(count("FirstDayChecklistItemEntity")).isEqualTo(6);
+        var linked = entityManager.createQuery("select c from FirstDayChecklistItemEntity c where c.item is not null", FirstDayChecklistItemEntity.class).getResultList();
+        assertThat(linked).singleElement().satisfies(point -> {
+            assertThat(point.getName()).isEqualTo("Постельное бельё");
+            assertThat(point.getItem().getName()).isEqualTo("Постельное бельё");
+            assertThat(point.getItem().isFirstDay()).isTrue();
+        });
+        assertThat(entityManager.createQuery("select count(c) from FirstDayChecklistItemEntity c where c.item is null", Long.class).getSingleResult()).isEqualTo(5);
         assertThat(count("ProjectEventEntity")).isEqualTo(18);
         assertThat(entityManager.createQuery("from BoxEntity", BoxEntity.class).getResultList())
                 .hasSize(5)

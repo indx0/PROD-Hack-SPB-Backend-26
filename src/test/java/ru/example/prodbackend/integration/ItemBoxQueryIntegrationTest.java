@@ -25,6 +25,8 @@ import ru.example.prodbackend.item.dto.CreateItemsRequest;
 import ru.example.prodbackend.item.dto.ItemResponse;
 import ru.example.prodbackend.item.entity.ItemEntity;
 import ru.example.prodbackend.item.service.ItemService;
+import ru.example.prodbackend.checklist.entity.FirstDayChecklistItemEntity;
+import ru.example.prodbackend.checklist.service.FirstDayChecklistService;
 import ru.example.prodbackend.move.entity.MoveProjectEntity;
 import ru.example.prodbackend.room.entity.RoomEntity;
 import ru.example.prodbackend.user.entity.UserEntity;
@@ -46,6 +48,7 @@ class ItemBoxQueryIntegrationTest {
     @Autowired private BoxService boxService;
     @Autowired private ItemService itemService;
     @Autowired private BoxRepository boxRepository;
+    @Autowired private FirstDayChecklistService checklistService;
     @Autowired private JdbcCapture jdbcCapture;
 
     private UserEntity owner;
@@ -256,6 +259,36 @@ class ItemBoxQueryIntegrationTest {
         assertThat(summary.getCountsByStatus()).hasSize(BoxStatus.values().length);
         assertThat(summary.getCountsByStatus().values()).containsOnly(0L);
         assertThat(summary.getRooms()).isEmpty();
+    }
+
+    @Test
+    void checklistPageFetchesCurrentLinkedItemsBoxesAndRoomsWithoutNPlusOne() {
+        for (int number = 1; number <= 6; number++) {
+            var point = FirstDayChecklistItemEntity.builder().project(project).name("Первый день " + number).build();
+            if (number != 1) {
+                ItemEntity linked = item(box(kitchen, number, BoxStatus.PACKING, false), "Вещь " + number);
+                linked.setFirstDay(true);
+                point.setItem(linked);
+            }
+            entityManager.persist(point);
+        }
+        flushAndClear();
+        PaginationRequest pagination = new PaginationRequest();
+        pagination.setSize(4);
+        jdbcCapture.start();
+        var result = checklistService.findAll(project.getId(), pagination, owner.getId());
+        var executions = jdbcCapture.stop();
+        assertThat(result.getTotalElements()).isEqualTo(6);
+        assertThat(result.getContent()).hasSize(4);
+        assertThat(result.getContent().get(0).getItemId()).isNull();
+        assertThat(result.getContent().subList(1, 4)).allSatisfy(point -> {
+            assertThat(point.getItemId()).isNotNull();
+            assertThat(point.getItemName()).startsWith("Вещь ");
+            assertThat(point.getBoxId()).isNotNull();
+            assertThat(point.getRoomName()).isEqualTo("Кухня");
+        });
+        assertThat(executions).hasSize(3);
+        assertThat(executions).noneMatch(e -> e.sql().contains("from items") || e.sql().contains("from boxes") || e.sql().contains("from rooms"));
     }
 
     private RoomEntity room(String name) {

@@ -18,6 +18,9 @@ import java.util.UUID;
 @Repository
 public interface ItemRepository extends JpaRepository<ItemEntity, UUID> {
 
+    @Query("select i.box.id from ItemEntity i where i.id = :itemId and i.box.project.id = :projectId and i.box.project.owner.id = :ownerId")
+    Optional<UUID> findOwnedBoxId(@Param("itemId") UUID itemId, @Param("projectId") UUID projectId, @Param("ownerId") UUID ownerId);
+
     @Query("""
             select new ru.example.prodbackend.item.repository.BoxItemCounts(
                 i.box.id, count(i),

@@ -25,6 +25,7 @@ public class UpdateItemRequest {
     @Schema(description = "Изменение только в PACKING; новое количество сбрасывает packedAt. Повтор текущего значения сохраняет отметку")
     private Integer quantity;
 
+    @Schema(description = "false снимает связь с пунктом первого дня, сохраняя пункт; true не создаёт пункт автоматически")
     private Boolean firstDay;
 
     @Schema(description = "Отметка упаковки всей записи. Изменяется только в коробке PACKING")

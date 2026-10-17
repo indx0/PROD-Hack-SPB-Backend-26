@@ -98,7 +98,7 @@ public class DataLoader implements ApplicationRunner {
 
         createBox(user.getId(), projectId, livingRoom, 1, BoxStatus.PACKING, true);
         createBox(user.getId(), projectId, kitchen, 2, BoxStatus.PACKED, false, "Тарелки", "Кружки", "Столовые приборы");
-        createBox(user.getId(), projectId, bedroom, 3, BoxStatus.LOADED, false, "Постельное бельё", "Подушки", "Плед");
+        List<UUID> bedroomItems = createBox(user.getId(), projectId, bedroom, 3, BoxStatus.LOADED, false, "Постельное бельё", "Подушки", "Плед");
         createBox(user.getId(), projectId, livingRoom, 4, BoxStatus.DELIVERED, false, "Книги", "Настольная лампа", "Фоторамки");
         createBox(user.getId(), projectId, bathroom, 5, BoxStatus.UNPACKED, false, "Полотенца", "Шампунь", "Фен");
 
@@ -117,13 +117,14 @@ public class DataLoader implements ApplicationRunner {
         checklistService.create(projectId, CreateChecklistItemRequest.builder().name("Документы").build(), user.getId());
         checklistService.create(projectId, CreateChecklistItemRequest.builder().name("Аптечка").build(), user.getId());
         for (var item : checklistService.findAll(projectId, new PaginationRequest(), user.getId()).getContent()) {
+            if (item.getName().equals("Постельное бельё")) checklistService.link(projectId, item.getId(), bedroomItems.get(0), user.getId());
             if (item.getName().equals("Зарядки") || item.getName().equals("Документы")) {
                 checklistService.update(projectId, item.getId(), UpdateChecklistItemRequest.builder().completed(true).build(), user.getId());
             }
         }
     }
 
-    private UUID createBox(UUID userId, UUID projectId, UUID roomId, int number, BoxStatus status, boolean deferred, String... items) {
+    private List<UUID> createBox(UUID userId, UUID projectId, UUID roomId, int number, BoxStatus status, boolean deferred, String... items) {
         var box = boxService.create(userId, projectId, CreateBoxRequest.builder().roomId(roomId).number(number).contentsDeferred(deferred).build());
         List<UUID> itemIds = new ArrayList<>();
         for (String name : items) {
@@ -148,7 +149,7 @@ public class DataLoader implements ApplicationRunner {
             if (next == BoxStatus.UNPACKED) markItems(userId, projectId, box.getId(), itemIds, false);
             boxService.changeStatus(userId, projectId, box.getId(), next);
         }
-        return box.getId();
+        return itemIds;
     }
 
     private void markItems(UUID userId, UUID projectId, UUID boxId, List<UUID> itemIds, boolean packing) {

@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.*;
 import ru.example.prodbackend.move.entity.MoveProjectEntity;
+import ru.example.prodbackend.item.entity.ItemEntity;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -14,7 +15,8 @@ import java.util.UUID;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name = "first_day_checklist_items", indexes = @Index(name = "idx_first_day_items_project", columnList = "project_id"))
+@Table(name = "first_day_checklist_items", indexes = @Index(name = "idx_first_day_items_project", columnList = "project_id"),
+        uniqueConstraints = @UniqueConstraint(name = "uk_first_day_items_item", columnNames = "item_id"))
 public class FirstDayChecklistItemEntity {
 
     @Id
@@ -29,6 +31,10 @@ public class FirstDayChecklistItemEntity {
     @Size(max = 255)
     @Column(name = "name", nullable = false, length = 255)
     private String name;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "item_id", foreignKey = @ForeignKey(name = "fk_first_day_items_item"))
+    private ItemEntity item;
 
     @Column(name = "completed_at")
     private Instant completedAt;

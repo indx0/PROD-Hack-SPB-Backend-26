@@ -50,7 +50,8 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                 // Roll back only the new columns, then upgrade a schema that already has items.
                 var items = jdbc.queryForList("SELECT id, name, quantity, first_day FROM items ORDER BY id");
                 var boxes = jdbc.queryForList("SELECT id, status FROM boxes ORDER BY id");
-                runLiquibase(schema, 1);
+                var checklist = jdbc.queryForList("SELECT id, name, completed_at FROM first_day_checklist_items ORDER BY id");
+                runLiquibase(schema, 2);
                 assertThat(jdbc.queryForList("""
                         SELECT column_name FROM information_schema.columns
                         WHERE table_schema = ? AND table_name = 'items'
@@ -59,6 +60,8 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                 assertHistory(jdbc);
                 assertThat(jdbc.queryForList("SELECT id, name, quantity, first_day FROM items ORDER BY id")).isEqualTo(items);
                 assertThat(jdbc.queryForList("SELECT id, status FROM boxes ORDER BY id")).isEqualTo(boxes);
+                assertThat(jdbc.queryForList("SELECT id, name, completed_at FROM first_day_checklist_items ORDER BY id")).isEqualTo(checklist);
+                assertThat(jdbc.queryForObject("SELECT count(*) FROM first_day_checklist_items WHERE item_id IS NOT NULL", Long.class)).isZero();
                 assertThat(jdbc.queryForObject("SELECT count(*) FROM items WHERE packed_at IS NOT NULL OR unpacked_at IS NOT NULL", Long.class)).isZero();
 
                 var users = jdbc.queryForList("SELECT id, email FROM users ORDER BY email");
@@ -67,7 +70,7 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                 assertHistory(jdbc);
                 assertThat(jdbc.queryForList("SELECT id, email FROM users ORDER BY email")).isEqualTo(users);
 
-                runLiquibase(schema, 12);
+                runLiquibase(schema, 13);
                 assertThat(jdbc.queryForList("""
                         SELECT tablename FROM pg_tables
                         WHERE schemaname = ? AND tablename NOT IN ('databasechangelog', 'databasechangeloglock')
@@ -121,7 +124,7 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
 
     private void assertHistory(JdbcTemplate jdbc) {
         assertThat(jdbc.queryForList("SELECT author FROM databasechangelog", String.class))
-                .hasSize(12).containsOnly("indx0", "timn2020");
+                .hasSize(13).containsOnly("indx0", "timn2020");
     }
 
     private void assertConstraints(JdbcTemplate jdbc) {
@@ -188,6 +191,23 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
         rejects(jdbc, "UPDATE items SET quantity = -1 WHERE id = ?", "23514", item);
         rejects(jdbc, "UPDATE items SET quantity = NULL WHERE id = ?", "23502", item);
         rejects(jdbc, "UPDATE items SET first_day = NULL WHERE id = ?", "23502", item);
+
+        UUID point = UUID.randomUUID();
+        UUID otherPoint = UUID.randomUUID();
+        for (UUID id : new UUID[]{point, otherPoint}) {
+            jdbc.update("INSERT INTO first_day_checklist_items (id, project_id, name, completed_at, created_at, updated_at) VALUES (?, ?, 'Первый день', now(), now(), now())", id, project);
+        }
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM first_day_checklist_items WHERE item_id IS NULL", Long.class)).isEqualTo(2);
+        jdbc.update("UPDATE first_day_checklist_items SET item_id = ? WHERE id = ?", item, point);
+        rejects(jdbc, "UPDATE first_day_checklist_items SET item_id = ? WHERE id = ?", "23505", item, otherPoint);
+        rejects(jdbc, "UPDATE first_day_checklist_items SET item_id = ? WHERE id = ?", "23503", UUID.randomUUID(), otherPoint);
+        UUID removable = UUID.randomUUID();
+        jdbc.update("INSERT INTO items (id, box_id, name, lost, created_at, updated_at) VALUES (?, ?, 'Удалить', false, now(), now())", removable, box);
+        jdbc.update("UPDATE first_day_checklist_items SET item_id = ? WHERE id = ?", removable, point);
+        jdbc.update("DELETE FROM items WHERE id = ?", removable);
+        assertThat(jdbc.queryForObject("SELECT item_id FROM first_day_checklist_items WHERE id = ?", UUID.class, point)).isNull();
+        assertThat(jdbc.queryForObject("SELECT name FROM first_day_checklist_items WHERE id = ?", String.class, point)).isEqualTo("Первый день");
+        assertThat(jdbc.queryForObject("SELECT completed_at FROM first_day_checklist_items WHERE id = ?", java.sql.Timestamp.class, point)).isNotNull();
     }
 
     private void rejects(JdbcTemplate jdbc, String sql, String sqlState, Object... args) {
