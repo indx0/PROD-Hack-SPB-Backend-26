@@ -10,6 +10,9 @@ import liquibase.changelog.FastCheckService;
 import liquibase.database.DatabaseFactory;
 import liquibase.database.jvm.JdbcConnection;
 import liquibase.resource.ClassLoaderResourceAccessor;
+import liquibase.resource.DirectoryResourceAccessor;
+import org.junit.jupiter.api.io.TempDir;
+import java.nio.file.*;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -33,6 +36,8 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private DataSource dataSource;
+
+    @TempDir Path historicalResources;
 
     @Test
     void migratesOncePreservesDataAndSupportsRollbackAndReapplication() throws Exception {
@@ -224,11 +229,26 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
     }
 
     private void runLiquibase(String schema, int rollbackCount) throws Exception {
+        // Exercise the original 26-change lifecycle independently of the forward-only retirement boundary.
+        try (var original = new ClassLoaderResourceAccessor()) {
+            String master = new String(original.get(CHANGELOG).openInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            master = master.lines().filter(line -> !line.contains("0026-archive-first-day") && !line.contains("0027-migrate-first-day"))
+                    .collect(java.util.stream.Collectors.joining("\n"));
+            Path target = historicalResources.resolve(CHANGELOG);
+            Files.createDirectories(target.getParent());
+            Files.writeString(target, master);
+            for (String line : master.lines().filter(l -> l.contains("<include")).toList()) {
+                String relative = line.substring(line.indexOf("file=\"") + 6).split("\"")[0];
+                Path copy = target.getParent().resolve(relative);
+                Files.createDirectories(copy.getParent());
+                try (var stream = original.get("db/changelog/" + relative).openInputStream()) { Files.copy(stream, copy, StandardCopyOption.REPLACE_EXISTING); }
+            }
+        }
         // Each operation uses a fresh instance, just like separate application/CLI launches.
         // Liquibase also caches the up-to-date result globally within the JVM across instances.
         Scope.getCurrentScope().getSingleton(FastCheckService.class).clearCache();
         try (Connection connection = dataSource.getConnection();
-             ClassLoaderResourceAccessor resources = new ClassLoaderResourceAccessor()) {
+             DirectoryResourceAccessor resources = new DirectoryResourceAccessor(historicalResources)) {
             // Establish the schema before Liquibase starts a transaction, including rollback.
             connection.setSchema(schema);
             var database = DatabaseFactory.getInstance().findCorrectDatabaseImplementation(new JdbcConnection(

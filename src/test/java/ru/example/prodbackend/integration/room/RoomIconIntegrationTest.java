@@ -83,6 +83,7 @@ class RoomIconIntegrationTest extends BaseIntegrationTest {
         roomsUrl = projectUrl + "/rooms";
         roomUrl = roomsUrl + "/" + roomId;
         boxesUrl = "/api/projects/" + projectId + "/boxes";
+        ru.example.prodbackend.support.LegacyChecklistTestSupport.snapshot(jdbc);
     }
 
     @Test
@@ -203,7 +204,7 @@ class RoomIconIntegrationTest extends BaseIntegrationTest {
         assertThat(checklist.size()).isEqualTo(2);
         for (var point : checklist) {
             var icon = point.get("roomIconKey");
-            assertThat(icon.isNull() ? null : icon.asText()).isEqualTo(point.get("itemId").isNull() ? null : expected);
+            assertThat(icon.isNull() ? null : icon.asText()).isEqualTo(point.get("itemId").isNull() ? null : "kitchen");
         }
     }
 

@@ -87,9 +87,8 @@ class MoveWorkflowIntegrationTest extends AuthIntegrationTestSupport {
         String task = "/api/move-projects/" + projectId + "/tasks/" + taskId + "/completion";
         call("PATCH", task, Map.of("completed", true), token).andExpect(status().isOk());
         call("PATCH", task, Map.of("completed", true), token).andExpect(status().isOk());
-        UUID checklistItem = UUID.fromString(jsonMapper.readTree(call("POST", "/api/move-projects/" + projectId + "/first-day-checklist",
-                Map.of("name", "Документы"), token).andExpect(status().isCreated()).andReturn().getResponse().getContentAsByteArray()).get("id").asText());
-        call("PATCH", "/api/move-projects/" + projectId + "/first-day-checklist/" + checklistItem, Map.of("completed", true), token).andExpect(status().isOk());
+        call("POST", "/api/move-projects/" + projectId + "/first-day-checklist", Map.of("name", "Документы"), token)
+                .andExpect(status().isGone()).andExpect(jsonPath("$.code").value("FIRST_DAY_CHECKLIST_RETIRED"));
         call("GET", boxes + "/summary", null, token).andExpect(status().isOk())
                 .andExpect(jsonPath("$.countsByStatus.UNPACKED").value(1)).andExpect(jsonPath("$.totalBoxes").value(1))
                 .andExpect(jsonPath("$.rooms[0].roomId").value(bedroom.toString())).andExpect(jsonPath("$.rooms[0].unpackingProgressPercent").value(100));

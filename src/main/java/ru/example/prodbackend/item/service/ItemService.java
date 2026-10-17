@@ -9,7 +9,6 @@ import org.springframework.transaction.annotation.Transactional;
 import ru.example.prodbackend.box.entity.BoxEntity;
 import ru.example.prodbackend.box.entity.BoxStatus;
 import ru.example.prodbackend.box.repository.BoxRepository;
-import ru.example.prodbackend.checklist.repository.FirstDayChecklistRepository;
 import ru.example.prodbackend.common.dto.PageResponse;
 import ru.example.prodbackend.common.dto.PaginationRequest;
 import ru.example.prodbackend.exception.ItemNotFoundException;
@@ -40,7 +39,6 @@ public class ItemService {
 
     private final ItemRepository itemRepository;
     private final BoxRepository boxRepository;
-    private final FirstDayChecklistRepository checklistRepository;
     private final ProjectAccessService projectAccessService;
 
     public ItemResponse findById(UUID userId, UUID projectId, UUID boxId, UUID itemId) {
@@ -96,9 +94,6 @@ public class ItemService {
         if (request.getQuantity() != null) item.setQuantity(request.getQuantity());
         if (request.getFlags() != null) item.replaceFlags(request.getFlags());
         if (request.getFirstDay() != null) item.setFirstDay(request.getFirstDay());
-        if ((request.getFirstDay() != null || request.getFlags() != null) && !item.isFirstDay()) {
-            checklistRepository.findForUpdateByItemId(itemId).ifPresent(checklist -> checklist.setItem(null));
-        }
         item.setPackedAt(packedAt);
         item.setUnpackedAt(unpackedAt);
         return toResponse(itemRepository.saveAndFlush(item));

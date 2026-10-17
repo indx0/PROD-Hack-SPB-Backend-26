@@ -30,4 +30,6 @@
     <include file="1.1/2026-10-17-0023-create-task-folders.sql" relativeToChangelogFile="true"/>
     <include file="1.1/2026-10-17-0024-link-task-items.sql" relativeToChangelogFile="true"/>
     <include file="1.1/2026-10-17-0025-add-task-set-application-folder.sql" relativeToChangelogFile="true"/>
+    <include file="1.1/2026-10-17-0026-archive-first-day-checklist.sql" relativeToChangelogFile="true"/>
+    <include file="1.1/2026-10-17-0027-migrate-first-day-checklist.sql" relativeToChangelogFile="true"/>
 </databaseChangeLog>

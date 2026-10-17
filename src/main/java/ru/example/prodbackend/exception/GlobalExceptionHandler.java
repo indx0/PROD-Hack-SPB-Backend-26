@@ -69,6 +69,13 @@ public class GlobalExceptionHandler {
     }
 
 
+    @ExceptionHandler(FirstDayChecklistRetiredException.class)
+    public ResponseEntity<ErrorResponse> handleFirstDayChecklistRetired(FirstDayChecklistRetiredException exception) {
+        var body = ErrorResponse.builder().code("FIRST_DAY_CHECKLIST_RETIRED").message(exception.getMessage())
+                .traceId(UUID.randomUUID()).time(Instant.now()).build();
+        return ResponseEntity.status(HttpStatus.GONE).body(body);
+    }
+
     @ExceptionHandler(ChecklistItemNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleChecklistItemNotFound(ChecklistItemNotFoundException exception) {
         ErrorResponse body = ErrorResponse.builder().code("CHECKLIST_ITEM_NOT_FOUND").message(exception.getMessage())

@@ -51,14 +51,14 @@ class MergedItemFlagsIntegrationTest extends AuthIntegrationTestSupport {
     }
 
     @Test
-    void flagsDetachChecklistAndLegacyFieldPreservesOtherFlags() throws Exception {
+    void flagsPreserveLegacySourceAndLegacyFieldPreservesOtherFlags() throws Exception {
         UUID item = id(call(post(itemsUrl), Map.of("name", "Чайник", "flags", List.of("fragile", "first_day", "carry_personally")))
                 .andExpect(status().isCreated()));
-        UUID point = id(call(post(projectUrl + "/first-day-checklist"), Map.of("name", "Мой чайник", "itemId", item)).andExpect(status().isCreated()));
-        call(patch(projectUrl + "/first-day-checklist/" + point), Map.of("completed", true)).andExpect(status().isOk());
+        UUID point = UUID.randomUUID();
+        jdbc.update("INSERT INTO first_day_checklist_items(id,project_id,name,item_id,completed_at,created_at,updated_at) VALUES (?,?,'Мой чайник',?,now(),now(),now())", point, projectId, item);
         call(patch(itemsUrl + "/" + item), Map.of("flags", List.of("fragile", "carry_personally"))).andExpect(status().isOk())
                 .andExpect(jsonPath("$.firstDay").value(false));
-        assertThat(jdbc.queryForObject("SELECT item_id FROM first_day_checklist_items WHERE id = ?", UUID.class, point)).isNull();
+        assertThat(jdbc.queryForObject("SELECT item_id FROM first_day_checklist_items WHERE id = ?", UUID.class, point)).isEqualTo(item);
         assertThat(jdbc.queryForObject("SELECT name FROM first_day_checklist_items WHERE id = ?", String.class, point)).isEqualTo("Мой чайник");
         assertThat(jdbc.queryForObject("SELECT completed_at IS NOT NULL FROM first_day_checklist_items WHERE id = ?", Boolean.class, point)).isTrue();
         call(patch(itemsUrl + "/" + item), Map.of("firstDay", true)).andExpect(status().isOk()).andExpect(jsonPath("$.flags.length()").value(3));
