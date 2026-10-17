@@ -31,6 +31,7 @@
         <jacoco.version>0.8.15</jacoco.version>
         <unitTestArgLine/>
         <integrationTestArgLine/>
+        <skipUnitTests>false</skipUnitTests>
     </properties>
     <dependencies>
 
@@ -180,10 +181,12 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <argLine>@{unitTestArgLine}</argLine>
-                    <excludes>
-                        <exclude>**/*IntegrationTest.java</exclude>
-                        <exclude>**/ProdBackendApplicationTests.java</exclude>
-                    </excludes>
+                    <skipTests>${skipUnitTests}</skipTests>
+                    <includes>
+                        <include>**/unit/**/*Test.java</include>
+                    </includes>
+                    <failIfNoTests>true</failIfNoTests>
+                    <runOrder>alphabetical</runOrder>
                 </configuration>
             </plugin>
             <!-- Интеграционные тесты: настоящий PostgreSQL через Testcontainers. -->
@@ -193,9 +196,15 @@
                 <configuration>
                     <argLine>@{integrationTestArgLine}</argLine>
                     <includes>
-                        <include>**/*IntegrationTest.java</include>
-                        <include>**/ProdBackendApplicationTests.java</include>
+                        <include>**/integration/**/*IntegrationTest.java</include>
                     </includes>
+                    <failIfNoTests>true</failIfNoTests>
+                    <forkCount>1</forkCount>
+                    <reuseForks>true</reuseForks>
+                    <runOrder>alphabetical</runOrder>
+                    <systemPropertyVariables>
+                        <junit.jupiter.execution.parallel.enabled>false</junit.jupiter.execution.parallel.enabled>
+                    </systemPropertyVariables>
                 </configuration>
                 <executions>
                     <execution>
