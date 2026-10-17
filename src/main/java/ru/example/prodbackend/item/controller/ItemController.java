@@ -27,6 +27,7 @@ import ru.example.prodbackend.item.dto.CreateItemsRequest;
 import ru.example.prodbackend.item.dto.ItemBoxSuggestionResponse;
 import ru.example.prodbackend.item.dto.ItemResponse;
 import ru.example.prodbackend.item.dto.UpdateItemRequest;
+import ru.example.prodbackend.item.dto.MoveItemRequest;
 import ru.example.prodbackend.item.service.ItemService;
 import ru.example.prodbackend.user.entity.UserEntity;
 
@@ -44,7 +45,7 @@ import java.util.UUID;
                 content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
         @ApiResponse(responseCode = "404", description = "Коробка или вещь не найдена либо недоступна пользователю",
                 content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-        @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: статус коробки запрещает изменение содержимого или отметки",
+        @ApiResponse(responseCode = "409", description = "DATA_CONFLICT: недопустимый статус коробки или изменившееся расположение вещи",
                 content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
         @ApiResponse(responseCode = "422", description = "Ошибка валидации запроса",
                 content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
@@ -143,7 +144,7 @@ public class ItemController {
                     firstDay не создаёт и не удаляет пункты чек-листа.
                     Отсутствующие поля сохраняют значения. Неизвестные поля игнорируются.
                     Запрос без поддерживаемых полей запрещён (422), явный null запрещён (400).
-                    Перенос вещи в другую коробку не поддерживается.
+                    Для переноса вещи используется отдельный PUT /boxes/{sourceBoxId}/items/{itemId}/box.
                     """,
             responses = {
                     @ApiResponse(responseCode = "200", description = "Вещь обновлена",
@@ -160,6 +161,23 @@ public class ItemController {
             @Valid @RequestBody UpdateItemRequest request
     ) {
         return ResponseEntity.ok(itemService.update(user.getId(), projectId, boxId, itemId, request));
+    }
+
+    @Operation(summary = "Перенести вещь в другую коробку",
+            description = """
+                    Обе коробки должны принадлежать этому проекту и находиться в PACKING.
+                    Переносится вся запись: UUID, название, quantity, lost, firstDay, отметки и связь с чек-листом сохраняются.
+                    Статусы коробок автоматически не меняются. Ответ содержит новое расположение.
+                    Если вещь уже в целевой коробке, возвращает успех без изменения времени в любом статусе.
+                    Если вещь находится в третьей коробке, возвращает 409. При отказе данные сохраняются.
+                    """,
+            responses = @ApiResponse(responseCode = "200", description = "Вещь с актуальным расположением",
+                    content = @Content(schema = @Schema(implementation = ItemResponse.class))))
+    @PutMapping("/boxes/{sourceBoxId}/items/{itemId}/box")
+    public ResponseEntity<ItemResponse> move(@Parameter(hidden = true) @AuthenticationPrincipal UserEntity user,
+            @PathVariable UUID projectId, @PathVariable UUID sourceBoxId, @PathVariable UUID itemId,
+            @Valid @RequestBody MoveItemRequest request) {
+        return ResponseEntity.ok(itemService.move(user.getId(), projectId, sourceBoxId, itemId, request));
     }
 
     @Operation(summary = "Удаление вещи",

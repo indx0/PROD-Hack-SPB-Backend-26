@@ -19,6 +19,7 @@ import ru.example.prodbackend.item.dto.CreateItemsRequest;
 import ru.example.prodbackend.item.dto.ItemBoxSuggestionResponse;
 import ru.example.prodbackend.item.dto.ItemResponse;
 import ru.example.prodbackend.item.dto.UpdateItemRequest;
+import ru.example.prodbackend.item.dto.MoveItemRequest;
 import ru.example.prodbackend.item.entity.ItemEntity;
 import ru.example.prodbackend.item.repository.ItemRepository;
 
@@ -98,6 +99,29 @@ public class ItemService {
         return toResponse(itemRepository.saveAndFlush(item));
     }
 
+
+    @Transactional
+    public ItemResponse move(UUID userId, UUID projectId, UUID sourceBoxId, UUID itemId, MoveItemRequest request) {
+        UUID targetBoxId = request.getTargetBoxId();
+        boolean sourceFirst = sourceBoxId.compareTo(targetBoxId) <= 0;
+        // Every transfer locks the pair in the same UUID order, including opposite transfers.
+        BoxEntity first = requireOwnedBox(userId, projectId, sourceFirst ? sourceBoxId : targetBoxId, true);
+        BoxEntity second = sourceBoxId.equals(targetBoxId) ? first
+                : requireOwnedBox(userId, projectId, sourceFirst ? targetBoxId : sourceBoxId, true);
+        BoxEntity source = sourceFirst ? first : second;
+        BoxEntity target = sourceFirst ? second : first;
+        ItemEntity item = itemRepository.findByIdAndBoxProject_IdAndBoxProjectOwnerId(itemId, projectId, userId)
+                .orElseThrow(() -> new ItemNotFoundException("Вещь не найдена в этом проекте"));
+        UUID currentBoxId = item.getBox().getId();
+        if (currentBoxId.equals(targetBoxId)) return toResponse(item);
+        if (!currentBoxId.equals(sourceBoxId)) {
+            throw new ResourceConflictException("Расположение вещи уже изменилось: она находится в другой коробке");
+        }
+        requirePacking(source, "переносить вещи");
+        requirePacking(target, "переносить вещи");
+        item.setBox(target);
+        return toResponse(itemRepository.saveAndFlush(item));
+    }
 
     @Transactional
     public void delete(UUID userId, UUID projectId, UUID boxId, UUID itemId) {

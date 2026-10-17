@@ -111,7 +111,13 @@ public class FirstDayChecklistService {
         UUID boxId = itemRepository.findOwnedBoxId(itemId, projectId, userId)
                 .orElseThrow(() -> new ItemNotFoundException("Вещь не найдена в этом проекте"));
         boxRepository.findForUpdate(boxId, projectId).orElseThrow(() -> new ItemNotFoundException("Коробка не найдена"));
-        return itemRepository.findByIdAndBox_Id(itemId, boxId).orElseThrow(() -> new ItemNotFoundException("Вещь не найдена"));
+        return itemRepository.findByIdAndBox_Id(itemId, boxId).orElseThrow(() -> {
+            if (itemRepository.findOwnedBoxId(itemId, projectId, userId).isPresent()) {
+                // Do not acquire the new box after holding the old one: that would break transfer lock ordering.
+                return new ResourceConflictException("Вещь перемещена в другую коробку; повторите привязку");
+            }
+            return new ItemNotFoundException("Вещь не найдена");
+        });
     }
 
     private String normalizeName(String name) {
