@@ -56,7 +56,7 @@ class MergedMigrationHistoryIntegrationTest extends BaseIntegrationTest {
                     assertThat(jdbc.queryForObject("SELECT first_day FROM items WHERE id=?", Boolean.class, item)).isTrue();
                     assertThat(jdbc.queryForObject("SELECT quantity FROM items WHERE id=?", Integer.class, item)).isEqualTo(history.equals("feature") ? 7 : 1);
                     assertThat(jdbc.queryForObject("SELECT fragile AND carry_personally FROM items WHERE id=?", Boolean.class, item)).isEqualTo(history.equals("master"));
-                    assertThat(jdbc.queryForObject("SELECT count(*) FROM databasechangelog", Long.class)).isEqualTo(25);
+                    assertThat(jdbc.queryForObject("SELECT count(*) FROM databasechangelog", Long.class)).isEqualTo(26);
                     assertThat(jdbc.queryForList("SELECT id,author,filename,md5sum FROM databasechangelog ORDER BY orderexecuted")).containsAll(originalHistory);
                 } finally { connection.setSchema("public"); }
             }
@@ -66,7 +66,7 @@ class MergedMigrationHistoryIntegrationTest extends BaseIntegrationTest {
     private void prepareOldResources(String history) throws Exception {
         String root = read(ROOT);
         var includes = root.lines().filter(line -> line.contains("<include"))
-                .filter(line -> !line.contains("0021-add-personal-task-templates") && !line.contains("0022-add-task-assignee") && !line.contains("0023-create-task-folders") && !line.contains("0024-link-task-items"))
+                .filter(line -> !line.contains("0021-add-personal-task-templates") && !line.contains("0022-add-task-assignee") && !line.contains("0023-create-task-folders") && !line.contains("0024-link-task-items") && !line.contains("0025-add-task-set-application-folder"))
                 .filter(line -> history.equals("master") ? line.contains("1.0/") : !line.contains(FLAGS)).toList();
         String header = root.substring(0, root.indexOf("    <include"));
         Path master = oldResources.resolve(ROOT);

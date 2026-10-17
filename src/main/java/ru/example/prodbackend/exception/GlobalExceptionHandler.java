@@ -22,6 +22,13 @@ import java.util.UUID;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(TaskSetAlreadyAppliedException.class)
+    public ResponseEntity<ErrorResponse> handleTaskSetAlreadyApplied(TaskSetAlreadyAppliedException exception) {
+        var body = ErrorResponse.builder().code("TASK_SET_ALREADY_APPLIED").message(exception.getMessage())
+                .traceId(UUID.randomUUID()).time(Instant.now()).build();
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    }
+
     @ExceptionHandler(TaskFolderNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleTaskFolderNotFound(TaskFolderNotFoundException exception) {
         var body = ErrorResponse.builder().code("TASK_FOLDER_NOT_FOUND").message(exception.getMessage())

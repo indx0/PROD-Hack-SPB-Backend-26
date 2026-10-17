@@ -168,6 +168,7 @@ public class MoveTaskService {
     @Transactional
     public MoveTaskResponse applyTemplate(UUID projectId, ApplyTaskTemplateRequest request, UUID userId) {
         var project = projectAccessService.getAccessibleProjectForUpdate(projectId, userId);
+        var folder = resolveFolder(projectId, request.getFolderId());
         var template = taskTemplateRepository.findAccessibleForUpdate(request.getTemplateId(), userId)
                 .orElseThrow(() -> new TaskTemplateNotFoundException("Готовая задача не найдена или недоступна"));
 
@@ -177,6 +178,7 @@ public class MoveTaskService {
 
         MoveTaskEntity task = MoveTaskEntity.builder()
                 .project(project)
+                .folder(folder)
                 .template(template)
                 .title(template.getTitle())
                 .description(template.getDescription())
