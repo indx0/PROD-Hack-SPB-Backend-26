@@ -1,6 +1,7 @@
 package ru.example.prodbackend.taskfolder.service;
 
 import lombok.RequiredArgsConstructor;
+import lombok.Getter;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -31,17 +32,23 @@ public class TaskFolderService {
     private final MoveTaskRepository tasks;
     private final ProjectAccessService projectAccess;
 
-    public record CreateResult(TaskFolderResponse folder, boolean created) { }
+    @Getter
+    @RequiredArgsConstructor
+    public static class CreateResult {
+
+        private final TaskFolderResponse folder;
+        private final boolean created;
+    }
 
     @Transactional
     public CreateResult create(UUID projectId, CreateTaskFolderRequest request, UUID userId) {
         projectAccess.getAccessibleProjectForUpdate(projectId, userId);
-        if (request.id() == null) throw new RequestValidationException("id", "UUID папки обязателен");
-        var name = normalizeName(request.name());
-        var color = validateColor(request.colorKey());
-        boolean created = folders.insertIfAbsent(request.id(), projectId, name, color,
+        if (request.getId() == null) throw new RequestValidationException("id", "UUID папки обязателен");
+        var name = normalizeName(request.getName());
+        var color = validateColor(request.getColorKey());
+        boolean created = folders.insertIfAbsent(request.getId(), projectId, name, color,
                 Instant.now().truncatedTo(ChronoUnit.MICROS)) == 1;
-        var folder = folders.findById(request.id()).orElseThrow(TaskFolderNotFoundException::new);
+        var folder = folders.findById(request.getId()).orElseThrow(TaskFolderNotFoundException::new);
         if (!folder.getProject().getId().equals(projectId)
                 || !folder.getInitialName().equals(name) || !folder.getInitialColorKey().equals(color)
                 || !folder.getName().equals(name) || !folder.getColorKey().equals(color)) {
@@ -58,10 +65,10 @@ public class TaskFolderService {
         for (int i = 0; i < requests.size(); i++) {
             var request = requests.get(i);
             String prefix = "folders[" + i + "].";
-            if (request.id() == null) throw new RequestValidationException(prefix + "id", "UUID папки обязателен");
-            var name = normalizeName(request.name(), prefix + "name");
-            var color = validateColor(request.colorKey(), prefix + "colorKey");
-            if (folders.insertIfAbsent(request.id(), project.getId(), name, color, Instant.now().truncatedTo(ChronoUnit.MICROS)) != 1) {
+            if (request.getId() == null) throw new RequestValidationException(prefix + "id", "UUID папки обязателен");
+            var name = normalizeName(request.getName(), prefix + "name");
+            var color = validateColor(request.getColorKey(), prefix + "colorKey");
+            if (folders.insertIfAbsent(request.getId(), project.getId(), name, color, Instant.now().truncatedTo(ChronoUnit.MICROS)) != 1) {
                 throw new ResourceConflictException("UUID создаваемой папки уже занят");
             }
         }
@@ -73,7 +80,7 @@ public class TaskFolderService {
                 PageRequest.of(pagination.getPage(), pagination.getSize(), Sort.by("createdAt", "id")));
         var counts = page.isEmpty() ? Map.<UUID, TaskFolderCounts>of()
                 : tasks.countByFolderIds(page.getContent().stream().map(TaskFolderEntity::getId).toList()).stream()
-                    .collect(Collectors.toMap(TaskFolderCounts::folderId, Function.identity()));
+                    .collect(Collectors.toMap(TaskFolderCounts::getFolderId, Function.identity()));
         return PageResponse.from(page.map(folder -> toResponse(folder, counts.get(folder.getId()))));
     }
 
@@ -140,7 +147,7 @@ public class TaskFolderService {
 
     private TaskFolderResponse toResponse(TaskFolderEntity folder, TaskFolderCounts counts) {
         return new TaskFolderResponse(folder.getId(), folder.getProject().getId(), folder.getName(), folder.getColorKey(),
-                counts == null ? 0 : counts.taskCount(), counts == null ? 0 : counts.completedTaskCount(),
+                counts == null ? 0 : counts.getTaskCount(), counts == null ? 0 : counts.getCompletedTaskCount(),
                 folder.getCreatedAt(), folder.getUpdatedAt());
     }
 }

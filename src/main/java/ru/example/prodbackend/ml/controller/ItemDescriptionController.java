@@ -9,7 +9,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -96,8 +98,8 @@ public class ItemDescriptionController {
     }
 
     private void requireSinglePhoto(MultipartHttpServletRequest request) {
-        if (request.getMultiFileMap().values().stream().mapToInt(java.util.List::size).sum() != 1) {
-            throw new MlException(org.springframework.http.HttpStatus.BAD_REQUEST,
+        if (request.getMultiFileMap().values().stream().mapToInt(List::size).sum() != 1) {
+            throw new MlException(HttpStatus.BAD_REQUEST,
                     "INVALID_MULTIPART", "Передайте ровно одну фотографию");
         }
     }

@@ -8,6 +8,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.ServletException;
+import java.io.IOException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -95,7 +97,7 @@ public class RoomPackingPlanController {
             @Parameter(description = "Фотография JPEG, PNG или WebP размером до 10 МиБ") @RequestPart(value = "photo", required = false) MultipartFile photo,
             @Parameter(hidden = true)
             @RequestParam(value = "description", required = false) Object description,
-            MultipartHttpServletRequest request) throws java.io.IOException, jakarta.servlet.ServletException {
+            MultipartHttpServletRequest request) throws IOException, ServletException {
         var descriptions = request.getParameterValues("description");
         var parts = request.getParts();
         // Bind description without coercion so a file in this field is rejected as invalid multipart.

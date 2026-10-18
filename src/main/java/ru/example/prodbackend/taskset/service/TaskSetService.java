@@ -110,8 +110,8 @@ public class TaskSetService {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void applyInitialApplications(MoveProjectEntity project, List<InitialTaskSetApplicationRequest> requests, UUID userId) {
-        for (var request : requests.stream().sorted(Comparator.comparing(InitialTaskSetApplicationRequest::taskSetId)).toList()) {
-            applyLocked(project, request.taskSetId(), userId, request.folderId(), true);
+        for (var request : requests.stream().sorted(Comparator.comparing(InitialTaskSetApplicationRequest::getTaskSetId)).toList()) {
+            applyLocked(project, request.getTaskSetId(), userId, request.getFolderId(), true);
         }
     }
 
