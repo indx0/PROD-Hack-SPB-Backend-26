@@ -68,13 +68,13 @@ public class DataLoader implements ApplicationRunner {
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
-        createUser("admin", adminPassword, UserRole.ADMIN);
+        fillMissingLastName(createUser("admin", adminPassword, UserRole.ADMIN));
         List<UserEntity> users = new ArrayList<>();
         Map<UUID, UUID> newUserTaskSets = new HashMap<>();
         for (int number = 1; number <= 10; number++) {
             String login = "u" + number;
             var existing = userRepository.findByEmail(login);
-            var user = existing.orElseGet(() -> createUser(login, "1", UserRole.USER));
+            var user = fillMissingLastName(existing.orElseGet(() -> createUser(login, "1", UserRole.USER)));
             users.add(user);
             // Seed only new accounts: restarts preserve judges' edits, renames and deletions.
             if (existing.isEmpty()) newUserTaskSets.put(user.getId(), createOfficeTaskSet(user.getId()));
@@ -94,6 +94,13 @@ public class DataLoader implements ApplicationRunner {
     private UserEntity createUser(String login, String password, UserRole role) {
         return userRepository.findByEmail(login).orElseGet(() -> userRepository.saveAndFlush(UserEntity.builder()
                 .email(login).firstName(login).password(passwordEncoder.encode(password)).role(role).build()));
+    }
+
+    private UserEntity fillMissingLastName(UserEntity user) {
+        if (user.getLastName() == null || user.getLastName().isBlank()) {
+            user.setLastName(user.getRole() == UserRole.ADMIN ? "Администратор" : "Сотрудник");
+        }
+        return user;
     }
 
     private UUID createOfficeTaskSet(UUID userId) {

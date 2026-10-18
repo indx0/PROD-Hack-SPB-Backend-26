@@ -76,6 +76,7 @@ class DataLoaderIntegrationTest extends BaseIntegrationTest {
             String login = "u" + number;
             var user = user(login);
             assertThat(user.getFirstName()).isEqualTo(login);
+            assertThat(user.getLastName()).isEqualTo("Сотрудник");
             assertThat(user.getRole()).isEqualTo(UserRole.USER);
             assertThat(passwordEncoder.matches("1", user.getPassword())).isTrue();
             assertThat(token(login, "1")).isNotBlank();
@@ -110,6 +111,7 @@ class DataLoaderIntegrationTest extends BaseIntegrationTest {
                     .setParameter("project", project.getId()).getResultList()).contains(BoxStatus.values());
         }
         assertThat(passwordEncoder.matches("test-admin-password", user("admin").getPassword())).isTrue();
+        assertThat(user("admin").getLastName()).isEqualTo("Администратор");
     }
 
     @Test
@@ -146,6 +148,7 @@ class DataLoaderIntegrationTest extends BaseIntegrationTest {
         String updatedPassword = passwordEncoder.encode("changed-password");
         owner.setPassword(updatedPassword);
         owner.setFirstName("Имя проверяющего");
+        owner.setLastName("Фамилия проверяющего");
         var project = project("Переезд IT-отдела — u1");
         var emptyBox = entityManager.createQuery("from BoxEntity b where b.project.id = :project and b.number = 3", BoxEntity.class)
                 .setParameter("project", project.getId()).getSingleResult();
@@ -172,6 +175,7 @@ class DataLoaderIntegrationTest extends BaseIntegrationTest {
                 "select e.id from " + entity + " e order by e.id", UUID.class).getResultList()).isEqualTo(ids));
         assertThat(user("u1").getPassword()).isEqualTo(updatedPassword);
         assertThat(user("u1").getFirstName()).isEqualTo("Имя проверяющего");
+        assertThat(user("u1").getLastName()).isEqualTo("Фамилия проверяющего");
         assertThat(entityManager.find(MoveProjectEntity.class, project.getId()).getName()).isEqualTo("Переезд переименован жюри");
         assertThat(entityManager.find(RoomEntity.class, room.getId()).getIconKey()).isEqualTo("heart");
         assertThat(entityManager.find(ItemEntity.class, item.getId()).getName()).isEqualTo("Название изменено жюри");
@@ -181,8 +185,12 @@ class DataLoaderIntegrationTest extends BaseIntegrationTest {
     void existingAccountIsNotResetOrPopulatedWithUnrequestedData() {
         userRepository.saveAndFlush(UserEntity.builder().email("u1").firstName("Существующий пользователь")
                 .password(passwordEncoder.encode("original-password")).role(UserRole.USER).build());
+        userRepository.saveAndFlush(UserEntity.builder().email("u2").firstName("u2").lastName("  ")
+                .password(passwordEncoder.encode("original-password")).role(UserRole.USER).build());
         loader().run(new DefaultApplicationArguments());
         assertThat(user("u1").getFirstName()).isEqualTo("Существующий пользователь");
+        assertThat(user("u1").getLastName()).isEqualTo("Сотрудник");
+        assertThat(user("u2").getLastName()).isEqualTo("Сотрудник");
         assertThat(passwordEncoder.matches("original-password", user("u1").getPassword())).isTrue();
         assertThat(moveProjectRepository.findAllByArchiveFilter(user("u1").getId(), null, PageRequest.of(0, 100))).isEmpty();
         assertThat(count("UserEntity")).isEqualTo(11);
