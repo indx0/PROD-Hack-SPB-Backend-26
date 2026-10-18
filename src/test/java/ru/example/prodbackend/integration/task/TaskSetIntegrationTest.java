@@ -1,26 +1,25 @@
 package ru.example.prodbackend.integration.task;
 
-import ru.example.prodbackend.support.AuthIntegrationTestSupport;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.ResultActions;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
-import ru.example.prodbackend.taskset.repository.TaskSetRepository;
-import tools.jackson.databind.JsonNode;
-
 import java.time.LocalDate;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import ru.example.prodbackend.support.AuthIntegrationTestSupport;
+import ru.example.prodbackend.taskset.repository.TaskSetRepository;
+import tools.jackson.databind.JsonNode;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -86,7 +85,7 @@ class TaskSetIntegrationTest extends AuthIntegrationTestSupport {
     @Test
     void onlySetOwnerCanReadEditDeleteOrApplyAndAllEndpointsRequireAuth() throws Exception {
         for (var method : List.of("GET", "PUT", "DELETE")) {
-            var request = org.springframework.http.HttpMethod.valueOf(method);
+            var request = HttpMethod.valueOf(method);
             assertErrorResponse(call(member, request(request, "/api/task-sets/" + setId), method.equals("PUT") ? setBody("Чужой") : null), 404, "TASK_SET_NOT_FOUND");
             call(null, request(request, "/api/task-sets/" + setId), method.equals("PUT") ? setBody("Чужой") : null).andExpect(status().isUnauthorized());
         }

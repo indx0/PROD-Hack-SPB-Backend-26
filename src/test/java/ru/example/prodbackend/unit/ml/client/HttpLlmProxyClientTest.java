@@ -1,29 +1,39 @@
 package ru.example.prodbackend.unit.ml.client;
 
-import ru.example.prodbackend.ml.client.HttpLlmProxyClient;
-
 import com.sun.net.httpserver.HttpServer;
-import org.junit.jupiter.api.*;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
-import org.junit.jupiter.params.provider.ValueSource;
-import org.springframework.http.client.JdkClientHttpRequestFactory;
-import org.springframework.web.client.RestClient;
-import ru.example.prodbackend.ml.config.LlmProxyProperties;
-import ru.example.prodbackend.ml.exception.MlException;
-import ru.example.prodbackend.ml.validation.ItemDescriptionValidator;
-import tools.jackson.databind.json.JsonMapper;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.net.*;
 import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.slf4j.MDC;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
+import org.springframework.web.client.RestClient;
+import ru.example.prodbackend.ml.client.HttpLlmProxyClient;
+import ru.example.prodbackend.ml.config.LlmProxyProperties;
+import ru.example.prodbackend.ml.dto.InventoryItem;
+import ru.example.prodbackend.ml.dto.ItemDescriptionResponse;
+import ru.example.prodbackend.ml.exception.MlException;
+import ru.example.prodbackend.ml.validation.ItemDescriptionValidator;
+import ru.example.prodbackend.ml.validation.RoomPackingPlanValidator;
+import ru.example.prodbackend.ml.validation.UnpackingVerificationValidator;
+import ru.example.prodbackend.support.fixtures.RoomPackingPlanFixtures;
+import tools.jackson.databind.json.JsonMapper;
+
 import static org.assertj.core.api.Assertions.*;
 
 class HttpLlmProxyClientTest {
-    private final io.micrometer.core.instrument.simple.SimpleMeterRegistry meters = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+    private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
     private HttpServer server;
     private ExecutorService worker;
     private ExecutorService serverWorker;
@@ -34,7 +44,7 @@ class HttpLlmProxyClientTest {
     private String response;
     private long delay;
     private long bodyDelay;
-    private final java.util.concurrent.atomic.AtomicInteger calls = new java.util.concurrent.atomic.AtomicInteger();
+    private final AtomicInteger calls = new AtomicInteger();
 
     @BeforeEach
     void setUp() throws Exception {
@@ -151,8 +161,8 @@ class HttpLlmProxyClientTest {
 
     @Test
     void unpackingSendsInventoryAndPhotoOnceWithSeparatePromptSchemaAndMetrics() throws Exception {
-        var id = java.util.UUID.randomUUID();
-        var inventory = java.util.List.of(new ru.example.prodbackend.ml.dto.InventoryItem(id, "Зарядка"));
+        var id = UUID.randomUUID();
+        var inventory = List.of(new InventoryItem(id, "Зарядка"));
         response = envelope("{\"items\":[{\"itemId\":\"" + id + "\",\"photoDescription\":\"Зарядное устройство\"},"
                 + "{\"itemId\":null,\"photoDescription\":\"Книга\"}]}");
         var result = client("test-key", 2000).verifyUnpacking(new byte[]{1,2,3}, "image/png", inventory);
@@ -180,12 +190,12 @@ class HttpLlmProxyClientTest {
 
     @Test
     void unpackingUsesSharedErrorsDeadlineAndOverloadHandling() throws Exception {
-        var inventory = java.util.List.of(new ru.example.prodbackend.ml.dto.InventoryItem(java.util.UUID.randomUUID(), "Кружка"));
+        var inventory = List.of(new InventoryItem(UUID.randomUUID(), "Кружка"));
         var configured = client("key", 2000);
         response = envelope("{\"items\":[]}");
         assertThatThrownBy(() -> configured.verifyUnpacking(new byte[]{1}, "image/png", inventory))
                 .isInstanceOfSatisfying(MlException.class, e -> assertThat(e.getCode()).isEqualTo("IMAGE_NOT_RECOGNIZED"));
-        response = envelope("{\"items\":[{\"itemId\":\"" + java.util.UUID.randomUUID() + "\",\"photoDescription\":\"Кружка\"}]}");
+        response = envelope("{\"items\":[{\"itemId\":\"" + UUID.randomUUID() + "\",\"photoDescription\":\"Кружка\"}]}");
         assertThatThrownBy(() -> configured.verifyUnpacking(new byte[]{1}, "image/png", inventory))
                 .isInstanceOfSatisfying(MlException.class, e -> assertThat(e.getCode()).isEqualTo("LLM_INVALID_RESPONSE"));
         upstreamStatus = 429;
@@ -205,11 +215,11 @@ class HttpLlmProxyClientTest {
     @ParameterizedTest
     @ValueSource(strings = {"text", "photo", "combined"})
     void roomPackingSendsOnlyProvidedSourcesAndUsesOwnSchemaAndMetrics(String mode) throws Exception {
-        response = envelope(ru.example.prodbackend.support.fixtures.RoomPackingPlanFixtures.PLAN);
+        response = envelope(RoomPackingPlanFixtures.PLAN);
         byte[] image = mode.equals("text") ? null : new byte[]{1,2,3};
         String description = mode.equals("photo") ? "" : "Кухня";
         var result = client("test-key", 2000).planRoomPacking(description, image, image == null ? null : "image/png");
-        assertThat(result).isEqualTo(ru.example.prodbackend.support.fixtures.RoomPackingPlanFixtures.response());
+        assertThat(result).isEqualTo(RoomPackingPlanFixtures.response());
         assertThat(calls.get()).isEqualTo(1);
         assertThat(authorization.get()).isEqualTo("Bearer test-key");
         var body = mapper.readTree(request.get());
@@ -237,7 +247,7 @@ class HttpLlmProxyClientTest {
     @Test
     void roomPackingMapsRefusalAndInvalidResponsesWithoutChangingRecognitionErrors() throws Exception {
         var configured = client("key", 2000);
-        for (String body : java.util.List.of(envelope(ru.example.prodbackend.support.fixtures.RoomPackingPlanFixtures.NO_PLAN),
+        for (String body : List.of(envelope(RoomPackingPlanFixtures.NO_PLAN),
                 "{\"choices\":[{\"finish_reason\":\"stop\",\"message\":{\"refusal\":\"refused\"}}]}",
                 "{\"choices\":[{\"finish_reason\":\"content_filter\"}]}")) {
             response = body;
@@ -245,7 +255,7 @@ class HttpLlmProxyClientTest {
                     .isInstanceOfSatisfying(MlException.class, e -> assertThat(e.getCode()).isEqualTo("ROOM_PLAN_NOT_GENERATED"));
         }
         assertThat(meters.get("movermate.llm.operation").tags("scenario", "room_packing", "outcome", "not_recognized").timer().count()).isEqualTo(3);
-        for (String body : java.util.List.of("not json", envelope("{}"), "x".repeat(64 * 1024 + 1))) {
+        for (String body : List.of("not json", envelope("{}"), "x".repeat(64 * 1024 + 1))) {
             response = body;
             assertThatThrownBy(() -> configured.planRoomPacking("Кухня", null, null))
                     .isInstanceOfSatisfying(MlException.class, e -> assertThat(e.getCode()).isEqualTo("LLM_INVALID_RESPONSE"));
@@ -263,7 +273,7 @@ class HttpLlmProxyClientTest {
         assertThatThrownBy(() -> configured.planRoomPacking("Кухня", null, null))
                 .isInstanceOfSatisfying(MlException.class, e -> assertThat(e.getCode()).isEqualTo("LLM_UNAVAILABLE"));
         upstreamStatus = 200;
-        response = envelope(ru.example.prodbackend.support.fixtures.RoomPackingPlanFixtures.PLAN);
+        response = envelope(RoomPackingPlanFixtures.PLAN);
         bodyDelay = 2000;
         var timed = client("key", 1000);
         assertThatThrownBy(() -> timed.planRoomPacking("Кухня", null, null))
@@ -377,8 +387,8 @@ class HttpLlmProxyClientTest {
         var release = new CountDownLatch(1);
         var capturedId = new AtomicReference<String>();
         var validator = new ItemDescriptionValidator(mapper) {
-            @Override public ru.example.prodbackend.ml.dto.ItemDescriptionResponse validate(String body) {
-                capturedId.set(org.slf4j.MDC.get("requestId"));
+            @Override public ItemDescriptionResponse validate(String body) {
+                capturedId.set(MDC.get("requestId"));
                 entered.countDown();
                 boolean released = false;
                 while (!released) {
@@ -390,8 +400,8 @@ class HttpLlmProxyClientTest {
         };
         var properties = new LlmProxyProperties(URI.create("http://127.0.0.1:" + server.getAddress().getPort()
                 + "/chat/completions"), "test-model", "secret", 1000, 1000);
-        var client = new HttpLlmProxyClient(RestClient.create(), properties, worker, validator, new ru.example.prodbackend.ml.validation.UnpackingVerificationValidator(validator), mapper, new ru.example.prodbackend.ml.validation.RoomPackingPlanValidator(new ItemDescriptionValidator(mapper)), meters);
-        org.slf4j.MDC.put("requestId", "request-test");
+        var client = new HttpLlmProxyClient(RestClient.create(), properties, worker, validator, new UnpackingVerificationValidator(validator), mapper, new RoomPackingPlanValidator(new ItemDescriptionValidator(mapper)), meters);
+        MDC.put("requestId", "request-test");
         try {
             assertThatThrownBy(() -> client.describe(new byte[]{1}, "image/png"))
                     .isInstanceOfSatisfying(MlException.class, e -> assertThat(e.getCode()).isEqualTo("LLM_TIMEOUT"));
@@ -401,9 +411,9 @@ class HttpLlmProxyClientTest {
             assertThat(meters.get("movermate.llm.operation").tags("scenario", "single", "outcome", "timeout").timer().count()).isEqualTo(1);
         } finally {
             release.countDown();
-            org.slf4j.MDC.clear();
+            MDC.clear();
         }
-        assertThat(worker.submit(() -> org.slf4j.MDC.get("requestId")).get(2, TimeUnit.SECONDS)).isNull();
+        assertThat(worker.submit(() -> MDC.get("requestId")).get(2, TimeUnit.SECONDS)).isNull();
         assertThat(meters.get("movermate.llm.active").gauge().value()).isZero();
         assertThat(meters.get("movermate.llm.operation").tags("scenario", "single", "outcome", "success").timer().count()).isZero();
     }
@@ -433,11 +443,11 @@ class HttpLlmProxyClientTest {
         factory.setReadTimeout(Duration.ofMillis(timeout));
         return new HttpLlmProxyClient(RestClient.builder().requestFactory(factory).build(), properties,
                 worker, new ItemDescriptionValidator(mapper),
-                new ru.example.prodbackend.ml.validation.UnpackingVerificationValidator(new ItemDescriptionValidator(mapper)), mapper, new ru.example.prodbackend.ml.validation.RoomPackingPlanValidator(new ItemDescriptionValidator(mapper)), meters);
+                new UnpackingVerificationValidator(new ItemDescriptionValidator(mapper)), mapper, new RoomPackingPlanValidator(new ItemDescriptionValidator(mapper)), meters);
     }
 
     private String envelope(String content) {
-        return mapper.writeValueAsString(Map.of("choices", java.util.List.of(Map.of(
+        return mapper.writeValueAsString(Map.of("choices", List.of(Map.of(
                 "finish_reason", "stop", "message", Map.of("content", content)))));
     }
 }

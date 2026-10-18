@@ -1,8 +1,15 @@
 package ru.example.prodbackend.integration.item;
 
-import ru.example.prodbackend.support.BaseIntegrationTest;
-
 import jakarta.persistence.EntityManager;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -25,18 +32,10 @@ import ru.example.prodbackend.item.entity.ItemEntity;
 import ru.example.prodbackend.item.service.ItemService;
 import ru.example.prodbackend.move.entity.MoveProjectEntity;
 import ru.example.prodbackend.room.entity.RoomEntity;
+import ru.example.prodbackend.support.BaseIntegrationTest;
+import ru.example.prodbackend.support.LegacyChecklistTestSupport;
 import ru.example.prodbackend.user.entity.UserEntity;
 import ru.example.prodbackend.user.entity.UserRole;
-
-import java.sql.Timestamp;
-import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -90,7 +89,7 @@ class ItemMoveIntegrationTest extends BaseIntegrationTest {
             pointId = point.getId();
             entityManager.flush();
         });
-        ru.example.prodbackend.support.LegacyChecklistTestSupport.snapshot(jdbc);
+        LegacyChecklistTestSupport.snapshot(jdbc);
     }
 
     @Test

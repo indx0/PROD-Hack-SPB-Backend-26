@@ -1,7 +1,6 @@
 package ru.example.prodbackend.integration.event;
 
-import ru.example.prodbackend.support.AuthIntegrationTestSupport;
-
+import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -12,12 +11,13 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import ru.example.prodbackend.box.dto.CreateBoxRequest;
 import ru.example.prodbackend.box.dto.CorrectBoxStatusRequest;
+import ru.example.prodbackend.box.dto.CreateBoxRequest;
 import ru.example.prodbackend.box.entity.BoxEntity;
 import ru.example.prodbackend.box.entity.BoxStatus;
 import ru.example.prodbackend.box.repository.BoxRepository;
 import ru.example.prodbackend.box.service.BoxService;
+import ru.example.prodbackend.checklist.repository.FirstDayChecklistRepository;
 import ru.example.prodbackend.event.entity.EventObjectType;
 import ru.example.prodbackend.event.entity.ProjectEventEntity;
 import ru.example.prodbackend.event.entity.ProjectEventType;
@@ -30,14 +30,13 @@ import ru.example.prodbackend.move.entity.MoveProjectEntity;
 import ru.example.prodbackend.move.service.MoveProjectService;
 import ru.example.prodbackend.room.entity.RoomEntity;
 import ru.example.prodbackend.room.repository.RoomRepository;
+import ru.example.prodbackend.support.AuthIntegrationTestSupport;
 import ru.example.prodbackend.task.dto.request.CreateMoveTaskRequest;
 import ru.example.prodbackend.task.entity.TaskStage;
 import ru.example.prodbackend.task.repository.MoveTaskRepository;
 import ru.example.prodbackend.task.service.MoveTaskService;
-import ru.example.prodbackend.checklist.repository.FirstDayChecklistRepository;
+import ru.example.prodbackend.taskfolder.repository.TaskFolderRepository;
 import ru.example.prodbackend.user.entity.UserEntity;
-
-import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -62,7 +61,7 @@ class ProjectEventIntegrationTest extends AuthIntegrationTestSupport {
     @MockitoSpyBean
     private MoveTaskRepository taskRepository;
     @Autowired
-    private ru.example.prodbackend.taskfolder.repository.TaskFolderRepository taskFolderRepository;
+    private TaskFolderRepository taskFolderRepository;
     @Autowired
     private PlatformTransactionManager transactionManager;
     @Autowired

@@ -1,5 +1,6 @@
 package ru.example.prodbackend.auth.config;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
@@ -17,6 +18,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import ru.example.prodbackend.exception.dto.ErrorResponse;
+import ru.example.prodbackend.observability.ErrorObservabilityAdvice;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
@@ -95,6 +97,7 @@ public class SecurityConfig {
                 .exceptionHandling(errors -> errors
                         .authenticationEntryPoint((request, response, exception) ->
                                 writeError(
+                                        request,
                                         response,
                                         HttpStatus.UNAUTHORIZED,
                                         "Authentication required or access token is invalid"
@@ -102,6 +105,7 @@ public class SecurityConfig {
                         )
                         .accessDeniedHandler((request, response, exception) ->
                                 writeError(
+                                        request,
                                         response,
                                         HttpStatus.FORBIDDEN,
                                         "Access denied"
@@ -118,6 +122,7 @@ public class SecurityConfig {
     }
 
     private void writeError(
+            HttpServletRequest request,
             HttpServletResponse response,
             HttpStatus status,
             String message
@@ -129,6 +134,7 @@ public class SecurityConfig {
                 .time(Instant.now())
                 .build();
 
+        ErrorObservabilityAdvice.capture(request, body);
         response.setStatus(status.value());
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);

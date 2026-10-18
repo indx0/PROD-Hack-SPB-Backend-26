@@ -4,13 +4,13 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import java.time.Instant;
+import java.util.UUID;
 import lombok.*;
+import lombok.AccessLevel;
 import ru.example.prodbackend.box.entity.BoxStatus;
 import ru.example.prodbackend.move.entity.MoveProjectEntity;
 import ru.example.prodbackend.user.entity.UserEntity;
-
-import java.time.Instant;
-import java.util.UUID;
 
 @Entity
 @Builder
@@ -25,7 +25,7 @@ import java.util.UUID;
 public class ProjectEventEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    @Setter(lombok.AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -51,7 +51,7 @@ public class ProjectEventEntity {
     private UUID objectId;
 
     @Column(name = "occurred_at", nullable = false, updatable = false)
-    @Setter(lombok.AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
     private Instant occurredAt;
 
     @NotBlank

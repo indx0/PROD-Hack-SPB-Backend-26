@@ -1,23 +1,27 @@
 package ru.example.prodbackend.exception;
 
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.ResponseEntity;
-import org.springframework.http.converter.HttpMessageNotReadableException;
-import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
-import ru.example.prodbackend.exception.dto.ErrorResponse;
-import ru.example.prodbackend.exception.dto.FieldErrorResponse;
-import ru.example.prodbackend.ml.exception.MlRateLimitException;
-
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
+import ru.example.prodbackend.exception.dto.ErrorResponse;
+import ru.example.prodbackend.exception.dto.FieldErrorResponse;
+import ru.example.prodbackend.ml.exception.MlException;
+import ru.example.prodbackend.ml.exception.MlRateLimitException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -36,8 +40,8 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
     }
 
-    @ExceptionHandler(ru.example.prodbackend.ml.exception.MlException.class)
-    public ResponseEntity<ErrorResponse> handleMl(ru.example.prodbackend.ml.exception.MlException exception) {
+    @ExceptionHandler(MlException.class)
+    public ResponseEntity<ErrorResponse> handleMl(MlException exception) {
         var response = ResponseEntity.status(exception.getStatus());
         if (exception instanceof MlRateLimitException rateLimit) {
             response.header(HttpHeaders.RETRY_AFTER, Long.toString(rateLimit.getRetryAfterSeconds()));
@@ -47,18 +51,18 @@ public class GlobalExceptionHandler {
                 .traceId(exception.getTraceId()).time(Instant.now()).build());
     }
 
-    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ErrorResponse> handleUploadSize(Exception exception) {
         return uploadError(HttpStatus.CONTENT_TOO_LARGE, "IMAGE_TOO_LARGE", "Превышен размер загрузки");
     }
 
-    @ExceptionHandler({org.springframework.web.multipart.MultipartException.class,
-            org.springframework.web.multipart.support.MissingServletRequestPartException.class})
+    @ExceptionHandler({MultipartException.class,
+            MissingServletRequestPartException.class})
     public ResponseEntity<ErrorResponse> handleMultipart(Exception exception) {
         return uploadError(HttpStatus.BAD_REQUEST, "INVALID_MULTIPART", "Некорректный multipart или отсутствует photo");
     }
 
-    @ExceptionHandler(org.springframework.web.HttpMediaTypeNotSupportedException.class)
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
     public ResponseEntity<ErrorResponse> handleMediaType(Exception exception) {
         return uploadError(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "UNSUPPORTED_MEDIA_TYPE", "Неподдерживаемый Content-Type");
     }

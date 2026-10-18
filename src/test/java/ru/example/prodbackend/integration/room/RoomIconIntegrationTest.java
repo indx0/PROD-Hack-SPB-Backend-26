@@ -1,8 +1,11 @@
 package ru.example.prodbackend.integration.room;
 
-import ru.example.prodbackend.support.BaseIntegrationTest;
-
 import jakarta.persistence.EntityManager;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,13 +24,10 @@ import ru.example.prodbackend.move.entity.MoveProjectEntity;
 import ru.example.prodbackend.room.dto.request.UpdateRoomRequest;
 import ru.example.prodbackend.room.entity.RoomEntity;
 import ru.example.prodbackend.room.service.RoomService;
+import ru.example.prodbackend.support.BaseIntegrationTest;
+import ru.example.prodbackend.support.LegacyChecklistTestSupport;
 import ru.example.prodbackend.user.entity.UserEntity;
 import ru.example.prodbackend.user.entity.UserRole;
-
-import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -83,7 +83,7 @@ class RoomIconIntegrationTest extends BaseIntegrationTest {
         roomsUrl = projectUrl + "/rooms";
         roomUrl = roomsUrl + "/" + roomId;
         boxesUrl = "/api/projects/" + projectId + "/boxes";
-        ru.example.prodbackend.support.LegacyChecklistTestSupport.snapshot(jdbc);
+        LegacyChecklistTestSupport.snapshot(jdbc);
     }
 
     @Test
@@ -110,12 +110,12 @@ class RoomIconIntegrationTest extends BaseIntegrationTest {
                 .andExpect(jsonPath("$.iconKey").value("book")).andExpect(jsonPath("$.name").value("Мастерская"))
                 .andExpect(jsonPath("$.iconKeyPresent").doesNotExist());
         perform(patch(roomUrl), Map.of("name", "  Кабинет  ")).andExpect(status().isOk()).andExpect(jsonPath("$.iconKey").value("book"));
-        var updatedAt = jdbc.queryForObject("SELECT updated_at FROM rooms WHERE id = ?", java.sql.Timestamp.class, roomId);
+        var updatedAt = jdbc.queryForObject("SELECT updated_at FROM rooms WHERE id = ?", Timestamp.class, roomId);
         for (String body : List.of("{}", "{\"name\":null}", "{\"iconKeyPresent\":true}")) {
             raw(patch(roomUrl), body).andExpect(status().isOk()).andExpect(jsonPath("$.iconKey").value("book"));
         }
         assertThat(savedIcon(roomId)).isEqualTo("book");
-        assertThat(jdbc.queryForObject("SELECT updated_at FROM rooms WHERE id = ?", java.sql.Timestamp.class, roomId)).isEqualTo(updatedAt);
+        assertThat(jdbc.queryForObject("SELECT updated_at FROM rooms WHERE id = ?", Timestamp.class, roomId)).isEqualTo(updatedAt);
         roomService.updateRoom(projectId, roomId, UpdateRoomRequest.builder().name("Рабочая комната").build(), ownerId);
         assertThat(savedIcon(roomId)).isEqualTo("book");
         roomService.updateRoom(projectId, roomId, UpdateRoomRequest.builder().iconKey("sun").build(), ownerId);
@@ -128,9 +128,9 @@ class RoomIconIntegrationTest extends BaseIntegrationTest {
     void explicitNullClearsIconAndRepeatedClearPreservesNameAndTime() throws Exception {
         raw(patch(roomUrl), "{\"iconKey\":null,\"name\":null}").andExpect(status().isOk()).andExpect(jsonPath("$.name").value("Мастерская"));
         assertThat(savedIcon(roomId)).isNull();
-        var updatedAt = jdbc.queryForObject("SELECT updated_at FROM rooms WHERE id = ?", java.sql.Timestamp.class, roomId);
+        var updatedAt = jdbc.queryForObject("SELECT updated_at FROM rooms WHERE id = ?", Timestamp.class, roomId);
         raw(patch(roomUrl), "{\"iconKey\":null}").andExpect(status().isOk());
-        assertThat(jdbc.queryForObject("SELECT updated_at FROM rooms WHERE id = ?", java.sql.Timestamp.class, roomId)).isEqualTo(updatedAt);
+        assertThat(jdbc.queryForObject("SELECT updated_at FROM rooms WHERE id = ?", Timestamp.class, roomId)).isEqualTo(updatedAt);
         assertRoomIconInList(null);
     }
 

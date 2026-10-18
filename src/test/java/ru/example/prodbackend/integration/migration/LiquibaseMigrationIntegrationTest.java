@@ -1,7 +1,13 @@
 package ru.example.prodbackend.integration.migration;
 
-import ru.example.prodbackend.support.BaseIntegrationTest;
-
+import java.nio.charset.StandardCharsets;
+import java.nio.file.*;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.util.UUID;
+import java.util.stream.Collectors;
+import javax.sql.DataSource;
 import liquibase.Contexts;
 import liquibase.LabelExpression;
 import liquibase.Liquibase;
@@ -11,17 +17,12 @@ import liquibase.database.DatabaseFactory;
 import liquibase.database.jvm.JdbcConnection;
 import liquibase.resource.ClassLoaderResourceAccessor;
 import liquibase.resource.DirectoryResourceAccessor;
-import org.junit.jupiter.api.io.TempDir;
-import java.nio.file.*;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
-
-import javax.sql.DataSource;
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.util.UUID;
+import ru.example.prodbackend.support.BaseIntegrationTest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -150,7 +151,7 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
                         .rootCause().extracting(error -> ((SQLException) error).getSQLState()).isEqualTo("23514");
                 assertHistory(jdbc, 18);
                 assertThat(jdbc.queryForObject("SELECT event_type FROM project_events WHERE id = ?", String.class, archiveEvent)).isEqualTo("PROJECT_RESTORED");
-                assertThat(jdbc.queryForObject("SELECT archived_at FROM move_projects WHERE id = ?", java.sql.Timestamp.class, archivedProject)).isNotNull();
+                assertThat(jdbc.queryForObject("SELECT archived_at FROM move_projects WHERE id = ?", Timestamp.class, archivedProject)).isNotNull();
                 jdbc.update("DELETE FROM project_events WHERE id = ?", archiveEvent); // Remove only this test fixture before lifecycle rollback.
                 runLiquibase(schema, 0);
                 assertHistory(jdbc);
@@ -231,9 +232,9 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
     private void runLiquibase(String schema, int rollbackCount) throws Exception {
         // Exercise the original 26-change lifecycle independently of the forward-only retirement boundary.
         try (var original = new ClassLoaderResourceAccessor()) {
-            String master = new String(original.get(CHANGELOG).openInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            String master = new String(original.get(CHANGELOG).openInputStream().readAllBytes(), StandardCharsets.UTF_8);
             master = master.lines().filter(line -> !line.contains("0026-archive-first-day") && !line.contains("0027-migrate-first-day"))
-                    .collect(java.util.stream.Collectors.joining("\n"));
+                    .collect(Collectors.joining("\n"));
             Path target = historicalResources.resolve(CHANGELOG);
             Files.createDirectories(target.getParent());
             Files.writeString(target, master);
@@ -346,11 +347,11 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
         jdbc.update("UPDATE task_sets SET deleted_at = now() WHERE id = ?", set);
         assertThat(jdbc.queryForObject("SELECT task_set_application_id FROM move_tasks WHERE id = ?", UUID.class, task)).isEqualTo(application);
         UUID room = UUID.randomUUID();
-        assertThat(jdbc.queryForObject("SELECT archived_at FROM move_projects WHERE id = ?", java.sql.Timestamp.class, project)).isNull();
+        assertThat(jdbc.queryForObject("SELECT archived_at FROM move_projects WHERE id = ?", Timestamp.class, project)).isNull();
         String insertParticipant = "INSERT INTO project_participants (id, project_id, user_id) VALUES (?, ?, ?)";
         UUID participant = UUID.randomUUID();
         jdbc.update(insertParticipant, participant, project, otherUser);
-        assertThat(jdbc.queryForObject("SELECT added_at FROM project_participants WHERE id = ?", java.sql.Timestamp.class, participant)).isNotNull();
+        assertThat(jdbc.queryForObject("SELECT added_at FROM project_participants WHERE id = ?", Timestamp.class, participant)).isNotNull();
         rejects(jdbc, insertParticipant, "23505", UUID.randomUUID(), project, otherUser);
         rejects(jdbc, insertParticipant, "23503", UUID.randomUUID(), UUID.randomUUID(), otherUser);
         rejects(jdbc, insertParticipant, "23503", UUID.randomUUID(), project, UUID.randomUUID());
@@ -406,8 +407,8 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT carry_personally FROM items WHERE id = ?", Boolean.class, item)).isFalse();
         jdbc.update("UPDATE items SET fragile = true, carry_personally = true WHERE id = ?", item);
         assertThat(jdbc.queryForObject("SELECT fragile AND carry_personally FROM items WHERE id = ?", Boolean.class, item)).isTrue();
-        assertThat(jdbc.queryForObject("SELECT packed_at FROM items WHERE id = ?", java.sql.Timestamp.class, item)).isNull();
-        assertThat(jdbc.queryForObject("SELECT unpacked_at FROM items WHERE id = ?", java.sql.Timestamp.class, item)).isNull();
+        assertThat(jdbc.queryForObject("SELECT packed_at FROM items WHERE id = ?", Timestamp.class, item)).isNull();
+        assertThat(jdbc.queryForObject("SELECT unpacked_at FROM items WHERE id = ?", Timestamp.class, item)).isNull();
 
         jdbc.update("UPDATE items SET quantity = 6, first_day = true WHERE id = ?", item);
         assertThat(jdbc.queryForObject("SELECT quantity FROM items WHERE id = ?", Integer.class, item)).isEqualTo(6);
@@ -433,7 +434,7 @@ class LiquibaseMigrationIntegrationTest extends BaseIntegrationTest {
         jdbc.update("DELETE FROM items WHERE id = ?", removable);
         assertThat(jdbc.queryForObject("SELECT item_id FROM first_day_checklist_items WHERE id = ?", UUID.class, point)).isNull();
         assertThat(jdbc.queryForObject("SELECT name FROM first_day_checklist_items WHERE id = ?", String.class, point)).isEqualTo("Первый день");
-        assertThat(jdbc.queryForObject("SELECT completed_at FROM first_day_checklist_items WHERE id = ?", java.sql.Timestamp.class, point)).isNotNull();
+        assertThat(jdbc.queryForObject("SELECT completed_at FROM first_day_checklist_items WHERE id = ?", Timestamp.class, point)).isNotNull();
 
         UUID event = UUID.randomUUID();
         jdbc.update("""

@@ -1,8 +1,13 @@
 package ru.example.prodbackend.integration.move;
 
-import ru.example.prodbackend.support.BaseIntegrationTest;
-
 import jakarta.persistence.EntityManager;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -16,17 +21,11 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import ru.example.prodbackend.auth.service.JwtService;
+import ru.example.prodbackend.support.BaseIntegrationTest;
+import ru.example.prodbackend.support.LegacyChecklistTestSupport;
 import ru.example.prodbackend.user.entity.UserEntity;
 import ru.example.prodbackend.user.entity.UserRole;
 import tools.jackson.databind.JsonNode;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -94,7 +93,7 @@ class SharedProjectIntegrationTest extends BaseIntegrationTest {
         taskId = id(perform(ownerToken, post(tasksUrl), Map.of("title", "Собрать вещи", "stage", "BEFORE_MOVE")).andExpect(status().isCreated()));
         pointId = UUID.randomUUID();
         jdbc.update("INSERT INTO first_day_checklist_items(id,project_id,name,item_id,created_at,updated_at) VALUES (?,?,'Первый день',?,now(),now())", pointId, projectId, itemId);
-        ru.example.prodbackend.support.LegacyChecklistTestSupport.snapshot(jdbc);
+        LegacyChecklistTestSupport.snapshot(jdbc);
         templateId = jdbc.queryForObject("SELECT id FROM task_templates ORDER BY id LIMIT 1", UUID.class);
         jdbc.update("DELETE FROM move_tasks WHERE project_id = ? AND template_id = ?", projectId, templateId);
     }

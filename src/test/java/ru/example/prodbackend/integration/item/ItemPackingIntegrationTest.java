@@ -1,8 +1,16 @@
 package ru.example.prodbackend.integration.item;
 
-import ru.example.prodbackend.support.BaseIntegrationTest;
-
 import jakarta.persistence.EntityManager;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -23,17 +31,9 @@ import ru.example.prodbackend.box.entity.BoxStatus;
 import ru.example.prodbackend.item.entity.ItemEntity;
 import ru.example.prodbackend.move.entity.MoveProjectEntity;
 import ru.example.prodbackend.room.entity.RoomEntity;
+import ru.example.prodbackend.support.BaseIntegrationTest;
 import ru.example.prodbackend.user.entity.UserEntity;
 import ru.example.prodbackend.user.entity.UserRole;
-
-import java.sql.Timestamp;
-import java.time.Instant;
-import java.util.Arrays;
-import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -94,7 +94,7 @@ class ItemPackingIntegrationTest extends BaseIntegrationTest {
         Instant updatedAt = storedTime("updated_at");
         boolean allowed = marked == requested || status == (mark.equals("packed") ? BoxStatus.PACKING : BoxStatus.DELIVERED);
         Instant before = Instant.now();
-        var result = perform(patch(itemUrl), jsonMapper.writeValueAsString(java.util.Map.of(mark, requested)))
+        var result = perform(patch(itemUrl), jsonMapper.writeValueAsString(Map.of(mark, requested)))
                 .andExpect(status().is(allowed ? 200 : 409));
         Instant after = Instant.now();
         if (!allowed) result.andExpect(jsonPath("$.code").value("DATA_CONFLICT"));
@@ -115,7 +115,7 @@ class ItemPackingIntegrationTest extends BaseIntegrationTest {
     @ValueSource(strings = {"packed", "unpacked"})
     void repeatsPreserveExactServerTimestampAfterCommitAndClosingStage(String mark) throws Exception {
         setStatus(mark.equals("packed") ? BoxStatus.PACKING : BoxStatus.DELIVERED);
-        String body = jsonMapper.writeValueAsString(java.util.Map.of(mark, true));
+        String body = jsonMapper.writeValueAsString(Map.of(mark, true));
         String initial = perform(patch(itemUrl), body).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         String time = jsonMapper.readTree(initial).get(mark + "At").asText();
@@ -123,7 +123,7 @@ class ItemPackingIntegrationTest extends BaseIntegrationTest {
         perform(patch(itemUrl), body).andExpect(status().isOk()).andExpect(jsonPath("$." + mark + "At").value(time));
         setStatus(mark.equals("packed") ? BoxStatus.PACKED : BoxStatus.UNPACKED);
         perform(patch(itemUrl), body).andExpect(status().isOk()).andExpect(jsonPath("$." + mark + "At").value(time));
-        perform(patch(itemUrl), jsonMapper.writeValueAsString(java.util.Map.of(mark, false))).andExpect(status().isConflict());
+        perform(patch(itemUrl), jsonMapper.writeValueAsString(Map.of(mark, false))).andExpect(status().isConflict());
         perform(get(itemUrl), null).andExpect(status().isOk()).andExpect(jsonPath("$." + mark + "At").value(time));
     }
 
@@ -199,7 +199,7 @@ class ItemPackingIntegrationTest extends BaseIntegrationTest {
         var executor = Executors.newFixedThreadPool(2);
         var start = new CountDownLatch(1);
         try {
-            java.util.concurrent.Callable<String> request = () -> {
+            Callable<String> request = () -> {
                 start.await();
                 String body = perform(patch(itemUrl), "{\"packed\":true}").andExpect(status().isOk())
                         .andReturn().getResponse().getContentAsString();
