@@ -100,7 +100,7 @@ public class DataLoader implements ApplicationRunner {
         var project = moveProjectService.createMoveProject(CreateMoveProjectRequest.builder().name(DEMO_PROJECT_NAME)
                 .moveDate(moveDate.atStartOfDay(ZoneOffset.UTC).toInstant()).originAddress("Москва, ул. Лесная, д. 10, кв. 15")
                 .destinationAddress("Москва, ул. Садовая, д. 25, кв. 42")
-                .participants(List.of(AddProjectParticipantRequest.builder().userId(adminId).build())).taskSetIds(List.of(demoSet.id())).build(), user);
+                .participants(List.of(AddProjectParticipantRequest.builder().userId(adminId).build())).taskSetIds(List.of(demoSet.getId())).build(), user);
         UUID projectId = project.getId();
         UUID kitchen = roomService.createRoom(projectId, CreateRoomRequest.builder().name("Кухня").iconKey("kitchen").build(), user.getId()).getId();
         UUID livingRoom = roomService.createRoom(projectId, CreateRoomRequest.builder().name("Гостиная").iconKey("sofa").build(), user.getId()).getId();

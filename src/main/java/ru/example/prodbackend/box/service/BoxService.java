@@ -80,7 +80,7 @@ public class BoxService {
                 filter.getContentsDeferred(), filter.getFragile(), filter.getFirstDay(), filter.getCarryWithMe(), pageable);
         Map<UUID, BoxItemCounts> counts = boxes.isEmpty() ? Map.of() : itemRepository.countByBoxIds(
                 boxes.getContent().stream().map(BoxEntity::getId).toList()).stream()
-                .collect(Collectors.toMap(BoxItemCounts::boxId, value -> value));
+                .collect(Collectors.toMap(BoxItemCounts::getBoxId, value -> value));
         return PageResponse.from(boxes.map(box -> toResponse(box, counts.getOrDefault(box.getId(), emptyCounts(box.getId())))));
     }
 
@@ -147,13 +147,13 @@ public class BoxService {
         if (status == BoxStatus.PACKED || status == BoxStatus.UNPACKED) {
             boolean packing = status == BoxStatus.PACKED;
             String action = packing ? "собрать" : "распаковать";
-            if (counts.totalItems() == 0) {
+            if (counts.getTotalItems() == 0) {
                 throw new ResourceConflictException("Нельзя " + action + " пустую коробку: добавьте хотя бы одну вещь");
             }
-            long marked = packing ? counts.packedItems() : counts.unpackedItems();
-            if (marked != counts.totalItems()) {
+            long marked = packing ? counts.getPackedItems() : counts.getUnpackedItems();
+            if (marked != counts.getTotalItems()) {
                 throw new ResourceConflictException("Нельзя " + action + " коробку: " + (packing ? "упаковано " : "распаковано ")
-                        + marked + " из " + counts.totalItems() + " вещей");
+                        + marked + " из " + counts.getTotalItems() + " вещей");
             }
         }
         box.changeStatus(status);
@@ -182,16 +182,16 @@ public class BoxService {
 
         BoxItemCounts counts = itemCounts(boxId);
         if (target == BoxStatus.PACKED || target == BoxStatus.LOADED) {
-            if (counts.totalItems() == 0) throw new ResourceConflictException("Нельзя вернуть пустую коробку в " + target + "; выберите PACKING");
-            if (counts.packedItems() != counts.totalItems()) {
-                throw new ResourceConflictException("Нельзя вернуть коробку в " + target + ": упаковано " + counts.packedItems()
-                        + " из " + counts.totalItems() + " вещей; выберите PACKING");
+            if (counts.getTotalItems() == 0) throw new ResourceConflictException("Нельзя вернуть пустую коробку в " + target + "; выберите PACKING");
+            if (counts.getPackedItems() != counts.getTotalItems()) {
+                throw new ResourceConflictException("Нельзя вернуть коробку в " + target + ": упаковано " + counts.getPackedItems()
+                        + " из " + counts.getTotalItems() + " вещей; выберите PACKING");
             }
         }
         boolean resetUnpacked = target == BoxStatus.PACKING || target == BoxStatus.PACKED || target == BoxStatus.LOADED;
         if (resetUnpacked) {
             itemRepository.clearUnpackedMarks(boxId, Instant.now().truncatedTo(ChronoUnit.MICROS));
-            counts = new BoxItemCounts(boxId, counts.totalItems(), counts.packedItems(), 0);
+            counts = new BoxItemCounts(boxId, counts.getTotalItems(), counts.getPackedItems(), 0);
         }
         box.correctStatus(target);
         boxRepository.saveAndFlush(box);
@@ -279,9 +279,9 @@ public class BoxService {
                 .status(box.getStatus())
                 .contentsDeferred(box.isContentsDeferred())
                 .title(box.getTitle()).fragile(box.isFragile()).firstDay(box.isFirstDay()).carryWithMe(box.isCarryWithMe())
-                .totalItems(counts.totalItems()).packedItems(counts.packedItems()).unpackedItems(counts.unpackedItems())
-                .readyToPack(box.getStatus() == BoxStatus.PACKING && counts.totalItems() > 0 && counts.packedItems() == counts.totalItems())
-                .readyToUnpack(box.getStatus() == BoxStatus.DELIVERED && counts.totalItems() > 0 && counts.unpackedItems() == counts.totalItems())
+                .totalItems(counts.getTotalItems()).packedItems(counts.getPackedItems()).unpackedItems(counts.getUnpackedItems())
+                .readyToPack(box.getStatus() == BoxStatus.PACKING && counts.getTotalItems() > 0 && counts.getPackedItems() == counts.getTotalItems())
+                .readyToUnpack(box.getStatus() == BoxStatus.DELIVERED && counts.getTotalItems() > 0 && counts.getUnpackedItems() == counts.getTotalItems())
                 .createdAt(box.getCreatedAt())
                 .updatedAt(box.getUpdatedAt())
                 .build();

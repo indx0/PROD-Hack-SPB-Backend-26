@@ -1,7 +1,10 @@
 package ru.example.prodbackend.integration.ml;
 
-import ru.example.prodbackend.support.BaseMlIntegrationTest;
 import jakarta.persistence.EntityManager;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+import lombok.Value;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mock.web.MockMultipartFile;
@@ -16,11 +19,10 @@ import ru.example.prodbackend.ml.dto.ObservedItem;
 import ru.example.prodbackend.ml.service.UnpackingVerificationService;
 import ru.example.prodbackend.move.entity.MoveProjectEntity;
 import ru.example.prodbackend.room.entity.RoomEntity;
+import ru.example.prodbackend.support.BaseMlIntegrationTest;
 import ru.example.prodbackend.user.entity.UserEntity;
 import ru.example.prodbackend.user.entity.UserRole;
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
+
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -51,28 +53,40 @@ class UnpackingSnapshotIntegrationTest extends BaseMlIntegrationTest {
             when(llmClient.verifyUnpacking(any(), eq("image/jpeg"), anyList())).thenAnswer(call -> {
                 assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
                 List<InventoryItem> snapshot = call.getArgument(2);
-                assertThat(snapshot).containsExactly(new InventoryItem(fixture.item(), "Зарядка"));
-                tx.executeWithoutResult(status -> entities.find(ItemEntity.class, fixture.item()).setName("Изменено во время сверки"));
-                return List.of(new ObservedItem(fixture.item(), "Зарядное устройство"));
+                assertThat(snapshot).containsExactly(new InventoryItem(fixture.getItem(), "Зарядка"));
+                tx.executeWithoutResult(status -> entities.find(ItemEntity.class, fixture.getItem()).setName("Изменено во время сверки"));
+                return List.of(new ObservedItem(fixture.getItem(), "Зарядное устройство"));
             });
             var photo = new MockMultipartFile("photo", new byte[]{(byte)255, (byte)216, (byte)255});
-            var result = service.verify(fixture.user(), fixture.project(), fixture.box(), photo);
-            assertThat(result.matched()).singleElement().satisfies(item -> assertThat(item.name()).isEqualTo("Зарядка"));
+            var result = service.verify(fixture.getUser(), fixture.getProject(), fixture.getBox(), photo);
+            assertThat(result.getMatched()).singleElement().satisfies(item -> assertThat(item.getName()).isEqualTo("Зарядка"));
             tx.executeWithoutResult(status -> {
-                assertThat(entities.find(ItemEntity.class, fixture.item()).getName()).isEqualTo("Изменено во время сверки");
-                assertThat(entities.find(ItemEntity.class, fixture.item()).isLost()).isTrue();
-                assertThat(entities.find(BoxEntity.class, fixture.box()).getStatus()).isEqualTo(BoxStatus.DELIVERED);
+                assertThat(entities.find(ItemEntity.class, fixture.getItem()).getName()).isEqualTo("Изменено во время сверки");
+                assertThat(entities.find(ItemEntity.class, fixture.getItem()).isLost()).isTrue();
+                assertThat(entities.find(BoxEntity.class, fixture.getBox()).getStatus()).isEqualTo(BoxStatus.DELIVERED);
             });
         } finally {
             tx.executeWithoutResult(status -> {
-                entities.remove(entities.find(ItemEntity.class, fixture.item()));
-                entities.remove(entities.find(BoxEntity.class, fixture.box()));
-                entities.remove(entities.find(RoomEntity.class, fixture.room()));
-                entities.remove(entities.find(MoveProjectEntity.class, fixture.project()));
-                entities.remove(entities.find(UserEntity.class, fixture.user()));
+                entities.remove(entities.find(ItemEntity.class, fixture.getItem()));
+                entities.remove(entities.find(BoxEntity.class, fixture.getBox()));
+                entities.remove(entities.find(RoomEntity.class, fixture.getRoom()));
+                entities.remove(entities.find(MoveProjectEntity.class, fixture.getProject()));
+                entities.remove(entities.find(UserEntity.class, fixture.getUser()));
             });
         }
     }
 
-    private record Fixture(UUID user, UUID project, UUID room, UUID box, UUID item) { }
+    @Value
+    private static class Fixture {
+
+        private final UUID user;
+
+        private final UUID project;
+
+        private final UUID room;
+
+        private final UUID box;
+
+        private final UUID item;
+    }
 }

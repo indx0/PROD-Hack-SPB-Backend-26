@@ -15,10 +15,10 @@ public class LlmProxyConfig {
     @Bean
     RestClient llmRestClient(LlmProxyProperties properties) {
         HttpClient http = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofMillis(properties.connectTimeoutMs()))
+                .connectTimeout(Duration.ofMillis(properties.getConnectTimeoutMs()))
                 .followRedirects(HttpClient.Redirect.NEVER).build();
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(http);
-        factory.setReadTimeout(Duration.ofMillis(properties.timeoutMs()));
+        factory.setReadTimeout(Duration.ofMillis(properties.getTimeoutMs()));
         return RestClient.builder().requestFactory(factory).build();
     }
 

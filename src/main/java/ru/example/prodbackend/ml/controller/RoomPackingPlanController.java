@@ -60,7 +60,7 @@ public class RoomPackingPlanController {
     public RoomPackingPlanResponse planText(
             @Parameter(hidden = true) @AuthenticationPrincipal UserEntity user,
             @RequestBody RoomPackingPlanRequest request) {
-        return service.plan(user.getId(), request.description(), null);
+        return service.plan(user.getId(), request.getDescription(), null);
     }
 
     @Operation(summary = "Спланировать упаковку комнаты",
@@ -99,12 +99,16 @@ public class RoomPackingPlanController {
             @RequestParam(value = "description", required = false) Object description,
             MultipartHttpServletRequest request) throws IOException, ServletException {
         var descriptions = request.getParameterValues("description");
+        var photoFields = request.getParameterValues("photo");
         var parts = request.getParts();
         // Bind description without coercion so a file in this field is rejected as invalid multipart.
         if ((description != null && !(description instanceof String))
                 || request.getMultiFileMap().keySet().stream().anyMatch(name -> !"photo".equals(name))
                 || request.getFiles("photo").size() > 1
-                || request.getParameterMap().keySet().stream().anyMatch(name -> !"description".equals(name))
+                || request.getParameterMap().keySet().stream().anyMatch(name -> !"description".equals(name) && !"photo".equals(name))
+                // curl/Swagger can send an unselected optional photo as an empty text field.
+                || (photoFields != null && (photoFields.length != 1 || !photoFields[0].isEmpty()
+                        || !request.getFiles("photo").isEmpty()))
                 || (descriptions != null && descriptions.length > 1)
                 || parts.stream().anyMatch(part -> !"photo".equals(part.getName()) && !"description".equals(part.getName()))
                 || parts.stream().filter(part -> "photo".equals(part.getName())).count() > 1

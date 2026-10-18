@@ -19,13 +19,13 @@ public class ItemDescriptionService {
     public ItemDescriptionResponse describe(UUID userId, MultipartFile photo) {
         var validated = photos.validate(photo);
         rateLimiter.acquire(userId);
-        return client.describe(validated.bytes(), validated.mime());
+        return client.describe(validated.getBytes(), validated.getMime());
     }
 
     public ItemsDescriptionResponse describeItems(UUID userId, MultipartFile photo) {
         var validated = photos.validate(photo);
         rateLimiter.acquire(userId);
-        return client.describeItems(validated.bytes(), validated.mime());
+        return client.describeItems(validated.getBytes(), validated.getMime());
     }
 
 }

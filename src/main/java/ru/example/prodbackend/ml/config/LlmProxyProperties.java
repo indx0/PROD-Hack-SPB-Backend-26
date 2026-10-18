@@ -1,21 +1,35 @@
 package ru.example.prodbackend.ml.config;
 
-import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.boot.context.properties.bind.DefaultValue;
-import org.springframework.validation.annotation.Validated;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import java.net.URI;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
 
 @ConfigurationProperties("llm.proxy")
 @Validated
-public record LlmProxyProperties(
-        @DefaultValue("https://llm-proxy.spirit.t-education.com/chat/completions") URI url,
-        @DefaultValue("openai/gpt-6-luna") @NotBlank String model,
-        @DefaultValue("") String apiKey,
-        @DefaultValue("10000") @Min(1) long connectTimeoutMs,
-        @DefaultValue("120000") @Min(1) long timeoutMs) {
-    // Do not expose the API key through record-generated toString().
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class LlmProxyProperties {
+
+    private URI url = URI.create("https://llm-proxy.spirit.t-education.com/chat/completions");
+
+    @NotBlank
+    private String model = "openai/gpt-6-luna";
+
+    private String apiKey = "";
+
+    @Min(1)
+    private long connectTimeoutMs = 10000L;
+
+    @Min(1)
+    private long timeoutMs = 120000L;
+
+    // Do not expose the API key through toString().
     @Override
     public String toString() { return "LlmProxyProperties[model=" + model + "]"; }
 }

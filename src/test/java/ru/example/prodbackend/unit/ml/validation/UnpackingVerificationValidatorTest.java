@@ -23,15 +23,15 @@ class UnpackingVerificationValidatorTest {
     void matchesCopiesInInventoryOrderAndPreservesUnmatchedObjects() {
         var result = validator.validate(envelope("{\"items\":[" + item(second, " Белая кружка ") + ","
                 + item(null, "Тарелка") + "," + item(first, "Кружка") + "]}"), inventory);
-        assertThat(result).extracting(object -> object.itemId()).containsExactly(first, null, second);
-        assertThat(result).extracting(object -> object.photoDescription()).containsExactly("Белая кружка", "Тарелка", "Кружка");
+        assertThat(result).extracting(object -> object.getItemId()).containsExactly(first, null, second);
+        assertThat(result).extracting(object -> object.getPhotoDescription()).containsExactly("Белая кружка", "Тарелка", "Кружка");
     }
 
     @Test
     void aSingleVisibleCopyMatchesOnlyOneInventoryEntry() {
         var result = validator.validate(envelope("{\"items\":[" + item(second, "Кружка") + "]}"), inventory);
         assertThat(result).hasSize(1);
-        assertThat(result.get(0).itemId()).isEqualTo(first);
+        assertThat(result.get(0).getItemId()).isEqualTo(first);
     }
 
     @Test

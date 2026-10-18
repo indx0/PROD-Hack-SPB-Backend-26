@@ -1,11 +1,5 @@
 package ru.example.prodbackend.support.config;
 
-import org.springframework.beans.factory.config.BeanPostProcessor;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
-import org.springframework.jdbc.datasource.DelegatingDataSource;
-
-import javax.sql.DataSource;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
@@ -15,6 +9,12 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import javax.sql.DataSource;
+import lombok.Value;
+import org.springframework.beans.factory.config.BeanPostProcessor;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.jdbc.datasource.DelegatingDataSource;
 
 /** Records actual JDBC executions, including batch sizes, only on the requesting test thread. */
 @TestConfiguration(proxyBeanMethods = false)
@@ -105,5 +105,11 @@ public class JdbcCaptureConfig {
         }
     }
 
-    public record Execution(String sql, int batchSize) {}
+    @Value
+    public static class Execution {
+
+        private final String sql;
+
+        private final int batchSize;
+    }
 }

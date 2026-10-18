@@ -27,7 +27,7 @@ class RoomPackingPlanValidatorTest {
         var plan = plan();
         ((ObjectNode)plan.path("declutteringSuggestions").path(0)).put("action", "discard");
         assertThat(mapper.writeValueAsString(validator.validate(envelope(plan.toString())))).contains("\"action\":\"discard\"");
-        assertThatThrownBy(() -> result.boxGroups().clear()).isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> result.getBoxGroups().clear()).isInstanceOf(UnsupportedOperationException.class);
     }
 
     @Test
@@ -36,8 +36,8 @@ class RoomPackingPlanValidatorTest {
         ((ArrayNode)plan.path("declutteringSuggestions")).removeAll();
         ((ObjectNode)plan.path("boxGroups").path(0)).put("label", " Посуда ");
         var result = validator.validate(envelope(plan.toString()));
-        assertThat(result.declutteringSuggestions()).isEmpty();
-        assertThat(result.boxGroups().get(0).label()).isEqualTo("Посуда");
+        assertThat(result.getDeclutteringSuggestions()).isEmpty();
+        assertThat(result.getBoxGroups().get(0).getLabel()).isEqualTo("Посуда");
     }
 
     @ParameterizedTest
@@ -51,7 +51,7 @@ class RoomPackingPlanValidatorTest {
         invalid(plan -> ((ObjectNode)plan.path("boxGroups").path(0)).put("count", 100));
         var plan = plan();
         ((ObjectNode)plan.path("boxGroups").path(0)).put("count", 99);
-        assertThat(validator.validate(envelope(plan.toString())).boxCount()).isEqualTo(100);
+        assertThat(validator.validate(envelope(plan.toString())).getBoxCount()).isEqualTo(100);
     }
 
     @Test
@@ -84,7 +84,7 @@ class RoomPackingPlanValidatorTest {
         invalid(plan -> ((ArrayNode)plan.path("boxGroups").path(0).path("items")).removeAll());
         var plan = plan();
         ((ObjectNode)plan.path("boxGroups").path(0)).put("label", "x".repeat(255)).put("packingAdvice", "x".repeat(1000));
-        assertThat(validator.validate(envelope(plan.toString())).boxCount()).isEqualTo(3);
+        assertThat(validator.validate(envelope(plan.toString())).getBoxCount()).isEqualTo(3);
     }
 
     @Test

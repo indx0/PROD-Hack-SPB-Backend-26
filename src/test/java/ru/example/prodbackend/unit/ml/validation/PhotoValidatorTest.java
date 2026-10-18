@@ -12,9 +12,9 @@ class PhotoValidatorTest {
 
     @Test
     void detectsSupportedSignaturesIgnoringFileMetadata() {
-        assertThat(validate(new byte[]{(byte)255, (byte)216, (byte)255}).mime()).isEqualTo("image/jpeg");
-        assertThat(validate(new byte[]{(byte)137,80,78,71,13,10,26,10}).mime()).isEqualTo("image/png");
-        assertThat(validate("RIFF0000WEBP".getBytes(java.nio.charset.StandardCharsets.US_ASCII)).mime()).isEqualTo("image/webp");
+        assertThat(validate(new byte[]{(byte)255, (byte)216, (byte)255}).getMime()).isEqualTo("image/jpeg");
+        assertThat(validate(new byte[]{(byte)137,80,78,71,13,10,26,10}).getMime()).isEqualTo("image/png");
+        assertThat(validate("RIFF0000WEBP".getBytes(java.nio.charset.StandardCharsets.US_ASCII)).getMime()).isEqualTo("image/webp");
     }
 
     @Test
@@ -28,7 +28,7 @@ class PhotoValidatorTest {
     void acceptsExactlyTenMiB() {
         byte[] bytes = new byte[PhotoValidator.MAX_BYTES];
         bytes[0] = (byte)255; bytes[1] = (byte)216; bytes[2] = (byte)255;
-        assertThat(validate(bytes).bytes()).hasSize(PhotoValidator.MAX_BYTES);
+        assertThat(validate(bytes).getBytes()).hasSize(PhotoValidator.MAX_BYTES);
     }
 
     private PhotoValidator.Photo validate(byte[] bytes) {
