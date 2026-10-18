@@ -1,210 +1,210 @@
 package ru.example.prodbackend.integration.system;
 
-import ru.example.prodbackend.support.BaseIntegrationTest;
-
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.DefaultApplicationArguments;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Transactional;
-import ru.example.prodbackend.auth.service.RefreshTokenService;
+import ru.example.prodbackend.auth.dto.AuthenticationRequest;
+import ru.example.prodbackend.auth.service.AuthenticationService;
+import ru.example.prodbackend.box.dto.CreateBoxRequest;
 import ru.example.prodbackend.box.entity.BoxEntity;
 import ru.example.prodbackend.box.entity.BoxStatus;
+import ru.example.prodbackend.box.service.BoxService;
 import ru.example.prodbackend.config.DataLoader;
-import ru.example.prodbackend.move.entity.MoveProjectEntity;
+import ru.example.prodbackend.item.dto.CreateItemRequest;
 import ru.example.prodbackend.item.entity.ItemEntity;
 import ru.example.prodbackend.item.service.ItemService;
-import ru.example.prodbackend.checklist.entity.FirstDayChecklistItemEntity;
+import ru.example.prodbackend.move.entity.MoveProjectEntity;
+import ru.example.prodbackend.move.service.MoveProjectService;
+import ru.example.prodbackend.room.entity.RoomEntity;
+import ru.example.prodbackend.room.service.RoomService;
+import ru.example.prodbackend.support.BaseIntegrationTest;
+import ru.example.prodbackend.task.dto.request.CreateMoveTaskRequest;
 import ru.example.prodbackend.task.entity.MoveTaskEntity;
 import ru.example.prodbackend.task.entity.TaskDueType;
-import ru.example.prodbackend.user.repository.UserRepository;
-import ru.example.prodbackend.box.service.BoxService;
-import ru.example.prodbackend.taskfolder.service.TaskFolderService;
-import ru.example.prodbackend.move.service.MoveProjectService;
-import ru.example.prodbackend.room.service.RoomService;
-import ru.example.prodbackend.room.entity.RoomEntity;
+import ru.example.prodbackend.task.entity.TaskStage;
 import ru.example.prodbackend.task.service.MoveTaskService;
-import ru.example.prodbackend.task.service.TaskTemplateService;
 import ru.example.prodbackend.taskset.service.TaskSetService;
+import ru.example.prodbackend.user.entity.UserEntity;
+import ru.example.prodbackend.user.entity.UserRole;
 
-import java.time.LocalDate;
-import java.time.LocalTime;
-import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @Transactional
 class DataLoaderIntegrationTest extends BaseIntegrationTest {
 
-    @Autowired
-    private EntityManager entityManager;
-
-    @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
-    private PasswordEncoder passwordEncoder;
-
-    @Autowired
-    private RefreshTokenService refreshTokenService;
-    @Autowired
-    private MoveProjectService moveProjectService;
-    @Autowired
-    private RoomService roomService;
-    @Autowired
-    private BoxService boxService;
-    @Autowired
-    private MoveTaskService moveTaskService;
-    @Autowired
-    private TaskFolderService taskFolderService;
-    @Autowired
-    private ItemService itemService;
+    @Autowired private EntityManager entityManager;
+    @Autowired private PasswordEncoder passwordEncoder;
+    @Autowired private AuthenticationService authenticationService;
+    @Autowired private MoveProjectService moveProjectService;
+    @Autowired private RoomService roomService;
+    @Autowired private BoxService boxService;
+    @Autowired private MoveTaskService moveTaskService;
+    @Autowired private ItemService itemService;
     @Autowired private TaskSetService taskSetService;
-    @Autowired private TaskTemplateService taskTemplateService;
 
     @Test
-    void loadsDemoMoveForUser1() {
-        // Run inside the test transaction so demo data is rolled back, including in the shared CI database.
-        DataLoader loader = loader();
-        LocalDate beforeLoad = LocalDate.now(ZoneOffset.UTC);
-        loader.run(new DefaultApplicationArguments(new String[0]));
-        LocalDate afterLoad = LocalDate.now(ZoneOffset.UTC);
+    void seedsSmallCorporateMovesAndAllowsAllTenAccountsToSignIn() {
+        loader().run(new DefaultApplicationArguments());
         entityManager.flush();
         entityManager.clear();
 
-        MoveProjectEntity project = entityManager.createQuery("from MoveProjectEntity", MoveProjectEntity.class)
-                .getSingleResult();
-        assertThat(project.getOwner().getEmail()).isEqualTo("user1");
-        assertThat(entityManager.createQuery("select p.user.email from ProjectParticipantEntity p", String.class).getResultList()).containsExactly("admin");
-        LocalDate moveDate = project.getMoveDate().atOffset(ZoneOffset.UTC).toLocalDate();
-        assertThat(moveDate).isBetween(beforeLoad.plusDays(14), afterLoad.plusDays(14));
-        assertThat(project.getMoveDate().atOffset(ZoneOffset.UTC).toLocalTime()).isEqualTo(LocalTime.MIDNIGHT);
-        assertThat(count("UserEntity")).isEqualTo(2);
-        assertThat(entityManager.createQuery(
-                "select count(t) from RefreshTokenEntity t group by t.user.id", Long.class).getResultList())
-                .containsExactlyInAnyOrder(1L, 1L);
-        assertThat(count("RoomEntity")).isEqualTo(4);
-        assertThat(entityManager.createQuery("from RoomEntity", RoomEntity.class).getResultList()).allSatisfy(room -> {
-            String icon = switch (room.getName()) {
-                case "Кухня" -> "kitchen";
-                case "Гостиная" -> "sofa";
-                case "Спальня" -> "bed";
-                case "Ванная" -> "bath";
-                default -> throw new AssertionError("Неожиданная демо-комната: " + room.getName());
-            };
-            assertThat(room.getIconKey()).isEqualTo(icon);
-        });
-        assertThat(count("ItemEntity")).isEqualTo(12);
+        assertThat(count("UserEntity")).isEqualTo(11); // Ten demo accounts plus the service administrator.
+        assertThat(count("RefreshTokenEntity")).isZero(); // Sessions are created on sign-in, not on startup.
+        assertThat(count("MoveProjectEntity")).isEqualTo(22);
+        assertThat(count("ProjectParticipantEntity")).isEqualTo(8);
+        assertThat(count("TaskFolderEntity")).isEqualTo(44);
+        assertThat(count("TaskSetEntity")).isEqualTo(10);
+        assertThat(count("TaskSetApplicationEntity")).isEqualTo(22);
+        assertThat(count("MoveTaskEntity")).isEqualTo(88);
+        assertThat(count("RoomEntity")).isEqualTo(44);
+        assertThat(count("BoxEntity")).isEqualTo(72);
+        assertThat(count("ItemEntity")).isEqualTo(100);
+        assertThat(count("FirstDayChecklistItemEntity")).isZero();
+
+        for (int number = 1; number <= 10; number++) {
+            String login = "u" + number;
+            var user = user(login);
+            assertThat(user.getFirstName()).isEqualTo(login);
+            assertThat(user.getRole()).isEqualTo(UserRole.USER);
+            assertThat(passwordEncoder.matches("1", user.getPassword())).isTrue();
+            assertThat(token(login, "1")).isNotBlank();
+            var projects = moveProjectRepository.findAllByArchiveFilter(user.getId(), false, PageRequest.of(0, 100));
+            assertThat(projects.getContent()).hasSize(3);
+            for (var project : projects) {
+                assertThat(project.getArchivedAt()).isNull();
+                var tasks = entityManager.createQuery("from MoveTaskEntity t where t.project.id = :project", MoveTaskEntity.class)
+                        .setParameter("project", project.getId()).getResultList();
+                assertThat(tasks).hasSize(4).allSatisfy(task -> {
+                    assertThat(task.getFolder()).isNotNull();
+                    assertThat(task.getFolder().getProject().getId()).isEqualTo(project.getId());
+                    assertThat(task.getAssignee()).isNotNull();
+                    assertThat(moveProjectRepository.hasAccess(project.getId(), task.getAssignee().getId())).isTrue();
+                    assertThat(task.getDueType()).isEqualTo(TaskDueType.RELATIVE);
+                    assertThat(task.getDueDate()).isEqualTo(project.getMoveDate().atOffset(java.time.ZoneOffset.UTC)
+                            .toLocalDate().plusDays(task.getOffsetDays()));
+                });
+                assertThat(tasks).anyMatch(task -> task.getCompletedAt() != null)
+                        .anyMatch(task -> task.getCompletedAt() == null).anyMatch(task -> task.getLinkedItem() != null);
+            }
+        }
+
         assertThat(entityManager.createQuery("from ItemEntity", ItemEntity.class).getResultList()).allSatisfy(item -> {
+            assertThat(item.getQuantity()).isPositive();
             if (item.getBox().getStatus() != BoxStatus.PACKING) assertThat(item.getPackedAt()).isNotNull();
             if (item.getBox().getStatus() == BoxStatus.UNPACKED) assertThat(item.getUnpackedAt()).isNotNull();
-        });
-        assertThat(entityManager.createQuery(
-                "select i.quantity from ItemEntity i where i.name = 'Тарелки'", Integer.class)
-                .getSingleResult()).isEqualTo(6);
-        assertThat(entityManager.createQuery(
-                "select i.firstDay from ItemEntity i where i.name = 'Постельное бельё'", Boolean.class)
-                .getSingleResult()).isTrue();
-        assertThat(count("MoveTaskEntity")).isEqualTo(14);
-        assertThat(count("TaskSetEntity")).isEqualTo(1);
-        assertThat(count("TaskSetItemEntity")).isEqualTo(11);
-        assertThat(count("TaskSetApplicationEntity")).isEqualTo(1);
-        assertThat(entityManager.createQuery("from MoveTaskEntity", MoveTaskEntity.class).getResultList()).allSatisfy(task -> {
-            if (List.of("Отключить интернет", "Документы", "Аптечка").contains(task.getTitle())) {
-                assertThat(task.getDueType()).isEqualTo(TaskDueType.FIXED);
-                assertThat(task.getOffsetDays()).isNull();
-            } else {
-                assertThat(task.getDueType()).isEqualTo(TaskDueType.RELATIVE);
-                assertThat(task.getOffsetDays()).isNotNull();
-                assertThat(task.getDueDate()).isEqualTo(moveDate.plusDays(task.getOffsetDays()));
-            }
-        });
-        assertThat(count("FirstDayChecklistItemEntity")).isZero();
-        var linked = entityManager.createQuery("select c from FirstDayChecklistItemEntity c where c.item is not null", FirstDayChecklistItemEntity.class).getResultList();
-        assertThat(linked).isEmpty();
-        assertThat(entityManager.createQuery("select count(c) from FirstDayChecklistItemEntity c where c.item is null", Long.class).getSingleResult()).isZero();
-        assertThat(count("ProjectEventEntity")).isEqualTo(19);
-        assertThat(entityManager.createQuery("from BoxEntity", BoxEntity.class).getResultList())
-                .hasSize(5)
-                .allSatisfy(box -> {
-                    assertThat(box.getProject().getId()).isEqualTo(project.getId());
-                    assertThat(box.getRoom().getProject().getId()).isEqualTo(project.getId());
-                    assertThat(box.isFragile()).isEqualTo(box.getNumber() == 2);
-                    assertThat(box.isFirstDay()).isEqualTo(box.getNumber() == 3);
-                    assertThat(box.isCarryWithMe()).isEqualTo(box.getNumber() == 5);
-                    String title = switch (box.getNumber()) {
-                        case 2 -> "Посуда для кухни";
-                        case 3 -> "Коробка первого дня";
-                        case 5 -> "Везу с собой";
-                        default -> "";
-                    };
-                    assertThat(box.getTitle()).isEqualTo(title);
-                })
-                .extracting(BoxEntity::getStatus).containsExactlyInAnyOrder(BoxStatus.values());
-        assertThat(entityManager.createQuery("from BoxEntity", BoxEntity.class).getResultList())
-                .extracting(BoxEntity::getNumber).containsExactlyInAnyOrder(1, 2, 3, 4, 5);
-        assertTaskDueDate("Заказать грузчиков", moveDate.minusDays(14));
-        assertTaskDueDate("Передать ключи", moveDate);
-        assertTaskDueDate("Подключить интернет", moveDate.plusDays(1));
-        assertTaskDueDate("Упаковать кухню", moveDate.minusDays(2));
-        assertThat(entityManager.createQuery("select count(t) from MoveTaskEntity t where t.completedAt is not null", Long.class).getSingleResult()).isEqualTo(3);
-        assertThat(entityManager.createQuery("select count(i) from FirstDayChecklistItemEntity i where i.completedAt is not null", Long.class).getSingleResult()).isZero();
-        assertThat(entityManager.createQuery("select count(e) from ProjectEventEntity e where e.eventType = ru.example.prodbackend.event.entity.ProjectEventType.PROJECT_CREATED", Long.class).getSingleResult()).isEqualTo(1);
-        assertThat(passwordEncoder.matches("test-user-password", userRepository.findByEmail("user1").orElseThrow().getPassword())).isTrue();
+        }).anyMatch(ItemEntity::isLost).anyMatch(ItemEntity::isFirstDay).anyMatch(ItemEntity::isFragile);
+        for (String shared : List.of("Общий переезд офиса из Феррума", "Общий переезд офиса на Неве")) {
+            var project = project(shared);
+            assertThat(entityManager.createQuery("select b.status from BoxEntity b where b.project.id = :project", BoxStatus.class)
+                    .setParameter("project", project.getId()).getResultList()).contains(BoxStatus.values());
+        }
+        assertThat(passwordEncoder.matches("test-admin-password", user("admin").getPassword())).isTrue();
     }
 
     @Test
-    void repeatedRunPreservesUsersDemoObjectsSessionsAndEvents() {
-        DataLoader loader = loader();
-        var args = new DefaultApplicationArguments(new String[0]);
-        loader.run(args);
+    void judgesCanAddInventoryAndTasksToSharedProjectsButOtherGroupCannotReadThem() throws Exception {
+        loader().run(new DefaultApplicationArguments());
+        var project = project("Общий переезд офиса из Феррума");
+        UUID member = user("u2").getId();
+        UUID roomId = entityManager.createQuery("select r.id from RoomEntity r where r.project.id = :project order by r.id", UUID.class)
+                .setParameter("project", project.getId()).setMaxResults(1).getSingleResult();
+        var box = boxService.create(member, project.getId(), CreateBoxRequest.builder()
+                .number(7).title("Коробка жюри").roomId(roomId).build());
+        var item = itemService.create(member, project.getId(), box.getId(), CreateItemRequest.builder().name("Тестовый переходник").build());
+        var task = moveTaskService.create(project.getId(), CreateMoveTaskRequest.builder().title("Проверить новую коробку")
+                .stage(TaskStage.BEFORE_MOVE).assigneeId(member).linkedItemId(item.getId()).build(), member);
+        assertThat(task.getLinkedItemId()).isEqualTo(item.getId());
+        assertThat(itemService.findById(user("u1").getId(), project.getId(), box.getId(), item.getId()).getName())
+                .isEqualTo("Тестовый переходник");
+
+        mockMvc.perform(get("/api/move-projects/{id}", project.getId())
+                        .header("Authorization", "Bearer " + token("u2", "1"))).andExpect(status().isOk());
+        mockMvc.perform(get("/api/move-projects/{id}", project.getId())
+                        .header("Authorization", "Bearer " + token("u6", "1"))).andExpect(status().isNotFound());
+        var privateProject = project("Переезд IT-отдела — u1");
+        mockMvc.perform(get("/api/move-projects/{id}", privateProject.getId())
+                        .header("Authorization", "Bearer " + token("u2", "1"))).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void restartPreservesPasswordsRenamesDeletionsInventoryAndSessions() {
+        var loader = loader();
+        loader.run(new DefaultApplicationArguments());
+        var owner = user("u1");
+        token("u1", "1");
+        String updatedPassword = passwordEncoder.encode("changed-password");
+        owner.setPassword(updatedPassword);
+        owner.setFirstName("Имя проверяющего");
+        var project = project("Переезд IT-отдела — u1");
+        var emptyBox = entityManager.createQuery("from BoxEntity b where b.project.id = :project and b.number = 3", BoxEntity.class)
+                .setParameter("project", project.getId()).getSingleResult();
+        boxService.delete(owner.getId(), project.getId(), emptyBox.getId());
+        project.setName("Переезд переименован жюри");
+        var room = entityManager.createQuery("from RoomEntity r where r.project.id = :project order by r.id", RoomEntity.class)
+                .setParameter("project", project.getId()).setMaxResults(1).getSingleResult();
+        room.setIconKey("heart");
+        var item = entityManager.createQuery("from ItemEntity i where i.box.project.id = :project order by i.id", ItemEntity.class)
+                .setParameter("project", project.getId()).setMaxResults(1).getSingleResult();
+        item.setName("Название изменено жюри");
         entityManager.flush();
+
         var before = new HashMap<String, List<UUID>>();
-        for (String entity : new String[]{"UserEntity", "RefreshTokenEntity", "MoveProjectEntity", "ProjectParticipantEntity", "TaskSetEntity", "TaskSetItemEntity", "TaskSetApplicationEntity", "RoomEntity", "BoxEntity", "ItemEntity", "MoveTaskEntity", "FirstDayChecklistItemEntity", "ProjectEventEntity"}) {
+        for (String entity : List.of("UserEntity", "RefreshTokenEntity", "MoveProjectEntity", "ProjectParticipantEntity",
+                "TaskFolderEntity", "TaskSetEntity", "TaskSetItemEntity", "TaskSetApplicationEntity", "RoomEntity",
+                "BoxEntity", "ItemEntity", "MoveTaskEntity", "ProjectEventEntity")) {
             before.put(entity, entityManager.createQuery("select e.id from " + entity + " e order by e.id", UUID.class).getResultList());
         }
-        String password = userRepository.findByEmail("user1").orElseThrow().getPassword();
-        var existingBox = entityManager.createQuery("from BoxEntity b where b.number = 2", BoxEntity.class).getSingleResult();
-        existingBox.setTitle("Моя подпись");
-        existingBox.setFragile(false);
-        existingBox.setFirstDay(true);
-        existingBox.setCarryWithMe(true);
-        UUID existingBoxId = existingBox.getId();
-        var existingRoom = existingBox.getRoom();
-        existingRoom.setIconKey("heart");
-        UUID existingRoomId = existingRoom.getId();
-        ReflectionTestUtils.setField(loader, "user1Password", "new-password-must-not-overwrite-user");
-        loader.run(args);
+        loader.run(new DefaultApplicationArguments());
         entityManager.flush();
         entityManager.clear();
-        before.forEach((entity, ids) -> assertThat(entityManager.createQuery("select e.id from " + entity + " e order by e.id", UUID.class).getResultList()).isEqualTo(ids));
-        assertThat(userRepository.findByEmail("user1").orElseThrow().getPassword()).isEqualTo(password);
-        var preserved = entityManager.find(BoxEntity.class, existingBoxId);
-        assertThat(preserved.getTitle()).isEqualTo("Моя подпись");
-        assertThat(preserved.isFragile()).isFalse();
-        assertThat(preserved.isFirstDay()).isTrue();
-        assertThat(preserved.isCarryWithMe()).isTrue();
-        assertThat(entityManager.find(RoomEntity.class, existingRoomId).getIconKey()).isEqualTo("heart");
+        before.forEach((entity, ids) -> assertThat(entityManager.createQuery(
+                "select e.id from " + entity + " e order by e.id", UUID.class).getResultList()).isEqualTo(ids));
+        assertThat(user("u1").getPassword()).isEqualTo(updatedPassword);
+        assertThat(user("u1").getFirstName()).isEqualTo("Имя проверяющего");
+        assertThat(entityManager.find(MoveProjectEntity.class, project.getId()).getName()).isEqualTo("Переезд переименован жюри");
+        assertThat(entityManager.find(RoomEntity.class, room.getId()).getIconKey()).isEqualTo("heart");
+        assertThat(entityManager.find(ItemEntity.class, item.getId()).getName()).isEqualTo("Название изменено жюри");
+    }
+
+    @Test
+    void existingAccountIsNotResetOrPopulatedWithUnrequestedData() {
+        userRepository.saveAndFlush(UserEntity.builder().email("u1").firstName("Существующий пользователь")
+                .password(passwordEncoder.encode("original-password")).role(UserRole.USER).build());
+        loader().run(new DefaultApplicationArguments());
+        assertThat(user("u1").getFirstName()).isEqualTo("Существующий пользователь");
+        assertThat(passwordEncoder.matches("original-password", user("u1").getPassword())).isTrue();
+        assertThat(moveProjectRepository.findAllByArchiveFilter(user("u1").getId(), null, PageRequest.of(0, 100))).isEmpty();
+        assertThat(count("UserEntity")).isEqualTo(11);
+        assertThat(token("u10", "1")).isNotBlank();
     }
 
     private DataLoader loader() {
-        var loader = new DataLoader(itemService, userRepository, passwordEncoder, refreshTokenService, moveProjectRepository,
-                moveProjectService, roomService, boxService, moveTaskService, taskFolderService, taskSetService, taskTemplateService);
+        var loader = new DataLoader(itemService, userRepository, passwordEncoder, moveProjectService,
+                roomService, boxService, moveTaskService, taskSetService);
         ReflectionTestUtils.setField(loader, "adminPassword", "test-admin-password");
-        ReflectionTestUtils.setField(loader, "user1Password", "test-user-password");
         return loader;
     }
 
-    private void assertTaskDueDate(String title, LocalDate expected) {
-        MoveTaskEntity task = entityManager.createQuery(
-                        "from MoveTaskEntity t where t.title = :title", MoveTaskEntity.class)
-                .setParameter("title", title).getSingleResult();
-        assertThat(task.getDueDate()).isEqualTo(expected);
+    private UserEntity user(String login) { return userRepository.findByEmail(login).orElseThrow(); }
+
+    private String token(String login, String password) {
+        return authenticationService.authenticate(new AuthenticationRequest(login, password)).getAccessToken();
+    }
+
+    private MoveProjectEntity project(String name) {
+        return entityManager.createQuery("from MoveProjectEntity p where p.name = :name", MoveProjectEntity.class)
+                .setParameter("name", name).getSingleResult();
     }
 
     private long count(String entity) {

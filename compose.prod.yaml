@@ -43,7 +43,6 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
-      USER1_PASSWORD: ${USER1_PASSWORD:?USER1_PASSWORD is required}
     ports:
       - "127.0.0.1:8080:8080"
     depends_on:
