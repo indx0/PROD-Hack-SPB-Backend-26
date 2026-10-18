@@ -60,7 +60,7 @@ public class RoomPackingPlanController {
     public RoomPackingPlanResponse planText(
             @Parameter(hidden = true) @AuthenticationPrincipal UserEntity user,
             @RequestBody RoomPackingPlanRequest request) {
-        return service.plan(user.getId(), request.description(), null);
+        return service.plan(user.getId(), request.getDescription(), null);
     }
 
     @Operation(summary = "Спланировать упаковку комнаты",

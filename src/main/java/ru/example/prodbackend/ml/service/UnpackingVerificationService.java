@@ -26,21 +26,21 @@ public class UnpackingVerificationService {
         var inventory = inventories.snapshot(userId, projectId, boxId);
         var validated = photos.validate(photo);
         rateLimiter.acquire(userId);
-        var observed = client.verifyUnpacking(validated.bytes(), validated.mime(), inventory);
-        var byId = inventory.stream().collect(Collectors.toMap(item -> item.itemId(), Function.identity()));
+        var observed = client.verifyUnpacking(validated.getBytes(), validated.getMime(), inventory);
+        var byId = inventory.stream().collect(Collectors.toMap(item -> item.getItemId(), Function.identity()));
         var matched = new ArrayList<MatchedItem>();
         var unmatched = new ArrayList<String>();
         var seen = new HashSet<UUID>();
         for (var object : observed) {
-            if (object.itemId() == null) {
-                unmatched.add(object.photoDescription());
+            if (object.getItemId() == null) {
+                unmatched.add(object.getPhotoDescription());
             } else {
-                var item = byId.get(object.itemId());
-                seen.add(item.itemId());
-                matched.add(new MatchedItem(item.itemId(), item.name(), object.photoDescription()));
+                var item = byId.get(object.getItemId());
+                seen.add(item.getItemId());
+                matched.add(new MatchedItem(item.getItemId(), item.getName(), object.getPhotoDescription()));
             }
         }
-        var notSeen = inventory.stream().filter(item -> !seen.contains(item.itemId())).toList();
+        var notSeen = inventory.stream().filter(item -> !seen.contains(item.getItemId())).toList();
         return new UnpackingVerificationResponse(boxId, List.copyOf(matched), notSeen, List.copyOf(unmatched));
     }
 }

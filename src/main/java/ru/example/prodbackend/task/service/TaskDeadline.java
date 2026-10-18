@@ -1,16 +1,24 @@
 package ru.example.prodbackend.task.service;
 
-import ru.example.prodbackend.exception.RequestValidationException;
-import ru.example.prodbackend.task.entity.MoveTaskEntity;
-import ru.example.prodbackend.task.entity.TaskDueType;
-
 import java.time.DateTimeException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import lombok.Value;
+import ru.example.prodbackend.exception.RequestValidationException;
+import ru.example.prodbackend.task.entity.MoveTaskEntity;
+import ru.example.prodbackend.task.entity.TaskDueType;
 
 /** Один расчёт срока для создания, шаблонов, PATCH и переноса проекта. */
-public record TaskDeadline(TaskDueType type, Integer offsetDays, LocalDate date) {
+@Value
+public class TaskDeadline {
+
+    private final TaskDueType type;
+
+    private final Integer offsetDays;
+
+    private final LocalDate date;
+
     public static TaskDeadline resolve(Instant moveDate, TaskDueType type, Integer offsetDays, LocalDate date, boolean dateProvided) {
         if (type == TaskDueType.RELATIVE) {
             if (dateProvided) throw new RequestValidationException("dueDate", "Для RELATIVE передавайте offsetDays, без dueDate");

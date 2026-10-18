@@ -24,7 +24,7 @@ public class UnpackingVerificationValidator {
                 || result.path("items").size() > ItemDescriptionValidator.MAX_ITEMS) throw invalid();
         if (result.path("items").isEmpty()) throw new MlException(HttpStatus.UNPROCESSABLE_CONTENT,
                 "IMAGE_NOT_RECOGNIZED", "Не удалось распознать предметы на фотографии");
-        var byId = inventory.stream().collect(Collectors.toMap(InventoryItem::itemId, Function.identity()));
+        var byId = inventory.stream().collect(Collectors.toMap(InventoryItem::getItemId, Function.identity()));
         var rawIds = new HashSet<UUID>();
         var assigned = new HashSet<UUID>();
         var observed = new ArrayList<ObservedItem>();
@@ -40,9 +40,9 @@ public class UnpackingVerificationValidator {
                 try { id = UUID.fromString(value); }
                 catch (IllegalArgumentException e) { throw invalid(); }
                 if (!id.toString().equalsIgnoreCase(value) || !byId.containsKey(id) || !rawIds.add(id)) throw invalid();
-                String name = byId.get(id).name();
-                id = inventory.stream().filter(item -> item.name().equals(name) && !assigned.contains(item.itemId()))
-                        .map(InventoryItem::itemId).findFirst().orElseThrow(this::invalid);
+                String name = byId.get(id).getName();
+                id = inventory.stream().filter(item -> item.getName().equals(name) && !assigned.contains(item.getItemId()))
+                        .map(InventoryItem::getItemId).findFirst().orElseThrow(this::invalid);
                 assigned.add(id);
             }
             observed.add(new ObservedItem(id, description));

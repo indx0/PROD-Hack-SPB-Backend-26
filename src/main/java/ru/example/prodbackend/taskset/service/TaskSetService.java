@@ -45,9 +45,9 @@ public class TaskSetService {
 
     @Transactional
     public TaskSetResponse create(UUID userId, SaveTaskSetRequest request) {
-        var set = TaskSetEntity.builder().owner(users.getReferenceById(userId)).name(request.name().strip())
-                .description(normalize(request.description())).build();
-        fillItems(set, request.items());
+        var set = TaskSetEntity.builder().owner(users.getReferenceById(userId)).name(request.getName().strip())
+                .description(normalize(request.getDescription())).build();
+        fillItems(set, request.getItems());
         return toResponse(sets.saveAndFlush(set));
     }
 
@@ -68,10 +68,10 @@ public class TaskSetService {
         // Сначала удалить старые позиции: вставки Hibernate иначе могут опередить orphanRemoval.
         set.getItems().clear();
         sets.flush();
-        set.setName(request.name().strip());
-        set.setDescription(normalize(request.description()));
+        set.setName(request.getName().strip());
+        set.setDescription(normalize(request.getDescription()));
         set.setUpdatedAt(Instant.now().truncatedTo(ChronoUnit.MICROS));
-        fillItems(set, request.items());
+        fillItems(set, request.getItems());
         return toResponse(sets.saveAndFlush(set));
     }
 
@@ -156,8 +156,8 @@ public class TaskSetService {
     private void fillItems(TaskSetEntity set, List<TaskSetItemRequest> items) {
         for (int position = 0; position < items.size(); position++) {
             var item = items.get(position);
-            set.getItems().add(TaskSetItemEntity.builder().taskSet(set).title(item.title().strip()).description(normalize(item.description()))
-                    .stage(item.stage()).offsetDays(item.offsetDays()).position(position).build());
+            set.getItems().add(TaskSetItemEntity.builder().taskSet(set).title(item.getTitle().strip()).description(normalize(item.getDescription()))
+                    .stage(item.getStage()).offsetDays(item.getOffsetDays()).position(position).build());
         }
     }
     private TaskSetResponse toResponse(TaskSetEntity set) {

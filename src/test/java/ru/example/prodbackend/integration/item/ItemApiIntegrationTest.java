@@ -114,7 +114,7 @@ class ItemApiIntegrationTest extends BaseMlIntegrationTest {
         org.mockito.Mockito.when(llmClient.verifyUnpacking(org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.eq("image/jpeg"), org.mockito.ArgumentMatchers.anyList())).thenAnswer(call -> {
                     List<ru.example.prodbackend.ml.dto.InventoryItem> snapshot = call.getArgument(2);
-                    assertThat(snapshot).extracting(entry -> entry.itemId()).containsExactly(source.getId(), missing.getId());
+                    assertThat(snapshot).extracting(entry -> entry.getItemId()).containsExactly(source.getId(), missing.getId());
                     return List.of(new ru.example.prodbackend.ml.dto.ObservedItem(source.getId(), "Зарядное устройство"),
                             new ru.example.prodbackend.ml.dto.ObservedItem(null, "Книга"));
                 });

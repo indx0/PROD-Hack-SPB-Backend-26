@@ -71,10 +71,10 @@ class HttpLlmProxyClientTest {
     @Test
     void sendsSchemaAndPhotoAndMapsResult() throws Exception {
         var result = client("test-key", 2000).describe(new byte[]{1,2,3}, "image/png");
-        assertThat(result.name()).isEqualTo("Кружка");
+        assertThat(result.getName()).isEqualTo("Кружка");
         assertThat(meters.get("movermate.llm.operation").tags("scenario", "single", "outcome", "success").timer().count()).isEqualTo(1);
         assertThat(meters.get("movermate.llm.active").gauge().value()).isZero();
-        assertThat(result.flags()).extracting(flag -> flag.value()).containsExactly("fragile");
+        assertThat(result.getFlags()).extracting(flag -> flag.value()).containsExactly("fragile");
         assertThat(authorization.get()).isEqualTo("Bearer test-key");
         var body = mapper.readTree(request.get());
         assertThat(body.path("model").asText()).isEqualTo("test-model");
@@ -95,8 +95,8 @@ class HttpLlmProxyClientTest {
                           {"item":"Зарядка","flags":["first_day"]}]}
                 """);
         var result = client("test-key", 2000).describeItems(new byte[]{1,2,3}, "image/png");
-        assertThat(result.items()).extracting(item -> item.name()).containsExactly("Кружка", "Кружка", "Зарядка");
-        assertThat(result.items().get(1).flags()).isEmpty();
+        assertThat(result.getItems()).extracting(item -> item.getName()).containsExactly("Кружка", "Кружка", "Зарядка");
+        assertThat(result.getItems().get(1).getFlags()).isEmpty();
         assertThat(calls.get()).isEqualTo(1);
         assertThat(authorization.get()).isEqualTo("Bearer test-key");
         var body = mapper.readTree(request.get());
@@ -157,8 +157,8 @@ class HttpLlmProxyClientTest {
                 + "{\"itemId\":null,\"photoDescription\":\"Книга\"}]}");
         var result = client("test-key", 2000).verifyUnpacking(new byte[]{1,2,3}, "image/png", inventory);
         assertThat(result).hasSize(2);
-        assertThat(result.get(0).itemId()).isEqualTo(id);
-        assertThat(result.get(1).itemId()).isNull();
+        assertThat(result.get(0).getItemId()).isEqualTo(id);
+        assertThat(result.get(1).getItemId()).isNull();
         assertThat(calls.get()).isEqualTo(1);
         assertThat(authorization.get()).isEqualTo("Bearer test-key");
         var body = mapper.readTree(request.get());

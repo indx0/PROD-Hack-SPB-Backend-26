@@ -36,7 +36,7 @@ class UnpackingInventoryServiceTest {
         });
         var snapshot = service.snapshot(user, project, box);
         entity.setName("Changed");
-        assertThat(snapshot.get(0).name()).isEqualTo("Кружка");
+        assertThat(snapshot.get(0).getName()).isEqualTo("Кружка");
         assertThatThrownBy(snapshot::clear).isInstanceOf(UnsupportedOperationException.class);
         var order = inOrder(access, boxes, items);
         order.verify(access).getAccessibleProject(project, user);

@@ -58,11 +58,11 @@ public class TaskTemplateService {
     }
 
     private void fill(TaskTemplateEntity template, SaveTaskTemplateRequest request) {
-        template.setTitle(request.title().strip());
-        var description = request.description() == null ? null : request.description().strip();
+        template.setTitle(request.getTitle().strip());
+        var description = request.getDescription() == null ? null : request.getDescription().strip();
         template.setDescription(description == null || description.isBlank() ? null : description);
-        template.setStage(request.stage());
-        template.setDueDateOffsetDays(request.dueDateOffsetDays());
+        template.setStage(request.getStage());
+        template.setDueDateOffsetDays(request.getDueDateOffsetDays());
     }
 
     public static TaskTemplateResponse toResponse(TaskTemplateEntity template) {

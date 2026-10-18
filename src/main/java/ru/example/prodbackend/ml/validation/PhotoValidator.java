@@ -1,19 +1,26 @@
 package ru.example.prodbackend.ml.validation;
 
-import org.springframework.stereotype.Component;
-import org.springframework.web.multipart.MultipartFile;
-import ru.example.prodbackend.ml.exception.MlException;
-import org.springframework.http.HttpStatus;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import lombok.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Component;
+import org.springframework.web.multipart.MultipartFile;
+import ru.example.prodbackend.ml.exception.MlException;
 
 @Component
 public class PhotoValidator {
     public static final int MAX_BYTES = 10 * 1024 * 1024;
     private static final byte[] PNG = {(byte)137, 80, 78, 71, 13, 10, 26, 10};
 
-    public record Photo(byte[] bytes, String mime) { }
+    @Value
+    public static class Photo {
+
+        private final byte[] bytes;
+
+        private final String mime;
+    }
 
     public Photo validate(MultipartFile file) {
         if (file.isEmpty()) throw new MlException(HttpStatus.UNPROCESSABLE_CONTENT,

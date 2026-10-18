@@ -90,8 +90,8 @@ class ItemBoxQueryIntegrationTest {
         boxService.delete(owner.getId(), project.getId(), target.getId());
 
         var executions = jdbcCapture.stop();
-        assertThat(executions.stream().filter(e -> e.sql().startsWith("delete from items"))).hasSize(1);
-        assertThat(executions).noneMatch(e -> e.sql().startsWith("select") && e.sql().contains("from items"));
+        assertThat(executions.stream().filter(e -> e.getSql().startsWith("delete from items"))).hasSize(1);
+        assertThat(executions).noneMatch(e -> e.getSql().startsWith("select") && e.getSql().contains("from items"));
         assertThat(statistics.getEntityStatistics(ItemEntity.class.getName()).getLoadCount()).isZero();
         entityManager.clear();
         assertThat(entityManager.find(BoxEntity.class, target.getId())).isNull();
@@ -125,7 +125,7 @@ class ItemBoxQueryIntegrationTest {
         assertThat(suggestions.get(1).isSameRoom()).isFalse();
         assertThat(statistics.getEntityStatistics(BoxEntity.class.getName()).getLoadCount()).isLessThanOrEqualTo(3);
         assertThat(executions).hasSize(3);
-        assertThat(executions.get(2).sql()).contains("fetch first");
+        assertThat(executions.get(2).getSql()).contains("fetch first");
     }
 
     @Test
@@ -151,8 +151,8 @@ class ItemBoxQueryIntegrationTest {
         var created = itemService.createBatch(owner.getId(), project.getId(), box.getId(),
                 CreateItemsRequest.builder().names(names).build());
 
-        var inserts = jdbcCapture.stop().stream().filter(e -> e.sql().startsWith("insert into items")).toList();
-        assertThat(inserts).extracting(Execution::batchSize).containsExactly(50, 50);
+        var inserts = jdbcCapture.stop().stream().filter(e -> e.getSql().startsWith("insert into items")).toList();
+        assertThat(inserts).extracting(Execution::getBatchSize).containsExactly(50, 50);
         assertThat(created).extracting(ItemResponse::getName)
                 .containsExactlyElementsOf(names.stream().map(String::strip).toList());
         assertThat(created).extracting(ItemResponse::getId).doesNotHaveDuplicates();
@@ -240,13 +240,13 @@ class ItemBoxQueryIntegrationTest {
         });
         assertThat(page.getContent().get(3).getTotalItems()).isZero();
         assertThat(page.getContent().get(3).isReadyToPack()).isFalse();
-        assertThat(executions.stream().filter(e -> e.sql().contains("from items"))).singleElement()
-                .satisfies(query -> assertThat(query.sql()).contains("group by", " in ("));
+        assertThat(executions.stream().filter(e -> e.getSql().contains("from items"))).singleElement()
+                .satisfies(query -> assertThat(query.getSql()).contains("group by", " in ("));
         assertThat(statistics.getEntityStatistics(ItemEntity.class.getName()).getLoadCount()).isZero();
         pagination.setPage(10);
         jdbcCapture.start();
         assertThat(boxService.findAll(owner.getId(), project.getId(), new BoxFilter(), pagination).getContent()).isEmpty();
-        assertThat(jdbcCapture.stop()).noneMatch(e -> e.sql().contains("from items"));
+        assertThat(jdbcCapture.stop()).noneMatch(e -> e.getSql().contains("from items"));
     }
 
     @Test
@@ -290,7 +290,7 @@ class ItemBoxQueryIntegrationTest {
             assertThat(point.getRoomName()).isEqualTo("Кухня");
         });
         assertThat(executions).hasSize(3);
-        assertThat(executions).noneMatch(e -> e.sql().contains("from items") || e.sql().contains("from boxes") || e.sql().contains("from rooms"));
+        assertThat(executions).noneMatch(e -> e.getSql().contains("from items") || e.getSql().contains("from boxes") || e.getSql().contains("from rooms"));
     }
 
     private RoomEntity room(String name) {

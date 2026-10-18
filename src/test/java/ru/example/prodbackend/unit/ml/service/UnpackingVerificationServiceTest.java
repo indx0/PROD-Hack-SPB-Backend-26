@@ -32,16 +32,16 @@ class UnpackingVerificationServiceTest {
         var snapshot = List.of(cup, charger);
         when(inventories.snapshot(user, project, box)).thenReturn(snapshot);
         when(client.verifyUnpacking(bytes, "image/jpeg", snapshot)).thenReturn(List.of(
-                new ObservedItem(charger.itemId(), "Зарядное устройство"), new ObservedItem(null, "Тарелка")));
+                new ObservedItem(charger.getItemId(), "Зарядное устройство"), new ObservedItem(null, "Тарелка")));
         var result = service.verify(user, project, box, photo);
-        assertThat(result.boxId()).isEqualTo(box);
-        assertThat(result.matched()).singleElement().satisfies(item -> {
-            assertThat(item.itemId()).isEqualTo(charger.itemId());
-            assertThat(item.name()).isEqualTo("Зарядка");
-            assertThat(item.photoDescription()).isEqualTo("Зарядное устройство");
+        assertThat(result.getBoxId()).isEqualTo(box);
+        assertThat(result.getMatched()).singleElement().satisfies(item -> {
+            assertThat(item.getItemId()).isEqualTo(charger.getItemId());
+            assertThat(item.getName()).isEqualTo("Зарядка");
+            assertThat(item.getPhotoDescription()).isEqualTo("Зарядное устройство");
         });
-        assertThat(result.notSeen()).containsExactly(cup);
-        assertThat(result.unmatched()).containsExactly("Тарелка");
+        assertThat(result.getNotSeen()).containsExactly(cup);
+        assertThat(result.getUnmatched()).containsExactly("Тарелка");
         var order = inOrder(inventories, limiter, client);
         order.verify(inventories).snapshot(user, project, box);
         order.verify(limiter).acquire(user);
@@ -54,16 +54,16 @@ class UnpackingVerificationServiceTest {
         var snapshot = List.of(cup, charger);
         when(inventories.snapshot(user, project, box)).thenReturn(snapshot);
         when(client.verifyUnpacking(bytes, "image/jpeg", snapshot)).thenReturn(List.of(
-                new ObservedItem(cup.itemId(), "Кружка"), new ObservedItem(charger.itemId(), "Зарядка")));
+                new ObservedItem(cup.getItemId(), "Кружка"), new ObservedItem(charger.getItemId(), "Зарядка")));
         var full = service.verify(user, project, box, photo);
-        assertThat(full.matched()).hasSize(2);
-        assertThat(full.notSeen()).isEmpty();
-        assertThat(full.unmatched()).isEmpty();
+        assertThat(full.getMatched()).hasSize(2);
+        assertThat(full.getNotSeen()).isEmpty();
+        assertThat(full.getUnmatched()).isEmpty();
         when(client.verifyUnpacking(bytes, "image/jpeg", snapshot)).thenReturn(List.of(new ObservedItem(null, "Книга")));
         var none = service.verify(user, project, box, photo);
-        assertThat(none.matched()).isEmpty();
-        assertThat(none.notSeen()).containsExactly(cup, charger);
-        assertThat(none.unmatched()).containsExactly("Книга");
+        assertThat(none.getMatched()).isEmpty();
+        assertThat(none.getNotSeen()).containsExactly(cup, charger);
+        assertThat(none.getUnmatched()).containsExactly("Книга");
     }
 
     @Test

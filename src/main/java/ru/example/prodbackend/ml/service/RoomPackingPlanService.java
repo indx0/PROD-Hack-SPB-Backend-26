@@ -26,6 +26,6 @@ public class RoomPackingPlanService {
                 "ROOM_INPUT_REQUIRED", "Добавьте описание комнаты или фотографию");
         var image = photo == null ? null : photos.validate(photo);
         rateLimiter.acquire(userId);
-        return client.planRoomPacking(text, image == null ? null : image.bytes(), image == null ? null : image.mime());
+        return client.planRoomPacking(text, image == null ? null : image.getBytes(), image == null ? null : image.getMime());
     }
 }

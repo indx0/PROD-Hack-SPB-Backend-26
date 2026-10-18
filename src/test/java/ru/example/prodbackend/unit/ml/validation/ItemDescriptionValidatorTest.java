@@ -23,17 +23,17 @@ class ItemDescriptionValidatorTest {
                           {"item":"Кружка","flags":[]},
                           {"item":"Зарядка","flags":["first_day","carry_personally"]}]}
                 """));
-        assertThat(result.items()).extracting(item -> item.name()).containsExactly("Кружка", "Кружка", "Зарядка");
-        assertThat(result.items().get(0).flags()).extracting(flag -> flag.value()).containsExactly("fragile");
-        assertThat(result.items().get(1).flags()).isEmpty();
-        assertThat(result.items().get(2).flags()).extracting(flag -> flag.value())
+        assertThat(result.getItems()).extracting(item -> item.getName()).containsExactly("Кружка", "Кружка", "Зарядка");
+        assertThat(result.getItems().get(0).getFlags()).extracting(flag -> flag.value()).containsExactly("fragile");
+        assertThat(result.getItems().get(1).getFlags()).isEmpty();
+        assertThat(result.getItems().get(2).getFlags()).extracting(flag -> flag.value())
                 .containsExactly("first_day", "carry_personally");
     }
 
     @ParameterizedTest
     @ValueSource(ints = {1, 100})
     void acceptsListBoundaries(int size) {
-        assertThat(validator.validateItems(envelope(list(size))).items()).hasSize(size);
+        assertThat(validator.validateItems(envelope(list(size))).getItems()).hasSize(size);
     }
 
     @Test
@@ -68,7 +68,7 @@ class ItemDescriptionValidatorTest {
     @Test
     void enforcesNameLengthAndPreservesSingleItemEmptySentinel() {
         assertThat(validator.validateItems(envelope(mapper.writeValueAsString(Map.of("items",
-                List.of(Map.of("item", "x".repeat(255), "flags", List.of())))))).items().get(0).name()).hasSize(255);
+                List.of(Map.of("item", "x".repeat(255), "flags", List.of())))))).getItems().get(0).getName()).hasSize(255);
         assertCode(mapper.writeValueAsString(Map.of("items",
                 List.of(Map.of("item", "x".repeat(256), "flags", List.of())))), "LLM_INVALID_RESPONSE", 502);
         assertThatThrownBy(() -> validator.validate(envelope("{\"item\":\"\",\"flags\":[]}")))

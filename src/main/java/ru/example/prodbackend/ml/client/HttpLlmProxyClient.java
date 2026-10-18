@@ -105,7 +105,7 @@ public class HttpLlmProxyClient implements LlmProxyClient {
         String outcome = "unavailable";
         Map<String, String> context = MDC.getCopyOfContextMap();
         try {
-            if (properties.apiKey() == null || properties.apiKey().isBlank()) throw unavailable();
+            if (properties.getApiKey() == null || properties.getApiKey().isBlank()) throw unavailable();
             pending = executor.submit(() -> {
                 Map<String, String> previous = MDC.getCopyOfContextMap();
                 active.incrementAndGet();
@@ -117,7 +117,7 @@ public class HttpLlmProxyClient implements LlmProxyClient {
                     if (previous == null) MDC.clear(); else MDC.setContextMap(previous);
                 }
             });
-            T result = pending.get(properties.timeoutMs(), TimeUnit.MILLISECONDS);
+            T result = pending.get(properties.getTimeoutMs(), TimeUnit.MILLISECONDS);
             outcome = "success";
             return result;
         } catch (TimeoutException e) {
@@ -167,9 +167,9 @@ public class HttpLlmProxyClient implements LlmProxyClient {
     }
 
     private String request(Map<String, Object> payload) {
-        return restClient.post().uri(properties.url())
+        return restClient.post().uri(properties.getUrl())
                 .contentType(MediaType.APPLICATION_JSON)
-                .headers(headers -> headers.setBearerAuth(properties.apiKey().strip()))
+                .headers(headers -> headers.setBearerAuth(properties.getApiKey().strip()))
                 .body(payload)
                 .exchange((request, response) -> {
                     int status = response.getStatusCode().value();
@@ -196,7 +196,7 @@ public class HttpLlmProxyClient implements LlmProxyClient {
                 "type", "object", "properties", Map.of("items", Map.of(
                         "type", "array", "maxItems", ItemDescriptionValidator.MAX_ITEMS, "items", itemSchema)),
                 "required", List.of("items"), "additionalProperties", false) : itemSchema;
-        return Map.of("model", properties.model(), "messages", List.of(
+        return Map.of("model", properties.getModel(), "messages", List.of(
                 Map.of("role", "system", "content", multiple ? itemsPrompt : prompt),
                 Map.of("role", "user", "content", List.of(
                         Map.of("type", "text", "text", multiple
@@ -216,7 +216,7 @@ public class HttpLlmProxyClient implements LlmProxyClient {
         var schema = Map.of("type", "object", "properties", Map.of("items", Map.of(
                 "type", "array", "maxItems", ItemDescriptionValidator.MAX_ITEMS, "items", entrySchema)),
                 "required", List.of("items"), "additionalProperties", false);
-        return Map.of("model", properties.model(), "messages", List.of(
+        return Map.of("model", properties.getModel(), "messages", List.of(
                 Map.of("role", "system", "content", unpackingPrompt),
                 Map.of("role", "user", "content", List.of(
                         Map.of("type", "text", "text", "Сверь видимые вещи с описью: "
@@ -247,7 +247,7 @@ public class HttpLlmProxyClient implements LlmProxyClient {
                 + mapper.writeValueAsString(description)));
         if (image != null) content.add(Map.of("type", "image_url", "image_url", Map.of("url",
                 "data:" + mime + ";base64," + Base64.getEncoder().encodeToString(image))));
-        return Map.of("model", properties.model(), "messages", List.of(
+        return Map.of("model", properties.getModel(), "messages", List.of(
                 Map.of("role", "system", "content", roomPackingPrompt), Map.of("role", "user", "content", content)),
                 "response_format", Map.of("type", "json_schema", "json_schema", Map.of(
                         "name", "room_packing_plan", "strict", true, "schema", schema)));

@@ -20,8 +20,8 @@ public class MlRateLimiter {
     private final Counter rejected;
 
     public MlRateLimiter(MlRateLimitProperties properties, MeterRegistry meters, LongSupplier ticker) {
-        this.maxRequests = properties.maxRequests();
-        this.windowNanos = Math.multiplyExact(properties.windowSeconds(), 1_000_000_000L);
+        this.maxRequests = properties.getMaxRequests();
+        this.windowNanos = Math.multiplyExact(properties.getWindowSeconds(), 1_000_000_000L);
         this.ticker = ticker;
         this.rejected = meters.counter("movermate.ml.rate_limit.rejected");
     }
