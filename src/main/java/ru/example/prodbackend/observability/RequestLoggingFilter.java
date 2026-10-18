@@ -1,5 +1,6 @@
 package ru.example.prodbackend.observability;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -23,6 +24,11 @@ import java.util.concurrent.TimeUnit;
 public class RequestLoggingFilter extends OncePerRequestFilter {
     private static final Logger log = LoggerFactory.getLogger(RequestLoggingFilter.class);
     private static final Set<String> METHODS = Set.of("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "TRACE");
+    private final MeterRegistry meters;
+
+    public RequestLoggingFilter(MeterRegistry meters) {
+        this.meters = meters;
+    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
@@ -39,12 +45,31 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
         } finally {
             try {
                 Object route = request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
-                log.atInfo().addKeyValue("event", "http_request_completed")
-                        .addKeyValue("method", METHODS.contains(request.getMethod()) ? request.getMethod() : "OTHER")
-                        .addKeyValue("route", route == null ? "UNMATCHED" : route.toString())
-                        .addKeyValue("status", failed ? 500 : response.getStatus())
-                        .addKeyValue("durationMs", TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started))
-                        .log("HTTP request completed");
+                String method = METHODS.contains(request.getMethod()) ? request.getMethod() : "OTHER";
+                String pattern = route == null ? "UNMATCHED" : route.toString();
+                int status = failed ? 500 : response.getStatus();
+                boolean error = status >= 400 && status <= 599;
+                String code = null;
+                if (error) {
+                    Object captured = request.getAttribute(ErrorObservabilityAdvice.ERROR_CODE);
+                    if (failed) code = "INTERNAL_ERROR";
+                    else if (captured instanceof String value && !value.isBlank()) code = value;
+                    else code = "HTTP_" + status;
+                    meters.counter("movermate.http.errors", "method", method, "route", pattern,
+                            "status", Integer.toString(status), "code", code).increment();
+                }
+                var event = status >= 500 ? log.atError() : error ? log.atWarn() : log.atInfo();
+                event.addKeyValue("event", "http_request_completed")
+                        .addKeyValue("method", method)
+                        .addKeyValue("route", pattern)
+                        .addKeyValue("status", status)
+                        .addKeyValue("durationMs", TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started));
+                if (error) {
+                    event.addKeyValue("code", code);
+                    Object traceId = request.getAttribute(ErrorObservabilityAdvice.ERROR_TRACE_ID);
+                    if (!failed && traceId != null) event.addKeyValue("traceId", traceId.toString());
+                }
+                event.log("HTTP request completed");
             } finally {
                 if (previous == null) MDC.remove("requestId"); else MDC.put("requestId", previous);
             }

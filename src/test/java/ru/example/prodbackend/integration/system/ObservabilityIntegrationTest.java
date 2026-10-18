@@ -1,9 +1,10 @@
 package ru.example.prodbackend.integration.system;
 
-import ru.example.prodbackend.support.AuthIntegrationTestSupport;
-
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.context.TestPropertySource;
+import ru.example.prodbackend.support.AuthIntegrationTestSupport;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -24,8 +25,8 @@ class ObservabilityIntegrationTest extends AuthIntegrationTestSupport {
                 .andExpect(status().isUnauthorized());
         var body = mockMvc.perform(get("/actuator/prometheus").header("Authorization", "Bearer test-scrape-secret"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        java.nio.file.Files.createDirectories(java.nio.file.Path.of("target/observability"));
-        java.nio.file.Files.writeString(java.nio.file.Path.of("target/observability/scrape.prom"), body);
+        Files.createDirectories(Path.of("target/observability"));
+        Files.writeString(Path.of("target/observability/scrape.prom"), body);
         assertThat(body).contains("jvm_memory_used_bytes", "movermate_llm_active",
                 "movermate_llm_operation_seconds_count", "http_server_requests_seconds_count")
                 .doesNotContain("test-scrape-secret", tokens.getAccessToken());

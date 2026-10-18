@@ -1,7 +1,7 @@
 package ru.example.prodbackend.integration.move;
 
-import ru.example.prodbackend.support.AuthIntegrationTestSupport;
-
+import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,6 +10,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import ru.example.prodbackend.box.dto.BoxResponse;
@@ -23,10 +24,8 @@ import ru.example.prodbackend.item.entity.ItemEntity;
 import ru.example.prodbackend.item.repository.ItemRepository;
 import ru.example.prodbackend.move.dto.response.MoveProjectResponse;
 import ru.example.prodbackend.room.dto.response.RoomResponse;
+import ru.example.prodbackend.support.AuthIntegrationTestSupport;
 import ru.example.prodbackend.task.repository.MoveTaskRepository;
-
-import java.util.Map;
-import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -150,7 +149,7 @@ class MoveWorkflowIntegrationTest extends AuthIntegrationTestSupport {
     }
 
     private ResultActions call(String method, String path, Object body, String accessToken) throws Exception {
-        var request = org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request(HttpMethod.valueOf(method), path)
+        var request = MockMvcRequestBuilders.request(HttpMethod.valueOf(method), path)
                 .contentType(MediaType.APPLICATION_JSON).content(body == null ? "" : jsonMapper.writeValueAsString(body));
         if (accessToken != null) request.header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken);
         return mockMvc.perform(request);

@@ -1,8 +1,8 @@
 package ru.example.prodbackend.ml.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -19,7 +19,6 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.multipart.MultipartHttpServletRequest;
 import ru.example.prodbackend.config.SwaggerTags;
 import ru.example.prodbackend.exception.dto.ErrorResponse;
-import ru.example.prodbackend.ml.dto.RoomPackingMultipartRequest;
 import ru.example.prodbackend.ml.dto.RoomPackingPlanRequest;
 import ru.example.prodbackend.ml.dto.RoomPackingPlanResponse;
 import ru.example.prodbackend.ml.exception.MlException;
@@ -86,11 +85,7 @@ public class RoomPackingPlanController {
                     @ApiResponse(responseCode = "503", description = "LLM_UNAVAILABLE: LLM Proxy не настроен, недоступен или перегружен", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class))),
                     @ApiResponse(responseCode = "504", description = "LLM_TIMEOUT: Превышено время ожидания LLM Proxy", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
             })
-    @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            description = "Описание комнаты, фотография или оба источника. Нужен хотя бы один источник.",
-            required = true,
-            content = @Content(mediaType = MediaType.MULTIPART_FORM_DATA_VALUE,
-                    schema = @Schema(implementation = RoomPackingMultipartRequest.class)))
+    @RoomPackingMultipartBody
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public RoomPackingPlanResponse planPhoto(
             @Parameter(hidden = true) @AuthenticationPrincipal UserEntity user,

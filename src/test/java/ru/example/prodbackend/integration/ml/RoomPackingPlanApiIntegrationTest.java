@@ -1,7 +1,8 @@
 package ru.example.prodbackend.integration.ml;
 
-import ru.example.prodbackend.support.BaseMlIntegrationTest;
 import jakarta.persistence.EntityManager;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -9,6 +10,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.mock.web.MockPart;
@@ -17,10 +19,11 @@ import org.springframework.test.web.servlet.request.AbstractMockHttpServletReque
 import org.springframework.transaction.annotation.Transactional;
 import ru.example.prodbackend.auth.service.JwtService;
 import ru.example.prodbackend.ml.exception.MlException;
+import ru.example.prodbackend.support.BaseMlIntegrationTest;
 import ru.example.prodbackend.user.entity.UserEntity;
 import ru.example.prodbackend.user.entity.UserRole;
 import tools.jackson.databind.json.JsonMapper;
-import java.util.*;
+
 import static org.assertj.core.api.Assertions.*;
 import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.*;
@@ -57,9 +60,9 @@ class RoomPackingPlanApiIntegrationTest extends BaseMlIntegrationTest {
             case "text_form" -> multipart(URL).param("description", " Кухня ");
             case "text_empty_photo" -> multipart(URL).param("photo", "").param("description", " Кухня ");
             case "text_empty_photo_part" -> multipart(URL).part(new MockPart("photo", new byte[0]))
-                    .part(new MockPart("description", " Кухня ".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+                    .part(new MockPart("description", " Кухня ".getBytes(StandardCharsets.UTF_8)));
             case "photo" -> multipart(URL).file(photo());
-            default -> multipart(URL).file(photo()).part(new MockPart("description", " Кухня ".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+            default -> multipart(URL).file(photo()).part(new MockPart("description", " Кухня ".getBytes(StandardCharsets.UTF_8)));
         };
         mvc.perform(auth(request)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.boxCount").value(3))
@@ -143,7 +146,7 @@ class RoomPackingPlanApiIntegrationTest extends BaseMlIntegrationTest {
     @ParameterizedTest
     @CsvSource({"422,ROOM_PLAN_NOT_GENERATED", "502,LLM_INVALID_RESPONSE", "503,LLM_UNAVAILABLE", "504,LLM_TIMEOUT"})
     void preservesUpstreamErrorsAndNeverWritesData(int httpStatus, String code) throws Exception {
-        var error = new MlException(org.springframework.http.HttpStatus.valueOf(httpStatus), code, "Не удалось составить план");
+        var error = new MlException(HttpStatus.valueOf(httpStatus), code, "Не удалось составить план");
         when(llmClient.planRoomPacking(anyString(), any(), any())).thenThrow(error);
         var before = counts();
         mvc.perform(auth(post(URL).contentType(MediaType.APPLICATION_JSON).content("{\"description\":\"Кухня\"}")))
@@ -157,6 +160,8 @@ class RoomPackingPlanApiIntegrationTest extends BaseMlIntegrationTest {
         mvc.perform(get("/v3/api-docs")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.paths['/api/ml/room-packing-plan'].post.requestBody.content['application/json']").exists())
                 .andExpect(jsonPath("$.paths['/api/ml/room-packing-plan'].post.requestBody.content['multipart/form-data']").exists())
+                .andExpect(jsonPath("$.components.schemas.RoomPackingMultipartRequest.properties.photo.format").value("binary"))
+                .andExpect(jsonPath("$.components.schemas.RoomPackingMultipartRequest.properties.description.maxLength").value(4000))
                 .andExpect(jsonPath("$.paths['/api/ml/room-packing-plan'].post.security[0].jwtAuth").exists());
     }
 

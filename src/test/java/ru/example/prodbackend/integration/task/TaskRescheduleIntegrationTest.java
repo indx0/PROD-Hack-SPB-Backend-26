@@ -1,27 +1,8 @@
 package ru.example.prodbackend.integration.task;
 
-import ru.example.prodbackend.support.AuthIntegrationTestSupport;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.ResultActions;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
-import ru.example.prodbackend.move.service.ProjectAccessService;
-import ru.example.prodbackend.task.dto.response.MoveTaskResponse;
-import ru.example.prodbackend.task.entity.TaskDueType;
-import ru.example.prodbackend.task.repository.MoveTaskRepository;
-import ru.example.prodbackend.task.repository.TaskTemplateRepository;
-import tools.jackson.databind.JsonNode;
-
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -29,6 +10,25 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import ru.example.prodbackend.move.service.ProjectAccessService;
+import ru.example.prodbackend.support.AuthIntegrationTestSupport;
+import ru.example.prodbackend.task.dto.response.MoveTaskResponse;
+import ru.example.prodbackend.task.entity.TaskDueType;
+import ru.example.prodbackend.task.repository.MoveTaskRepository;
+import ru.example.prodbackend.task.repository.TaskTemplateRepository;
+import tools.jackson.databind.JsonNode;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -290,7 +290,7 @@ class TaskRescheduleIntegrationTest extends AuthIntegrationTestSupport {
 
     private void deleteDefaultTemplateTask(UUID templateId) {
         new TransactionTemplate(transactionManager).executeWithoutResult(s -> tasks.deleteAll(tasks.findAllByFilters(projectId, null, null, null,
-                org.springframework.data.domain.PageRequest.of(0, 100)).stream().filter(t -> t.getTemplate() != null && t.getTemplate().getId().equals(templateId)).toList()));
+                PageRequest.of(0, 100)).stream().filter(t -> t.getTemplate() != null && t.getTemplate().getId().equals(templateId)).toList()));
     }
     private MoveTaskResponse relative(int offset) throws Exception { return create(Map.of("title", "Относительная", "stage", "BEFORE_MOVE", "dueType", "RELATIVE", "offsetDays", offset)); }
     private MoveTaskResponse create(Object body) throws Exception { return task(perform(ownerToken, post(url + "/tasks"), body).andExpect(status().isCreated())); }
@@ -298,7 +298,7 @@ class TaskRescheduleIntegrationTest extends AuthIntegrationTestSupport {
     private ResultActions read(UUID id) throws Exception { return perform(ownerToken, get(url + "/tasks/" + id), null).andExpect(status().isOk()); }
     private List<Object> snapshot(UUID id) {
         var t = tasks.findById(id).orElseThrow();
-        return java.util.Arrays.asList(t.getDueType(), t.getOffsetDays(), t.getDueDate(), t.getCompletedAt(), t.getCreatedAt(), t.getUpdatedAt());
+        return Arrays.asList(t.getDueType(), t.getOffsetDays(), t.getDueDate(), t.getCompletedAt(), t.getCreatedAt(), t.getUpdatedAt());
     }
     private List<Object> projectSnapshot() { var p = moveProjectRepository.findById(projectId).orElseThrow(); return List.of(p.getMoveDate(), p.getUpdatedAt()); }
     private JsonNode readProject() throws Exception { return json(perform(ownerToken, get(url), null).andExpect(status().isOk())); }

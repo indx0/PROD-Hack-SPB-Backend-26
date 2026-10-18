@@ -1,10 +1,11 @@
 package ru.example.prodbackend.unit.ml.validation;
 
-import ru.example.prodbackend.ml.validation.PhotoValidator;
-
+import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
 import ru.example.prodbackend.ml.exception.MlException;
+import ru.example.prodbackend.ml.validation.PhotoValidator;
+
 import static org.assertj.core.api.Assertions.*;
 
 class PhotoValidatorTest {
@@ -14,7 +15,7 @@ class PhotoValidatorTest {
     void detectsSupportedSignaturesIgnoringFileMetadata() {
         assertThat(validate(new byte[]{(byte)255, (byte)216, (byte)255}).getMime()).isEqualTo("image/jpeg");
         assertThat(validate(new byte[]{(byte)137,80,78,71,13,10,26,10}).getMime()).isEqualTo("image/png");
-        assertThat(validate("RIFF0000WEBP".getBytes(java.nio.charset.StandardCharsets.US_ASCII)).getMime()).isEqualTo("image/webp");
+        assertThat(validate("RIFF0000WEBP".getBytes(StandardCharsets.US_ASCII)).getMime()).isEqualTo("image/webp");
     }
 
     @Test

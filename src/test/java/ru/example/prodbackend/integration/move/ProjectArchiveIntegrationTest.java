@@ -1,8 +1,15 @@
 package ru.example.prodbackend.integration.move;
 
-import ru.example.prodbackend.support.BaseIntegrationTest;
-
 import jakarta.persistence.EntityManager;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -26,21 +33,14 @@ import ru.example.prodbackend.item.service.ItemService;
 import ru.example.prodbackend.move.entity.MoveProjectEntity;
 import ru.example.prodbackend.move.service.MoveProjectService;
 import ru.example.prodbackend.room.entity.RoomEntity;
+import ru.example.prodbackend.support.BaseIntegrationTest;
+import ru.example.prodbackend.support.LegacyChecklistTestSupport;
 import ru.example.prodbackend.task.entity.MoveTaskEntity;
 import ru.example.prodbackend.task.entity.TaskStage;
 import ru.example.prodbackend.task.repository.TaskTemplateRepository;
 import ru.example.prodbackend.user.entity.UserEntity;
 import ru.example.prodbackend.user.entity.UserRole;
 import tools.jackson.databind.JsonNode;
-
-import java.time.Instant;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
@@ -112,7 +112,7 @@ class ProjectArchiveIntegrationTest extends BaseIntegrationTest {
         itemsUrl = projectUrl + "/boxes/" + boxId + "/items";
         tasksUrl = projectUrl + "/tasks";
         checklistUrl = projectUrl + "/first-day-checklist";
-        ru.example.prodbackend.support.LegacyChecklistTestSupport.snapshot(jdbc);
+        LegacyChecklistTestSupport.snapshot(jdbc);
     }
 
     @Test
@@ -145,7 +145,7 @@ class ProjectArchiveIntegrationTest extends BaseIntegrationTest {
         jdbc.update("UPDATE boxes SET status = ? WHERE id = ?", boxStatus.name(), boxId);
         perform(put(archiveUrl), null).andExpect(status().isOk()).andExpect(jsonPath("$.archived").value(true));
         assertThat(jdbc.queryForObject("SELECT status FROM boxes WHERE id = ?", String.class, boxId)).isEqualTo(boxStatus.name());
-        assertThat(jdbc.queryForObject("SELECT completed_at FROM move_tasks WHERE id = ?", java.sql.Timestamp.class, taskId)).isNull();
+        assertThat(jdbc.queryForObject("SELECT completed_at FROM move_tasks WHERE id = ?", Timestamp.class, taskId)).isNull();
     }
 
     @Test
@@ -197,7 +197,7 @@ class ProjectArchiveIntegrationTest extends BaseIntegrationTest {
         });
         var ordered = List.of(projectId, ids.get(0), ids.get(1), ids.get(2));
         for (int i = 0; i < ordered.size(); i++) jdbc.update("UPDATE move_projects SET created_at = ? WHERE id = ?",
-                java.sql.Timestamp.from(Instant.parse("2026-10-01T10:00:00Z").plusSeconds(i)), ordered.get(i));
+                Timestamp.from(Instant.parse("2026-10-01T10:00:00Z").plusSeconds(i)), ordered.get(i));
         perform(put(archiveUrl), null).andExpect(status().isOk());
         perform(put("/api/move-projects/" + ids.get(0) + "/archive"), null).andExpect(status().isOk());
         perform(get("/api/move-projects"), null).andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(4));
@@ -222,7 +222,7 @@ class ProjectArchiveIntegrationTest extends BaseIntegrationTest {
             perform(archive ? put(missing) : delete(missing), null).andExpect(status().isNotFound());
             mockMvc.perform(archive ? put(archiveUrl) : delete(archiveUrl)).andExpect(status().isUnauthorized());
         }
-        assertThat(jdbc.queryForObject("SELECT archived_at FROM move_projects WHERE id = ?", java.sql.Timestamp.class, projectId)).isNull();
+        assertThat(jdbc.queryForObject("SELECT archived_at FROM move_projects WHERE id = ?", Timestamp.class, projectId)).isNull();
         assertThat(eventCount()).isZero();
     }
 

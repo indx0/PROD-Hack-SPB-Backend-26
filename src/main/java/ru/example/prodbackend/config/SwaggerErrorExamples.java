@@ -3,6 +3,7 @@ package ru.example.prodbackend.config;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.examples.Example;
 import io.swagger.v3.oas.models.media.Schema;
+import io.swagger.v3.oas.models.parameters.Parameter;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,7 +50,7 @@ final class SwaggerErrorExamples {
                         // A parameter example must refer to a parameter actually present on this operation.
                         String parameter = operation.getParameters() == null ? null : operation.getParameters().stream()
                                 .filter(p -> p.getSchema() != null && "uuid".equals(p.getSchema().getFormat()))
-                                .map(io.swagger.v3.oas.models.parameters.Parameter::getName).findFirst().orElse(null);
+                                .map(Parameter::getName).findFirst().orElse(null);
                         if ("INVALID_REQUEST_PARAMETER".equals(code)) {
                             if (parameter == null) continue;
                             message = "Invalid format for parameter: " + parameter;

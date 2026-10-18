@@ -1,9 +1,10 @@
 package ru.example.prodbackend.unit.ml.service;
 
-import ru.example.prodbackend.ml.service.UnpackingInventoryService;
-
+import java.util.*;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import ru.example.prodbackend.box.entity.BoxEntity;
 import ru.example.prodbackend.box.repository.BoxRepository;
@@ -11,8 +12,9 @@ import ru.example.prodbackend.exception.BoxNotFoundException;
 import ru.example.prodbackend.item.entity.ItemEntity;
 import ru.example.prodbackend.item.repository.ItemRepository;
 import ru.example.prodbackend.ml.exception.MlException;
+import ru.example.prodbackend.ml.service.UnpackingInventoryService;
 import ru.example.prodbackend.move.service.ProjectAccessService;
-import java.util.*;
+
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -56,12 +58,12 @@ class UnpackingInventoryServiceTest {
         when(boxes.findByIdAndProject_Id(box, project)).thenReturn(Optional.of(new BoxEntity()));
         when(items.findAllByBox_Id(eq(box), any(Pageable.class))).thenReturn(new PageImpl<>(List.of()));
         assertCode("EMPTY_INVENTORY");
-        var entities = java.util.stream.IntStream.range(0, 100)
+        var entities = IntStream.range(0, 100)
                 .mapToObj(i -> ItemEntity.builder().id(UUID.randomUUID()).name("Кружка").build()).toList();
         when(items.findAllByBox_Id(eq(box), any(Pageable.class))).thenReturn(new PageImpl<>(entities));
         assertThat(service.snapshot(user, project, box)).hasSize(100);
         when(items.findAllByBox_Id(eq(box), any(Pageable.class))).thenReturn(
-                new PageImpl<>(entities, org.springframework.data.domain.PageRequest.of(0, 101), 101));
+                new PageImpl<>(entities, PageRequest.of(0, 101), 101));
         assertCode("INVENTORY_TOO_LARGE");
     }
 

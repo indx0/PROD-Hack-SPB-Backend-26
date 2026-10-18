@@ -1,23 +1,22 @@
 package ru.example.prodbackend.integration.migration;
 
-import ru.example.prodbackend.support.BaseIntegrationTest;
-
+import java.nio.charset.StandardCharsets;
+import java.nio.file.*;
+import java.sql.Connection;
+import java.util.UUID;
+import javax.sql.DataSource;
 import liquibase.*;
 import liquibase.changelog.FastCheckService;
 import liquibase.database.DatabaseFactory;
 import liquibase.database.jvm.JdbcConnection;
 import liquibase.resource.*;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
-
-import javax.sql.DataSource;
-import java.nio.file.*;
-import java.sql.Connection;
-import java.util.UUID;
+import ru.example.prodbackend.support.BaseIntegrationTest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -89,7 +88,7 @@ class MergedMigrationHistoryIntegrationTest extends BaseIntegrationTest {
         }
     }
     private String read(String path) throws Exception {
-        try (var stream = getClass().getClassLoader().getResourceAsStream(path)) { return new String(stream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8); }
+        try (var stream = getClass().getClassLoader().getResourceAsStream(path)) { return new String(stream.readAllBytes(), StandardCharsets.UTF_8); }
     }
     private void update(String schema, ResourceAccessor resources) throws Exception {
         Scope.getCurrentScope().getSingleton(FastCheckService.class).clearCache();

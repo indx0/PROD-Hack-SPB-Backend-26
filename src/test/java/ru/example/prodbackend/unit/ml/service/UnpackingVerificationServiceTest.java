@@ -1,18 +1,19 @@
 package ru.example.prodbackend.unit.ml.service;
 
-import ru.example.prodbackend.ml.service.UnpackingInventoryService;
-import ru.example.prodbackend.ml.service.UnpackingVerificationService;
-import ru.example.prodbackend.ml.service.MlRateLimiter;
-
+import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
 import ru.example.prodbackend.exception.MoveProjectNotFoundException;
 import ru.example.prodbackend.ml.client.LlmProxyClient;
 import ru.example.prodbackend.ml.dto.InventoryItem;
 import ru.example.prodbackend.ml.dto.ObservedItem;
+import ru.example.prodbackend.ml.exception.MlException;
+import ru.example.prodbackend.ml.service.MlRateLimiter;
+import ru.example.prodbackend.ml.service.UnpackingInventoryService;
+import ru.example.prodbackend.ml.service.UnpackingVerificationService;
 import ru.example.prodbackend.ml.validation.PhotoValidator;
-import java.util.List;
-import java.util.UUID;
+
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -79,7 +80,7 @@ class UnpackingVerificationServiceTest {
     void invalidPhotoNeverReachesClient() {
         when(inventories.snapshot(user, project, box)).thenReturn(List.of(cup));
         assertThatThrownBy(() -> service.verify(user, project, box, new MockMultipartFile("photo", new byte[0])))
-                .isInstanceOf(ru.example.prodbackend.ml.exception.MlException.class);
+                .isInstanceOf(MlException.class);
         verifyNoInteractions(limiter, client);
     }
 }

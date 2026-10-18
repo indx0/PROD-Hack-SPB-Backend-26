@@ -2,12 +2,13 @@ package ru.example.prodbackend.item.entity;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
-import lombok.*;
-import ru.example.prodbackend.box.entity.BoxEntity;
-
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import lombok.*;
+import ru.example.prodbackend.box.entity.BoxEntity;
 
 @Entity
 @Builder
@@ -57,15 +58,15 @@ public class ItemEntity {
     @Column(name = "carry_personally", nullable = false)
     private boolean carryPersonally;
 
-    public java.util.List<ItemFlag> flags() {
-        java.util.List<ItemFlag> result = new java.util.ArrayList<>();
+    public List<ItemFlag> flags() {
+        List<ItemFlag> result = new ArrayList<>();
         if (fragile) result.add(ItemFlag.FRAGILE);
         if (firstDay) result.add(ItemFlag.FIRST_DAY);
         if (carryPersonally) result.add(ItemFlag.CARRY_PERSONALLY);
-        return java.util.List.copyOf(result);
+        return List.copyOf(result);
     }
 
-    public void replaceFlags(java.util.List<ItemFlag> flags) {
+    public void replaceFlags(List<ItemFlag> flags) {
         fragile = flags.contains(ItemFlag.FRAGILE);
         firstDay = flags.contains(ItemFlag.FIRST_DAY);
         carryPersonally = flags.contains(ItemFlag.CARRY_PERSONALLY);

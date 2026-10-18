@@ -2,13 +2,13 @@ package ru.example.prodbackend.box.entity;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
-import lombok.*;
-import ru.example.prodbackend.move.entity.MoveProjectEntity;
-import ru.example.prodbackend.room.entity.RoomEntity;
-
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
+import lombok.*;
+import lombok.AccessLevel;
+import ru.example.prodbackend.move.entity.MoveProjectEntity;
+import ru.example.prodbackend.room.entity.RoomEntity;
 
 @Entity
 @Builder
@@ -45,7 +45,7 @@ public class BoxEntity {
 
     @Builder.Default
     @NotNull
-    @Setter(lombok.AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private BoxStatus status = BoxStatus.PACKING;

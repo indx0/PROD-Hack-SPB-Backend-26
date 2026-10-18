@@ -1,5 +1,6 @@
 package ru.example.prodbackend.support;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -11,7 +12,7 @@ public final class LegacyChecklistTestSupport {
                 "db/changelog/1.1/2026-10-17-0027-migrate-first-day-checklist.sql")) {
             String source = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
             return source.substring(source.indexOf("DO $migration$"), source.indexOf("$migration$;") + "$migration$;".length());
-        } catch (java.io.IOException e) { throw new IllegalStateException(e); }
+        } catch (IOException e) { throw new IllegalStateException(e); }
     }
 
     public static void backfill(JdbcTemplate jdbc) { jdbc.execute(backfillSql()); }

@@ -1,6 +1,10 @@
 package ru.example.prodbackend.integration.item;
 
 import jakarta.persistence.EntityManager;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+import java.util.stream.IntStream;
 import org.hibernate.SessionFactory;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -9,33 +13,30 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
-import ru.example.prodbackend.box.entity.BoxEntity;
 import ru.example.prodbackend.box.dto.BoxFilter;
+import ru.example.prodbackend.box.entity.BoxEntity;
 import ru.example.prodbackend.box.entity.BoxStatus;
 import ru.example.prodbackend.box.repository.BoxRepository;
 import ru.example.prodbackend.box.service.BoxService;
+import ru.example.prodbackend.checklist.entity.FirstDayChecklistItemEntity;
+import ru.example.prodbackend.checklist.service.FirstDayChecklistService;
 import ru.example.prodbackend.common.dto.PaginationRequest;
-import ru.example.prodbackend.support.config.JdbcCaptureConfig;
-import ru.example.prodbackend.support.config.JdbcCaptureConfig.Execution;
-import ru.example.prodbackend.support.config.JdbcCaptureConfig.JdbcCapture;
-import ru.example.prodbackend.support.config.TestcontainersConfig;
 import ru.example.prodbackend.item.dto.CreateItemsRequest;
 import ru.example.prodbackend.item.dto.ItemResponse;
 import ru.example.prodbackend.item.entity.ItemEntity;
 import ru.example.prodbackend.item.service.ItemService;
-import ru.example.prodbackend.checklist.entity.FirstDayChecklistItemEntity;
-import ru.example.prodbackend.checklist.service.FirstDayChecklistService;
 import ru.example.prodbackend.move.entity.MoveProjectEntity;
 import ru.example.prodbackend.room.entity.RoomEntity;
+import ru.example.prodbackend.support.LegacyChecklistTestSupport;
+import ru.example.prodbackend.support.config.JdbcCaptureConfig.Execution;
+import ru.example.prodbackend.support.config.JdbcCaptureConfig.JdbcCapture;
+import ru.example.prodbackend.support.config.JdbcCaptureConfig;
+import ru.example.prodbackend.support.config.TestcontainersConfig;
 import ru.example.prodbackend.user.entity.UserEntity;
 import ru.example.prodbackend.user.entity.UserRole;
-
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
-import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -49,7 +50,7 @@ class ItemBoxQueryIntegrationTest {
     @Autowired private ItemService itemService;
     @Autowired private BoxRepository boxRepository;
     @Autowired private FirstDayChecklistService checklistService;
-    @Autowired private org.springframework.jdbc.core.JdbcTemplate jdbc;
+    @Autowired private JdbcTemplate jdbc;
     @Autowired private JdbcCapture jdbcCapture;
 
     private UserEntity owner;
@@ -274,7 +275,7 @@ class ItemBoxQueryIntegrationTest {
             entityManager.persist(point);
         }
         flushAndClear();
-        ru.example.prodbackend.support.LegacyChecklistTestSupport.snapshot(jdbc);
+        LegacyChecklistTestSupport.snapshot(jdbc);
         PaginationRequest pagination = new PaginationRequest();
         pagination.setSize(4);
         jdbcCapture.start();

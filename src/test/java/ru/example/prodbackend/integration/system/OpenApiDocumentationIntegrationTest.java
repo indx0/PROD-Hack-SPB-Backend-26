@@ -1,13 +1,14 @@
 package ru.example.prodbackend.integration.system;
 
-import org.junit.jupiter.api.Test;
-import ru.example.prodbackend.support.BaseIntegrationTest;
-import tools.jackson.databind.JsonNode;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.regex.Pattern;
+import org.junit.jupiter.api.Test;
+import ru.example.prodbackend.support.BaseIntegrationTest;
+import tools.jackson.databind.JsonNode;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -20,7 +21,7 @@ class OpenApiDocumentationIntegrationTest extends BaseIntegrationTest {
 
     private JsonNode documentation() throws Exception {
         String json = mockMvc.perform(get("/v3/api-docs")).andExpect(status().isOk())
-                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
         Files.writeString(Path.of("target/openapi-documentation.json"), json);
         return jsonMapper.readTree(json);
     }
@@ -127,7 +128,7 @@ class OpenApiDocumentationIntegrationTest extends BaseIntegrationTest {
         String json = mockMvc.perform(post("/api/auth/register").contentType("application/json")
                         .content("{\"email\":\"\",\"firstName\":\"Иван\",\"lastName\":\"Иванов\",\"password\":\"password123\"}"))
                 .andExpect(status().isUnprocessableContent()).andReturn().getResponse()
-                .getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+                .getContentAsString(StandardCharsets.UTF_8);
         JsonNode actual = jsonMapper.readTree(json);
         for (String field : Set.of("code", "message", "fieldErrors")) assertEquals(example.path(field), actual.path(field), field);
     }

@@ -2,12 +2,14 @@ package ru.example.prodbackend.item.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import ru.example.prodbackend.box.entity.BoxStatus;
+import ru.example.prodbackend.item.entity.ItemFlag;
 
 @Data
 @Builder
@@ -23,7 +25,7 @@ public class ItemResponse {
     @Schema(description = "Вещь нужна в первый день после переезда")
     private boolean firstDay;
     @Schema(description = "Метки вещи: fragile — хрупкое, first_day — первый день, carry_personally — везти с собой")
-    private java.util.List<ru.example.prodbackend.item.entity.ItemFlag> flags;
+    private List<ItemFlag> flags;
     @Schema(description = "Вещь помечена потерянной")
     private boolean lost;
     @Schema(description = "Все предметы записи отмечены упакованными")

@@ -1,5 +1,13 @@
 package ru.example.prodbackend.integration;
 
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -18,13 +26,6 @@ import ru.example.prodbackend.support.AuthIntegrationTestSupport;
 import ru.example.prodbackend.support.config.JdbcCaptureConfig;
 import ru.example.prodbackend.user.entity.UserEntity;
 import tools.jackson.databind.JsonNode;
-
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -140,7 +141,7 @@ class TaskAssignmentIntegrationTest extends AuthIntegrationTestSupport {
                 .andExpect(status().isCreated()));
         call(memberToken, patch(tasksUrl + "/" + completed + "/completion"), Map.of("completed", true)).andExpect(status().isOk());
         var before = jdbc.queryForList("SELECT id,title,description,stage,due_date,completed_at,created_at FROM move_tasks WHERE project_id = ? ORDER BY id", projectId);
-        var timestamp = jdbc.queryForObject("SELECT updated_at FROM move_tasks WHERE id = ?", java.sql.Timestamp.class, active).toInstant();
+        var timestamp = jdbc.queryForObject("SELECT updated_at FROM move_tasks WHERE id = ?", Timestamp.class, active).toInstant();
         UUID foreign = id(call(memberToken, post("/api/move-projects"), Map.of("name", "Другой проект", "moveDate", "2026-11-01T09:00:00Z"))
                 .andExpect(status().isCreated()));
         String foreignTasks = "/api/move-projects/" + foreign + "/tasks";
@@ -158,7 +159,7 @@ class TaskAssignmentIntegrationTest extends AuthIntegrationTestSupport {
         assertAssignment(call(ownerToken, get(tasksUrl + "/" + free), null), null, "Alice Smith");
         assertAssignment(call(memberToken, get(foreignTasks + "/" + foreignTask), null), member.getId(), "Alice Smith");
         assertThat(jdbc.queryForList("SELECT id,title,description,stage,due_date,completed_at,created_at FROM move_tasks WHERE project_id = ? ORDER BY id", projectId)).isEqualTo(before);
-        assertThat(jdbc.queryForObject("SELECT updated_at FROM move_tasks WHERE id = ?", java.sql.Timestamp.class, active).toInstant()).isAfter(timestamp);
+        assertThat(jdbc.queryForObject("SELECT updated_at FROM move_tasks WHERE id = ?", Timestamp.class, active).toInstant()).isAfter(timestamp);
         assertThat(jdbc.queryForList("SELECT * FROM project_events WHERE project_id = ? ORDER BY id", projectId)).isEqualTo(events);
         call(otherToken, get(items + "/" + item), null).andExpect(status().isOk());
         var list = json(call(ownerToken, get(participantsUrl), null).andExpect(status().isOk()));
@@ -295,7 +296,7 @@ class TaskAssignmentIntegrationTest extends AuthIntegrationTestSupport {
     }
 
     private List<String> textFields(JsonNode array, String field) {
-        var values = new java.util.ArrayList<String>();
+        var values = new ArrayList<String>();
         for (var element : array) values.add(element.path(field).asText());
         return values;
     }

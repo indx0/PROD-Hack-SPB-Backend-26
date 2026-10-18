@@ -1,19 +1,19 @@
 package ru.example.prodbackend.integration.auth;
 
-import ru.example.prodbackend.support.AuthIntegrationTestSupport;
-
 import io.jsonwebtoken.Jwts;
+import java.time.Instant;
+import java.util.Date;
+import java.util.Map;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import ru.example.prodbackend.auth.dto.AuthenticationResponse;
-
-import java.time.Instant;
-import java.util.Date;
-import java.util.Map;
+import ru.example.prodbackend.support.AuthIntegrationTestSupport;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -148,7 +148,7 @@ class SecurityIntegrationTest extends AuthIntegrationTestSupport {
         if (!operation.equals("POST") && !operation.equals("LIST")) {
             path += "/550e8400-e29b-41d4-a716-446655440000";
         }
-        var method = org.springframework.http.HttpMethod.valueOf(operation.equals("LIST") ? "GET" : operation);
+        var method = HttpMethod.valueOf(operation.equals("LIST") ? "GET" : operation);
         var requestBuilder = request(method, path).contentType(MediaType.APPLICATION_JSON).content("{}");
 
         assertErrorResponse(mockMvc.perform(requestBuilder), 401, "UNAUTHORIZED")
@@ -172,9 +172,9 @@ class SecurityIntegrationTest extends AuthIntegrationTestSupport {
                 .andExpect(jsonPath(boxes + ".responses['422'].content['application/json'].schema['$ref']").value("#/components/schemas/ErrorResponse"));
         for (String path : new String[]{"/api/move-projects", "/api/projects/{projectId}/boxes"}) {
             String parameters = "$.paths['" + path + "'].get.parameters";
-            response.andExpect(jsonPath(parameters + "[?(@.name == 'page')].schema.default").value(org.hamcrest.Matchers.contains(0)))
-                    .andExpect(jsonPath(parameters + "[?(@.name == 'size')].schema.default").value(org.hamcrest.Matchers.contains(20)))
-                    .andExpect(jsonPath(parameters + "[?(@.name == 'size')].schema.maximum").value(org.hamcrest.Matchers.contains(100)))
+            response.andExpect(jsonPath(parameters + "[?(@.name == 'page')].schema.default").value(Matchers.contains(0)))
+                    .andExpect(jsonPath(parameters + "[?(@.name == 'size')].schema.default").value(Matchers.contains(20)))
+                    .andExpect(jsonPath(parameters + "[?(@.name == 'size')].schema.maximum").value(Matchers.contains(100)))
                     .andExpect(jsonPath(parameters + "[?(@.name == 'sort')]").isEmpty());
         }
     }
