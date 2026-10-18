@@ -9,6 +9,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.ServletException;
+import java.io.IOException;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -69,7 +71,7 @@ public class UnpackingVerificationController {
     public UnpackingVerificationResponse verify(
             @Parameter(hidden = true) @AuthenticationPrincipal UserEntity user,
             @Parameter(description = "Идентификатор проекта переезда") @PathVariable UUID projectId, @Parameter(description = "Идентификатор коробки проекта") @PathVariable UUID boxId,
-            @Parameter(description = "Фотография JPEG, PNG или WebP размером до 10 МиБ") @RequestPart("photo") MultipartFile photo, MultipartHttpServletRequest request) throws java.io.IOException, jakarta.servlet.ServletException {
+            @Parameter(description = "Фотография JPEG, PNG или WebP размером до 10 МиБ") @RequestPart("photo") MultipartFile photo, MultipartHttpServletRequest request) throws IOException, ServletException {
         if (request.getMultiFileMap().size() != 1 || request.getFiles("photo").size() != 1
                 || !request.getParameterMap().isEmpty() || request.getParts().stream().anyMatch(part -> !"photo".equals(part.getName()))) {
             throw new MlException(HttpStatus.BAD_REQUEST, "INVALID_MULTIPART", "Передайте единственное поле photo");

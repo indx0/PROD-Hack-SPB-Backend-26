@@ -23,6 +23,8 @@ import ru.example.prodbackend.ml.dto.ItemsDescriptionResponse;
 import ru.example.prodbackend.ml.exception.MlException;
 import ru.example.prodbackend.ml.validation.ItemDescriptionValidator;
 import java.io.IOException;
+import java.net.SocketTimeoutException;
+import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.*;
@@ -257,8 +259,8 @@ public class HttpLlmProxyClient implements LlmProxyClient {
 
     private static boolean hasTimeout(Throwable cause) {
         for (Throwable current = cause; current != null; current = current.getCause()) {
-            if (current instanceof java.net.http.HttpTimeoutException
-                    || current instanceof java.net.SocketTimeoutException) return true;
+            if (current instanceof HttpTimeoutException
+                    || current instanceof SocketTimeoutException) return true;
         }
         return false;
     }

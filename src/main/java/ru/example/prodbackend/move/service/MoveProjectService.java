@@ -83,17 +83,17 @@ public class MoveProjectService {
         }
         var folderIds = new HashSet<UUID>();
         for (int i = 0; i < request.getFolders().size(); i++) {
-            if (!folderIds.add(request.getFolders().get(i).id())) {
+            if (!folderIds.add(request.getFolders().get(i).getId())) {
                 throw new RequestValidationException("folders[" + i + "].id", "UUID папки повторяется в запросе");
             }
         }
         var setIds = new HashSet<UUID>();
         for (int i = 0; i < request.getTaskSetApplications().size(); i++) {
             var application = request.getTaskSetApplications().get(i);
-            if (!setIds.add(application.taskSetId())) {
+            if (!setIds.add(application.getTaskSetId())) {
                 throw new RequestValidationException("taskSetApplications[" + i + "].taskSetId", "Шаблон можно выбрать только один раз");
             }
-            if (application.folderId() != null && !folderIds.contains(application.folderId())) {
+            if (application.getFolderId() != null && !folderIds.contains(application.getFolderId())) {
                 throw new RequestValidationException("taskSetApplications[" + i + "].folderId", "Папка должна присутствовать в folders этого же запроса");
             }
         }

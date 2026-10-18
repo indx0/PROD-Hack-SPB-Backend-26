@@ -79,7 +79,7 @@ public class TaskFolderController {
             @Valid @RequestBody CreateTaskFolderRequest request,
             @Parameter(hidden = true) @AuthenticationPrincipal UserEntity user) {
         var result = service.create(projectId, request, user.getId());
-        return ResponseEntity.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK).body(result.folder());
+        return ResponseEntity.status(result.isCreated() ? HttpStatus.CREATED : HttpStatus.OK).body(result.getFolder());
     }
 
     @PatchMapping("/{folderId}")

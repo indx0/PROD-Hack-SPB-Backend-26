@@ -10,7 +10,10 @@ import ru.example.prodbackend.ml.exception.MlException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
+import java.util.function.Supplier;
 
 @Component
 @RequiredArgsConstructor
@@ -29,14 +32,14 @@ public class ItemDescriptionValidator {
         if (result.path("items").isEmpty()) throw unrecognized();
         var items = new ArrayList<ItemDescriptionResponse>();
         for (JsonNode item : result.path("items")) items.add(validateItem(item, false));
-        return new ItemsDescriptionResponse(java.util.List.copyOf(items));
+        return new ItemsDescriptionResponse(List.copyOf(items));
     }
 
     JsonNode content(String body) {
         return content(body, this::unrecognized);
     }
 
-    JsonNode content(String body, java.util.function.Supplier<MlException> refused) {
+    JsonNode content(String body, Supplier<MlException> refused) {
         JsonNode envelope = parse(body);
         JsonNode choice = envelope.path("choices").path(0);
         JsonNode message = choice.path("message");
@@ -56,13 +59,13 @@ public class ItemDescriptionValidator {
         var flags = new ArrayList<ItemFlag>();
         for (JsonNode node : result.path("flags")) {
             if (!node.isString()) throw invalid();
-            ItemFlag flag = java.util.Arrays.stream(ItemFlag.values())
+            ItemFlag flag = Arrays.stream(ItemFlag.values())
                     .filter(value -> value.value().equals(node.asText())).findFirst().orElseThrow(this::invalid);
             flags.add(flag);
         }
         if (new HashSet<>(flags).size() != flags.size()) throw invalid();
         if (name.isEmpty()) throw single ? unrecognized() : invalid();
-        return new ItemDescriptionResponse(name, java.util.List.copyOf(flags));
+        return new ItemDescriptionResponse(name, List.copyOf(flags));
     }
 
     private JsonNode parse(String json) {
