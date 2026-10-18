@@ -218,7 +218,7 @@ UUID, количество, отметки и связи с задачами с�
 ### Дашборд в Grafana
 ![Дешборд](/docs/images/grafana_dashboard.png)
 
-### Дашборд в Sage
+### Дашборд в Sage (Нагрузка API в RPS)
 ![Дешборд](/docs/images/sage_dashboard.png)
 
 ## Реализовано в мобильном приложении
