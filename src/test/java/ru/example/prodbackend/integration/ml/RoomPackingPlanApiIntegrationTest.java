@@ -48,13 +48,16 @@ class RoomPackingPlanApiIntegrationTest extends BaseMlIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"json", "text_form", "photo", "combined"})
+    @ValueSource(strings = {"json", "text_form", "text_empty_photo", "text_empty_photo_part", "photo", "combined"})
     void userWithoutProjectsReceivesPlanWithoutWritingAnyData(String mode) throws Exception {
         when(llmClient.planRoomPacking(anyString(), any(), any())).thenReturn(response());
         var before = counts();
         AbstractMockHttpServletRequestBuilder<?> request = switch (mode) {
             case "json" -> post(URL).contentType(MediaType.APPLICATION_JSON).content("{\"description\":\" Кухня \"}");
             case "text_form" -> multipart(URL).param("description", " Кухня ");
+            case "text_empty_photo" -> multipart(URL).param("photo", "").param("description", " Кухня ");
+            case "text_empty_photo_part" -> multipart(URL).part(new MockPart("photo", new byte[0]))
+                    .part(new MockPart("description", " Кухня ".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
             case "photo" -> multipart(URL).file(photo());
             default -> multipart(URL).file(photo()).part(new MockPart("description", " Кухня ".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
         };
@@ -67,7 +70,7 @@ class RoomPackingPlanApiIntegrationTest extends BaseMlIntegrationTest {
                 .andExpect(jsonPath("$.declutteringSuggestions[0].action").value("donate"))
                 .andExpect(jsonPath("$.assumptions", hasSize(1)));
         assertThat(counts()).isEqualTo(before);
-        if (mode.equals("json") || mode.equals("text_form")) verify(llmClient).planRoomPacking("Кухня", null, null);
+        if (mode.equals("json") || mode.startsWith("text_")) verify(llmClient).planRoomPacking("Кухня", null, null);
         else verify(llmClient).planRoomPacking(mode.equals("photo") ? "" : "Кухня", JPEG, "image/jpeg");
         verifyNoMoreInteractions(llmClient);
     }
@@ -107,6 +110,14 @@ class RoomPackingPlanApiIntegrationTest extends BaseMlIntegrationTest {
     @Test
     void validatesMultipartAndPhotoBeforeLlmCall() throws Exception {
         mvc.perform(auth(multipart(URL))).andExpect(status().is(422)).andExpect(jsonPath("$.code").value("ROOM_INPUT_REQUIRED"));
+        mvc.perform(auth(multipart(URL).part(new MockPart("photo", new byte[0]))))
+                .andExpect(status().is(422)).andExpect(jsonPath("$.code").value("ROOM_INPUT_REQUIRED"));
+        mvc.perform(auth(multipart(URL).param("photo", "not-a-file").param("description", "Кухня")))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_MULTIPART"));
+        mvc.perform(auth(multipart(URL).param("photo", "", "").param("description", "Кухня")))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_MULTIPART"));
+        mvc.perform(auth(multipart(URL).file(photo()).param("photo", "")))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_MULTIPART"));
         mvc.perform(auth(multipart(URL).file(photo()).file(photo()))).andExpect(status().isBadRequest());
         mvc.perform(auth(multipart(URL).file(photo()).param("description", "Кухня", "Спальня"))).andExpect(status().isBadRequest());
         mvc.perform(auth(multipart(URL).file(photo()).param("extra", "value"))).andExpect(status().isBadRequest());
