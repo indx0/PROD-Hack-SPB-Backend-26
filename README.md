@@ -10,6 +10,7 @@ Backend for the MoverMate app. Built during the PROD 2026 Hackathon in Saint Pet
 - [RFC](RFC.en.md)
 - [Tests and reports](TESTING.en.md)
 - [Requirements implementation](docs/requirements.en.md)
+- [Mobile app](https://github.com/NotSoNymos/PROD2026-hack)
 
 ### 🇷🇺 RU:
 
@@ -18,3 +19,4 @@ Backend for the MoverMate app. Built during the PROD 2026 Hackathon in Saint Pet
 - [RFC](RFC.md)
 - [Тесты и отчёты](TESTING.md)
 - [Реализация требований](docs/requirements.md)
+- [Мобильное приложение](https://github.com/NotSoNymos/PROD2026-hack)
